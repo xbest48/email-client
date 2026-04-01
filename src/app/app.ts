@@ -5,12 +5,7 @@ import { RouterOutlet } from '@angular/router';
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RouterOutlet],
-  template: `<router-outlet/>`,
-  styles: `
-    :host {
-      display: block;
-      height: 100vh;
-    }
-  `,
+  templateUrl: './app.html',
+  styleUrl: './app.css',
 })
 export class AppComponent {}

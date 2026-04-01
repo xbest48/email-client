@@ -29,9 +29,9 @@
   ],
   "dataGroups": [
     {
-      "name": "gmail-api",
+      "name": "api",
       "urls": [
-        "https://gmail.googleapis.com/gmail/v1/**"
+        "/api/**"
       ],
       "cacheConfig": {
         "maxSize": 100,

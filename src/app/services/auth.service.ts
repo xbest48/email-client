@@ -1,85 +1,80 @@
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, inject, signal, computed } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
 import { environment } from '../environments/environment';
-
-declare const google: {
-  accounts: {
-    oauth2: {
-      initTokenClient(config: {
-        client_id: string;
-        scope: string;
-        callback: (response: { access_token: string; error?: string; expires_in: number }) => void;
-      }): { requestAccessToken(): void };
-    };
-  };
-};
 
 export interface UserProfile {
   email: string;
-  name: string;
-  picture: string;
+}
+
+export interface LoginCredentials {
+  email: string;
+  password: string;
+  imapHost: string;
+  imapPort: number;
+  smtpHost: string;
+  smtpPort: number;
 }
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private readonly accessToken = signal<string>('');
+  private readonly http = inject(HttpClient);
+  private readonly apiUrl = environment.apiUrl;
+
   private readonly userProfile = signal<UserProfile | null>(null);
-  private readonly tokenExpiry = signal<number>(0);
+  private readonly authenticated = signal(false);
+  readonly loginError = signal('');
 
-  readonly isAuthenticated = computed(() => {
-    const token = this.accessToken();
-    const expiry = this.tokenExpiry();
-    return !!token && Date.now() < expiry;
-  });
-
+  readonly isAuthenticated = computed(() => this.authenticated());
   readonly user = computed(() => this.userProfile());
-  readonly token = computed(() => this.accessToken());
 
-  signIn(): void {
-    if (typeof google === 'undefined') {
-      console.error('Google Identity Services not loaded');
-      return;
-    }
-
-    const client = google.accounts.oauth2.initTokenClient({
-      client_id: environment.googleClientId,
-      scope: environment.scopes,
-      callback: (response) => {
-        if (response.error) {
-          console.error('Auth error:', response.error);
-          return;
-        }
-        this.accessToken.set(response.access_token);
-        this.tokenExpiry.set(Date.now() + response.expires_in * 1000);
-        this.fetchUserProfile(response.access_token);
-      },
-    });
-
-    client.requestAccessToken();
-  }
-
-  signOut(): void {
-    this.accessToken.set('');
-    this.userProfile.set(null);
-    this.tokenExpiry.set(0);
-  }
-
-  getAuthHeaders(): Record<string, string> {
-    return { Authorization: `Bearer ${this.accessToken()}` };
-  }
-
-  private async fetchUserProfile(token: string): Promise<void> {
+  async checkAuthStatus(): Promise<void> {
     try {
-      const res = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      this.userProfile.set({
-        email: data.email,
-        name: data.name,
-        picture: data.picture,
-      });
-    } catch (err) {
-      console.error('Failed to fetch user profile', err);
+      const res = await firstValueFrom(
+        this.http.get<{ authenticated: boolean; user?: UserProfile }>(
+          `${this.apiUrl}/auth/status`,
+          { withCredentials: true }
+        )
+      );
+      this.authenticated.set(res.authenticated);
+      if (res.authenticated && res.user) {
+        this.userProfile.set(res.user);
+      }
+    } catch {
+      this.authenticated.set(false);
     }
+  }
+
+  async signIn(credentials: LoginCredentials): Promise<boolean> {
+    this.loginError.set('');
+    try {
+      const res = await firstValueFrom(
+        this.http.post<{ success: boolean; user: UserProfile }>(
+          `${this.apiUrl}/auth/login`,
+          credentials,
+          { withCredentials: true }
+        )
+      );
+      this.authenticated.set(true);
+      this.userProfile.set(res.user);
+      return true;
+    } catch (err: unknown) {
+      const message =
+        (err as { error?: { error?: string } })?.error?.error || 'Connexion echouee';
+      this.loginError.set(message);
+      return false;
+    }
+  }
+
+  async signOut(): Promise<void> {
+    try {
+      await firstValueFrom(
+        this.http.post(`${this.apiUrl}/auth/logout`, {}, { withCredentials: true })
+      );
+    } catch {
+      // ignore
+    }
+    this.authenticated.set(false);
+    this.userProfile.set(null);
   }
 }

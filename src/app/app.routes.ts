@@ -17,14 +17,14 @@ export const routes: Routes = [
         pathMatch: 'full',
       },
       {
-        path: 'email/:id',
+        path: 'email/:folder/:uid',
         loadComponent: () =>
           import('./components/email-detail/email-detail.component').then(
             (m) => m.EmailDetailComponent
           ),
       },
       {
-        path: 'label/:label',
+        path: 'folder/:folder',
         loadComponent: () =>
           import('./components/email-list/email-list.component').then(
             (m) => m.EmailListComponent

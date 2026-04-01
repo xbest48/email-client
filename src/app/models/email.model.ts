@@ -4,8 +4,8 @@ export interface EmailAddress {
 }
 
 export interface Email {
-  id: string;
-  threadId: string;
+  uid: number;
+  folder: string;
   from: EmailAddress;
   to: EmailAddress[];
   cc: EmailAddress[];
@@ -15,11 +15,13 @@ export interface Email {
   body: string;
   htmlBody: string;
   date: string;
-  labels: string[];
+  flags: string[];
   isRead: boolean;
   isStarred: boolean;
   hasAttachments: boolean;
   attachments: Attachment[];
+  size: number;
+  messageId?: string;
 }
 
 export interface Attachment {
@@ -29,13 +31,28 @@ export interface Attachment {
   size: number;
 }
 
-export interface Label {
-  id: string;
+export interface ImapFolder {
+  path: string;
   name: string;
-  type: 'system' | 'user';
-  messagesTotal: number;
-  messagesUnread: number;
-  color: string;
+  delimiter: string;
+  flags: string[];
+  specialUse: string | null;
+  listed: boolean;
+  subscribed: boolean;
+}
+
+export interface FolderStatus {
+  path: string;
+  messages: number;
+  unseen: number;
+  recent: number;
+}
+
+export interface EmailListResponse {
+  emails: Email[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 export interface SearchFilter {
@@ -44,14 +61,7 @@ export interface SearchFilter {
   to: string;
   subject: string;
   hasAttachment: boolean;
-  label: string;
   after: string;
   before: string;
   isUnread: boolean;
-}
-
-export interface EmailListResponse {
-  messages: Email[];
-  nextPageToken: string;
-  resultSizeEstimate: number;
 }
