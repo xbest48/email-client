@@ -1,0 +1,90 @@
+<div class="rich-editor flex flex-col" [class.flex-col-reverse]="toolbarPosition() === 'bottom'">
+  <!-- Toolbar -->
+  <div class="flex items-center gap-0.5 flex-wrap px-2 py-1.5 bg-gray-50 border-gray-200"
+       [class.border-b]="toolbarPosition() === 'top'"
+       [class.border-t]="toolbarPosition() === 'bottom'"
+       role="toolbar"
+       aria-label="Barre d'outils de mise en forme">
+
+    <!-- Font size -->
+    <select
+      (change)="changeFontSize($event)"
+      class="text-xs px-1 py-1 border border-gray-200 rounded bg-white text-gray-700
+             focus:outline-none focus:ring-1 focus:ring-amber-400 mr-1"
+      aria-label="Taille de police">
+      <option value="">Taille</option>
+      <option value="1">Petit</option>
+      <option value="3">Normal</option>
+      <option value="5">Grand</option>
+      <option value="7">Tres grand</option>
+    </select>
+
+    <!-- Text color -->
+    <label class="relative mr-1 cursor-pointer" aria-label="Couleur du texte">
+      <span class="flex items-center justify-center w-7 h-7 rounded text-xs hover:bg-gray-200 transition-colors"
+            title="Couleur du texte">A</span>
+      <input type="color" value="#000000" (input)="changeColor($event)"
+             class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+    </label>
+
+    @for (tool of toolItems; track $index) {
+      @if (tool.cmd === 'separator') {
+        <div class="w-px h-5 bg-gray-300 mx-1" aria-hidden="true"></div>
+      } @else {
+        <button
+          type="button"
+          (click)="execCommand(tool.cmd)"
+          class="flex items-center justify-center w-7 h-7 rounded text-xs text-gray-700
+                 hover:bg-gray-200 transition-colors
+                 focus:outline-none focus:ring-1 focus:ring-amber-400"
+          [title]="tool.title"
+          [attr.aria-label]="tool.title">
+          <span [style]="tool.style" aria-hidden="true">{{ tool.icon }}</span>
+        </button>
+      }
+    }
+  </div>
+
+  <!-- Link input popup -->
+  @if (showLinkInput()) {
+    <div class="flex items-center gap-2 px-3 py-2 bg-amber-50 border-b border-amber-100">
+      <label for="link-url" class="text-xs text-gray-600 shrink-0">URL :</label>
+      <input
+        id="link-url"
+        type="url"
+        [value]="linkUrl()"
+        (input)="linkUrl.set($any($event.target).value)"
+        (keydown.enter)="insertLink()"
+        (keydown.escape)="cancelLink()"
+        class="flex-1 px-2 py-1 text-xs border border-gray-300 rounded
+               focus:outline-none focus:ring-1 focus:ring-amber-400"
+        placeholder="https://..."
+        autofocus>
+      <button type="button" (click)="insertLink()"
+              class="px-2 py-1 text-xs bg-amber-500 text-white rounded hover:bg-amber-600
+                     focus:outline-none focus:ring-1 focus:ring-amber-400">
+        OK
+      </button>
+      <button type="button" (click)="cancelLink()"
+              class="px-2 py-1 text-xs text-gray-500 hover:text-gray-700
+                     focus:outline-none focus:ring-1 focus:ring-amber-400 rounded">
+        Annuler
+      </button>
+    </div>
+  }
+
+  <!-- Editable area -->
+  <div
+    #editor
+    contenteditable="true"
+    class="flex-1 px-4 py-3 text-sm text-gray-800 overflow-y-auto focus:outline-none
+           prose prose-sm max-w-none"
+    [style.min-height]="minHeight()"
+    [attr.data-placeholder]="placeholder()"
+    (input)="onInput()"
+    (paste)="onInput()"
+    role="textbox"
+    aria-multiline="true"
+    [attr.aria-label]="placeholder() || 'Editeur de texte'">
+  </div>
+</div>

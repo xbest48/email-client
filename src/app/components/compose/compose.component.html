@@ -8,16 +8,27 @@
 
 <!-- Compose dialog -->
 <div
-  class="fixed bottom-0 right-4 md:right-8 w-full max-w-lg z-50 flex flex-col
-         bg-white rounded-t-2xl shadow-2xl border border-gray-200 max-h-[85vh]"
+  class="fixed z-50 flex flex-col bg-white shadow-2xl border border-gray-200"
+  [class.bottom-0]="!maximized()"
+  [class.right-4]="!maximized()"
+  [class.md:right-8]="!maximized()"
+  [class.w-full]="!maximized()"
+  [class.max-w-lg]="!maximized()"
+  [class.max-h-[85vh]]="!maximized()"
+  [class.rounded-t-2xl]="!maximized()"
+  [class.inset-4]="maximized()"
+  [class.md:inset-8]="maximized()"
+  [class.rounded-2xl]="maximized()"
   role="dialog"
   aria-modal="true"
   aria-label="Nouveau message">
 
   <!-- Header -->
-  <div class="flex items-center justify-between px-4 py-3 bg-gray-800 rounded-t-2xl">
+  <div class="flex items-center justify-between px-4 py-3 bg-gray-800"
+       [class.rounded-t-2xl]="true">
     <h2 class="text-sm font-semibold text-white">Nouveau message</h2>
     <div class="flex items-center gap-1">
+      <!-- Minimize -->
       <button
         (click)="minimized.set(!minimized())"
         class="p-1 text-gray-300 hover:text-white rounded transition-colors
@@ -28,6 +39,24 @@
           <path stroke-linecap="round" stroke-linejoin="round" d="M20 12H4"/>
         </svg>
       </button>
+      <!-- Maximize / Restore -->
+      <button
+        (click)="toggleMaximize()"
+        class="p-1 text-gray-300 hover:text-white rounded transition-colors
+               focus:outline-none focus:ring-2 focus:ring-amber-400"
+        type="button"
+        [attr.aria-label]="maximized() ? 'Restaurer' : 'Agrandir en plein ecran'">
+        @if (maximized()) {
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 9V5a1 1 0 011-1h10a1 1 0 011 1v10a1 1 0 01-1 1h-4M15 15v4a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1h4"/>
+          </svg>
+        } @else {
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
+          </svg>
+        }
+      </button>
+      <!-- Close -->
       <button
         (click)="onClose()"
         class="p-1 text-gray-300 hover:text-white rounded transition-colors
@@ -102,27 +131,27 @@
           placeholder="Objet du message">
       </div>
 
-      <!-- Body -->
-      <div class="flex-1 overflow-y-auto">
-        <label for="compose-body" class="sr-only">Corps du message</label>
-        <textarea
-          id="compose-body"
-          [(ngModel)]="body"
-          name="body"
-          class="w-full h-full min-h-[200px] px-4 py-3 text-sm text-gray-800 resize-none focus:outline-none"
+      <!-- Rich text body with toolbar at bottom -->
+      <div class="flex-1 overflow-hidden flex flex-col">
+        <app-rich-editor
+          #bodyEditor
           placeholder="Ecrivez votre message..."
-          required></textarea>
+          [initialContent]="htmlBody()"
+          toolbarPosition="bottom"
+          [minHeight]="maximized() ? '300px' : '180px'"
+          (contentChange)="onBodyChange($event)"
+          class="flex-1 flex flex-col"/>
       </div>
 
-      <!-- Footer -->
-      <div class="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50/50">
+      <!-- Footer: Send button + trash, next to toolbar -->
+      <div class="flex items-center justify-between px-4 py-2 border-t border-gray-100 bg-gray-50/50">
         <button
           type="submit"
           class="px-6 py-2 bg-amber-500 text-white text-sm font-semibold rounded-xl
                  hover:bg-amber-600 transition-colors shadow-sm
                  focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2
                  disabled:opacity-50 disabled:cursor-not-allowed"
-          [disabled]="sending() || !to() || !body()">
+          [disabled]="sending() || !to()">
           @if (sending()) {
             Envoi...
           } @else {

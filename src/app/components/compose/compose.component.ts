@@ -1,16 +1,19 @@
-import { Component, inject, signal, output, ChangeDetectionStrategy } from '@angular/core';
+import { Component, inject, signal, output, ChangeDetectionStrategy, viewChild, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { EmailService } from '../../services/email.service';
+import { SettingsService } from '../../services/settings.service';
+import { RichEditorComponent } from '../rich-editor/rich-editor.component';
 
 @Component({
   selector: 'app-compose',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule],
+  imports: [FormsModule, RichEditorComponent],
   templateUrl: './compose.component.html',
   styleUrl: './compose.component.css',
 })
-export class ComposeComponent {
+export class ComposeComponent implements OnInit {
   private readonly emailService = inject(EmailService);
+  private readonly settingsService = inject(SettingsService);
 
   readonly close = output<void>();
 
@@ -18,24 +21,54 @@ export class ComposeComponent {
   readonly cc = signal('');
   readonly bcc = signal('');
   readonly subject = signal('');
-  readonly body = signal('');
+  readonly htmlBody = signal('');
   readonly showCc = signal(false);
   readonly minimized = signal(false);
+  readonly maximized = signal(false);
   readonly sending = signal(false);
+
+  readonly bodyEditor = viewChild<RichEditorComponent>('bodyEditor');
+
+  ngOnInit(): void {
+    const sig = this.settingsService.getDefaultSignature();
+    if (sig) {
+      this.htmlBody.set('<br><br>--<br>' + sig.html);
+    }
+  }
+
+  onBodyInit(): void {
+    const sig = this.settingsService.getDefaultSignature();
+    if (sig) {
+      const editor = this.bodyEditor();
+      if (editor && editor.isEmpty()) {
+        editor.setHtml('<br><br>--<br>' + sig.html);
+      }
+    }
+  }
+
+  onBodyChange(html: string): void {
+    this.htmlBody.set(html);
+  }
 
   async onSend(event: Event): Promise<void> {
     event.preventDefault();
-    if (!this.to() || !this.body()) return;
+    const editor = this.bodyEditor();
+    if (!this.to() || !editor || editor.isEmpty()) return;
 
     this.sending.set(true);
     try {
-      await this.emailService.sendEmail(this.to(), this.subject(), this.body(), this.cc(), this.bcc());
+      const html = editor.getHtml();
+      await this.emailService.sendEmail(this.to(), this.subject(), html, this.cc(), this.bcc());
       this.close.emit();
     } catch (err) {
       console.error('Failed to send email', err);
     } finally {
       this.sending.set(false);
     }
+  }
+
+  toggleMaximize(): void {
+    this.maximized.set(!this.maximized());
   }
 
   onClose(): void {

@@ -3,13 +3,14 @@ import { Router, RouterOutlet } from '@angular/router';
 import { SidebarComponent } from '../sidebar/sidebar.component';
 import { SearchBarComponent } from '../search-bar/search-bar.component';
 import { ComposeComponent } from '../compose/compose.component';
+import { SettingsComponent } from '../settings/settings.component';
 import { AuthService } from '../../services/auth.service';
 import { EmailService } from '../../services/email.service';
 
 @Component({
   selector: 'app-layout',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, SidebarComponent, SearchBarComponent, ComposeComponent],
+  imports: [RouterOutlet, SidebarComponent, SearchBarComponent, ComposeComponent, SettingsComponent],
   host: {
     '(window:keydown.escape)': 'onEscapeKey()',
   },
@@ -23,6 +24,7 @@ export class LayoutComponent implements OnInit {
 
   readonly sidebarOpen = signal(true);
   readonly showCompose = signal(false);
+  readonly showSettings = signal(false);
 
   ngOnInit(): void {
     this.emailService.fetchFolders();
@@ -43,7 +45,9 @@ export class LayoutComponent implements OnInit {
   }
 
   onEscapeKey(): void {
-    if (this.showCompose()) {
+    if (this.showSettings()) {
+      this.showSettings.set(false);
+    } else if (this.showCompose()) {
       this.showCompose.set(false);
     }
   }

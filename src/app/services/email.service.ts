@@ -3,10 +3,12 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../environments/environment';
 import { Email, ImapFolder, FolderStatus, EmailListResponse } from '../models/email.model';
+import { SettingsService } from './settings.service';
 
 @Injectable({ providedIn: 'root' })
 export class EmailService {
   private readonly http = inject(HttpClient);
+  private readonly settingsService = inject(SettingsService);
   private readonly apiUrl = environment.apiUrl;
 
   readonly loading = signal(false);
@@ -60,9 +62,10 @@ export class EmailService {
   async fetchEmails(folder: string, query = '', page = 1): Promise<void> {
     this.loading.set(true);
     try {
+      const pageSize = this.settingsService.pageSize;
       let params = new HttpParams()
         .set('page', String(page))
-        .set('pageSize', '25');
+        .set('pageSize', String(pageSize));
       if (query) params = params.set('q', query);
 
       const res = await firstValueFrom(
@@ -181,6 +184,13 @@ export class EmailService {
   async createFolder(name: string): Promise<void> {
     await firstValueFrom(
       this.http.post(`${this.apiUrl}/folders`, { name }, { withCredentials: true })
+    );
+    await this.fetchFolders();
+  }
+
+  async deleteFolder(path: string): Promise<void> {
+    await firstValueFrom(
+      this.http.delete(`${this.apiUrl}/folders/${encodeURIComponent(path)}`, { withCredentials: true })
     );
     await this.fetchFolders();
   }
