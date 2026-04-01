@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 566 566">
+  <!-- Outer curved accents -->
+  <path d="M283 0C127 0 0 127 0 283s127 283 283 283 283-127 283-283S439 0 283 0z" fill="none"/>
+  <!-- Top-left accent -->
+  <path d="M80 180C60 120 100 50 170 30c50-15 100-5 140 20C250 10 180-10 120 20 60 50 40 120 80 180z" fill="#808080" opacity="0.9"/>
+  <!-- Top-right accent -->
+  <path d="M486 180c20-60-20-130-90-150-50-15-100-5-140 20 60-40 130-60 190-30 60 30 80 100 40 160z" fill="#808080" opacity="0.9"/>
+  <!-- Bottom-left accent -->
+  <path d="M80 386c-20 60 20 130 90 150 50 15 100 5 140-20-60 40-130 60-190 30-60-30-80-100-40-160z" fill="#808080" opacity="0.9"/>
+  <!-- Bottom-right accent -->
+  <path d="M486 386c20 60-20 130-90 150-50 15-100 5-140-20 60 40 130 60 190 30 60-30 80-100 40-160z" fill="#808080" opacity="0.9"/>
+  <!-- Main circle -->
+  <circle cx="283" cy="283" r="230" fill="#6B7280"/>
+  <!-- Inner circle -->
+  <circle cx="283" cy="283" r="200" fill="#E5E7EB"/>
+  <!-- Envelope body -->
+  <rect x="133" y="193" width="300" height="200" rx="12" fill="#D4A520"/>
+  <!-- Envelope flap (top V) -->
+  <path d="M133 205 L283 310 L433 205" fill="none" stroke="#FFFFFF" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Envelope bottom creases -->
+  <path d="M133 393 L233 320" fill="none" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round"/>
+  <path d="M433 393 L333 320" fill="none" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round"/>
+</svg>

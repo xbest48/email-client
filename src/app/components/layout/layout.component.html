@@ -1,0 +1,72 @@
+<div class="flex h-screen bg-white overflow-hidden">
+  <!-- Mobile sidebar backdrop -->
+  @if (sidebarOpen() && isMobile()) {
+    <div
+      class="fixed inset-0 bg-black/30 z-30 lg:hidden"
+      (click)="sidebarOpen.set(false)"
+      role="presentation"
+      aria-hidden="true"></div>
+  }
+
+  <!-- Sidebar -->
+  <div
+    class="fixed lg:static z-40 h-full w-64 shrink-0 transition-transform duration-200 ease-in-out"
+    [class.translate-x-0]="sidebarOpen()"
+    [class.-translate-x-full]="!sidebarOpen()"
+    [class.lg:translate-x-0]="true">
+    <app-sidebar
+      [isOpen]="true"
+      (compose)="showCompose.set(true)"
+      (signOut)="onSignOut()"/>
+  </div>
+
+  <!-- Main content -->
+  <div class="flex-1 flex flex-col min-w-0">
+    <!-- Top bar -->
+    <header class="flex items-center gap-3 px-4 py-2.5 border-b border-gray-200 bg-white shrink-0">
+      <!-- Hamburger menu (mobile) -->
+      <button
+        (click)="sidebarOpen.set(!sidebarOpen())"
+        class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors
+               lg:hidden focus:outline-none focus:ring-2 focus:ring-amber-400"
+        type="button"
+        aria-label="Ouvrir le menu">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
+        </svg>
+      </button>
+
+      <!-- Search bar -->
+      <app-search-bar (search)="onSearch($event)" class="flex-1"/>
+
+      <!-- Settings button -->
+      <button
+        (click)="showSettings.set(true)"
+        class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors
+               focus:outline-none focus:ring-2 focus:ring-amber-400"
+        type="button"
+        aria-label="Parametres">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round"
+                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+      </button>
+    </header>
+
+    <!-- Content area -->
+    <main class="flex-1 overflow-hidden">
+      <router-outlet/>
+    </main>
+  </div>
+
+  <!-- Compose overlay -->
+  @if (showCompose()) {
+    <app-compose (close)="showCompose.set(false)"/>
+  }
+
+  <!-- Settings overlay -->
+  @if (showSettings()) {
+    <app-settings (close)="showSettings.set(false)"/>
+  }
+</div>

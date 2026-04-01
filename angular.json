@@ -24,6 +24,7 @@
                 "input": "public"
               }
             ],
+            "serviceWorker": "ngsw-config.json",
             "styles": [
               "src/styles.css"
             ]
@@ -61,6 +62,9 @@
             "development": {
               "buildTarget": "email-client:build:development"
             }
+          },
+          "options": {
+            "proxyConfig": "proxy.conf.json"
           },
           "defaultConfiguration": "development"
         },

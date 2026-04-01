@@ -1,0 +1,140 @@
+<div class="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-xl p-8 md:p-12 max-w-md w-full">
+    <div class="text-center mb-8">
+      <img src="logo.svg" alt="MailFlow" class="w-24 h-24 mx-auto mb-6" width="96" height="96">
+      <h1 class="text-3xl font-bold text-gray-900 mb-2">MailFlow</h1>
+      <p class="text-gray-500">Client email rapide et moderne</p>
+    </div>
+
+    <form (submit)="$event.preventDefault(); onSignIn()">
+      <!-- Email -->
+      <div class="mb-4">
+        <label for="login-email" class="block text-sm font-medium text-gray-700 mb-1">Adresse email</label>
+        <input
+          id="login-email"
+          type="email"
+          [(ngModel)]="email"
+          name="email"
+          (blur)="onEmailChange()"
+          class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm
+                 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400
+                 transition-colors"
+          placeholder="vous@exemple.com"
+          required
+          autocomplete="email">
+      </div>
+
+      <!-- Password -->
+      <div class="mb-4">
+        <label for="login-password" class="block text-sm font-medium text-gray-700 mb-1">Mot de passe</label>
+        <input
+          id="login-password"
+          type="password"
+          [(ngModel)]="password"
+          name="password"
+          class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm
+                 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400
+                 transition-colors"
+          placeholder="Mot de passe"
+          required
+          autocomplete="current-password">
+      </div>
+
+      <!-- IMAP Host -->
+      <div class="mb-4">
+        <label for="login-imap" class="block text-sm font-medium text-gray-700 mb-1">Serveur IMAP</label>
+        <input
+          id="login-imap"
+          type="text"
+          [(ngModel)]="imapHost"
+          name="imapHost"
+          class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm
+                 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400
+                 transition-colors"
+          placeholder="imap.exemple.com"
+          required>
+      </div>
+
+      <!-- SMTP Host -->
+      <div class="mb-4">
+        <label for="login-smtp" class="block text-sm font-medium text-gray-700 mb-1">Serveur SMTP</label>
+        <input
+          id="login-smtp"
+          type="text"
+          [(ngModel)]="smtpHost"
+          name="smtpHost"
+          class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm
+                 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400
+                 transition-colors"
+          placeholder="smtp.exemple.com"
+          required>
+      </div>
+
+      <!-- Advanced settings toggle -->
+      <div class="mb-4">
+        <button
+          type="button"
+          (click)="showAdvanced.set(!showAdvanced())"
+          class="text-sm text-amber-600 hover:text-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-400 rounded">
+          {{ showAdvanced() ? 'Masquer' : 'Afficher' }} les parametres avances
+        </button>
+      </div>
+
+      @if (showAdvanced()) {
+        <div class="grid grid-cols-2 gap-3 mb-4">
+          <div>
+            <label for="login-imap-port" class="block text-xs font-medium text-gray-600 mb-1">Port IMAP</label>
+            <input
+              id="login-imap-port"
+              type="number"
+              [(ngModel)]="imapPort"
+              name="imapPort"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm
+                     focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400">
+          </div>
+          <div>
+            <label for="login-smtp-port" class="block text-xs font-medium text-gray-600 mb-1">Port SMTP</label>
+            <input
+              id="login-smtp-port"
+              type="number"
+              [(ngModel)]="smtpPort"
+              name="smtpPort"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm
+                     focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400">
+          </div>
+        </div>
+      }
+
+      <!-- Error message -->
+      @if (auth.loginError()) {
+        <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700" role="alert">
+          {{ auth.loginError() }}
+        </div>
+      }
+
+      <!-- Submit -->
+      <button
+        type="submit"
+        class="w-full flex items-center justify-center gap-2 px-6 py-3
+               bg-amber-500 hover:bg-amber-600 text-white font-semibold
+               rounded-xl shadow-md hover:shadow-lg transition-all duration-200
+               focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2
+               disabled:opacity-50 disabled:cursor-not-allowed"
+        [disabled]="loading() || !email() || !password() || !imapHost() || !smtpHost()">
+        @if (loading()) {
+          <div class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+          Connexion...
+        } @else {
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+          </svg>
+          Se connecter
+        }
+      </button>
+    </form>
+
+    <p class="mt-6 text-xs text-gray-400 text-center">
+      Connexion securisee via IMAP/SMTP SSL
+    </p>
+  </div>
+</div>

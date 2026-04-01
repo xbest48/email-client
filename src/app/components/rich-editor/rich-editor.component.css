@@ -1,0 +1,10 @@
+[contenteditable]:empty::before {
+  content: attr(data-placeholder);
+  color: #9ca3af;
+  pointer-events: none;
+}
+
+[contenteditable] a {
+  color: #d97706;
+  text-decoration: underline;
+}
