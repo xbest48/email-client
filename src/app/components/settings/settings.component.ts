@@ -46,9 +46,10 @@ export class SettingsComponent {
   }
 
   addAccount(): void {
-    if (!this.accountEmail() || !this.accountImapHost() || !this.accountSmtpHost()) return;
+    if (!this.accountEmail() || !this.accountPassword() || !this.accountImapHost() || !this.accountSmtpHost()) return;
     this.settingsService.addAccount({
       email: this.accountEmail(),
+      password: this.accountPassword(),
       imapHost: this.accountImapHost(),
       imapPort: this.accountImapPort(),
       smtpHost: this.accountSmtpHost(),

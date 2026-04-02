@@ -1,8 +1,11 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, signal, inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
 
 export interface EmailAccount {
   id: string;
   email: string;
+  password?: string;
   imapHost: string;
   imapPort: number;
   smtpHost: string;
@@ -34,7 +37,12 @@ const DEFAULT_SETTINGS: AppSettings = {
 
 @Injectable({ providedIn: 'root' })
 export class SettingsService {
-  readonly settings = signal<AppSettings>(this.load());
+  private readonly http = inject(HttpClient);
+  readonly settings = signal<AppSettings>({ ...DEFAULT_SETTINGS });
+
+  constructor() {
+    this.load();
+  }
 
   get pageSize(): number {
     return this.settings().pageSize;
@@ -70,21 +78,28 @@ export class SettingsService {
 
   // --- Accounts ---
 
-  addAccount(account: Omit<EmailAccount, 'id'>): void {
-    const id = crypto.randomUUID();
-    this.settings.update((s) => {
-      const updated = { ...s, accounts: [...s.accounts, { ...account, id }] };
-      this.save(updated);
-      return updated;
-    });
+  async addAccount(account: Omit<EmailAccount, 'id'>): Promise<void> {
+    try {
+      const newAccount = await firstValueFrom(this.http.post<EmailAccount>('/api/accounts', account));
+      this.settings.update((s) => {
+        const updated = { ...s, accounts: [...s.accounts, newAccount] };
+        return updated;
+      });
+    } catch (err) {
+      console.error('Failed to add account', err);
+    }
   }
 
-  removeAccount(id: string): void {
-    this.settings.update((s) => {
-      const updated = { ...s, accounts: s.accounts.filter((a) => a.id !== id) };
-      this.save(updated);
-      return updated;
-    });
+  async removeAccount(id: string): Promise<void> {
+    try {
+      await firstValueFrom(this.http.delete(`/api/accounts/${id}`));
+      this.settings.update((s) => {
+        const updated = { ...s, accounts: s.accounts.filter((a) => a.id !== id) };
+        return updated;
+      });
+    } catch (err) {
+      console.error('Failed to remove account', err);
+    }
   }
 
   // --- Signatures ---
@@ -125,21 +140,33 @@ export class SettingsService {
     return this.settings().signatures.find((s) => s.isDefault);
   }
 
-  private load(): AppSettings {
+  private async load(): Promise<void> {
+    let settings = { ...DEFAULT_SETTINGS };
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        return { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
+        settings = { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
       }
     } catch {
       // ignore
     }
-    return { ...DEFAULT_SETTINGS };
+
+    try {
+      const accounts = await firstValueFrom(this.http.get<EmailAccount[]>('/api/accounts'));
+      settings.accounts = accounts;
+    } catch (err) {
+      console.error('Failed to load accounts', err);
+      settings.accounts = [];
+    }
+
+    this.settings.set(settings);
   }
 
   private save(settings: AppSettings): void {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+      // We no longer save accounts to local storage
+      const { accounts, ...settingsToSave } = settings;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(settingsToSave));
     } catch {
       // ignore
     }

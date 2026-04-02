@@ -1,0 +1,108 @@
+
+> email-client@0.0.0 start
+> ng serve
+
+❯ Building...
+✔ Building...
+Initial chunk files | Names                  |  Raw size
+styles.css          | styles                 |  39.63 kB |
+main.js             | main                   |   3.72 kB |
+chunk-GOMI4DH3.js   | -                      |   1.37 kB |
+
+                    | Initial total          |  44.72 kB
+
+Lazy chunk files    | Names                  |  Raw size
+chunk-CRLJB4MM.js   | layout-component       | 167.10 kB |
+chunk-3XGS5CUS.js   | email-list-component   |  30.99 kB |
+chunk-MBM576F4.js   | email-detail-component |  29.75 kB |
+chunk-36QUNGU7.js   | login-component        |  21.25 kB |
+chunk-QIZ2IPYA.js   | -                      |  11.44 kB |
+chunk-XRSIOT3W.js   | -                      |   2.59 kB |
+chunk-LO56YWFZ.js   | -                      |   1.57 kB |
+chunk-WGIFB4UJ.js   | -                      | 170 bytes |
+
+Application bundle generation complete. [4.563 seconds] - 2026-04-02T07:05:31.390Z
+
+Watch mode enabled. Watching for file changes...
+NOTE: Raw file sizes do not reflect development server per-request transformations.
+  ➜  Local:   http://localhost:4200/
+7:10:02 AM [vite] http proxy error: /api/folders
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+7:10:02 AM [vite] http proxy error: /api/emails/INBOX?page=1&pageSize=50
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.308 seconds] - 2026-04-02T07:25:09.970Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.211 seconds] - 2026-04-02T07:26:05.397Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.019 seconds] - 2026-04-02T07:26:09.553Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.009 seconds] - 2026-04-02T07:26:09.909Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.098 seconds] - 2026-04-02T07:26:33.640Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.070 seconds] - 2026-04-02T07:26:39.553Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.082 seconds] - 2026-04-02T07:30:53.274Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.007 seconds] - 2026-04-02T07:30:56.753Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.008 seconds] - 2026-04-02T07:30:57.058Z
+
+Page reload sent to client(s).

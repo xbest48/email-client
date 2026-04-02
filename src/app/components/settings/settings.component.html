@@ -90,6 +90,13 @@
                           focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400"
                    placeholder="vous@exemple.com">
           </div>
+          <div>
+            <label for="acc-password" class="block text-xs font-medium text-gray-600 mb-1">Mot de passe</label>
+            <input id="acc-password" type="password" [(ngModel)]="accountPassword" name="accountPassword"
+                   class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg
+                          focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400"
+                   placeholder="Votre mot de passe">
+          </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label for="acc-imap" class="block text-xs font-medium text-gray-600 mb-1">Serveur IMAP</label>
@@ -125,7 +132,7 @@
                          hover:bg-amber-600 transition-colors
                          focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2
                          disabled:opacity-50"
-                  [disabled]="!accountEmail() || !accountImapHost() || !accountSmtpHost()">
+                  [disabled]="!accountEmail() || !accountPassword() || !accountImapHost() || !accountSmtpHost()">
             Ajouter le compte
           </button>
         </form>

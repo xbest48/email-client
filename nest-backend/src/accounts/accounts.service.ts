@@ -1,0 +1,79 @@
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Account } from './account.entity';
+import * as crypto from 'crypto';
+
+const ALGORITHM = 'aes-256-cbc';
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '12345678901234567890123456789012'; // Must be 32 bytes
+const IV_LENGTH = 16;
+
+@Injectable()
+export class AccountsService {
+  constructor(
+    @InjectRepository(Account)
+    private accountsRepository: Repository<Account>,
+  ) {}
+
+  private encrypt(text: string): string {
+    const iv = crypto.randomBytes(IV_LENGTH);
+    const cipher = crypto.createCipheriv(ALGORITHM, Buffer.from(ENCRYPTION_KEY), iv);
+    let encrypted = cipher.update(text);
+    encrypted = Buffer.concat([encrypted, cipher.final()]);
+    return iv.toString('hex') + ':' + encrypted.toString('hex');
+  }
+
+  private decrypt(text: string): string {
+    const textParts = text.split(':');
+    const iv = Buffer.from(textParts.shift() as string, 'hex');
+    const encryptedText = Buffer.from(textParts.join(':'), 'hex');
+    const decipher = crypto.createDecipheriv(ALGORITHM, Buffer.from(ENCRYPTION_KEY), iv);
+    let decrypted = decipher.update(encryptedText);
+    decrypted = Buffer.concat([decrypted, decipher.final()]);
+    return decrypted.toString();
+  }
+
+  async findAll(): Promise<Account[]> {
+    const accounts = await this.accountsRepository.find();
+    return accounts.map(acc => {
+      if (acc.password) {
+        try {
+          acc.password = this.decrypt(acc.password);
+        } catch (e) {
+          console.error('Failed to decrypt password for account', acc.id);
+        }
+      }
+      return acc;
+    });
+  }
+
+  async findOne(id: string): Promise<Account | null> {
+    const acc = await this.accountsRepository.findOneBy({ id });
+    if (acc && acc.password) {
+      try {
+        acc.password = this.decrypt(acc.password);
+      } catch (e) {
+        console.error('Failed to decrypt password for account', acc.id);
+      }
+    }
+    return acc;
+  }
+
+  async create(account: Partial<Account>): Promise<Account> {
+    if (account.password) {
+      account.password = this.encrypt(account.password);
+    }
+    const newAccount = this.accountsRepository.create(account);
+    const savedAccount = await this.accountsRepository.save(newAccount);
+
+    // Return decrypted password to frontend if needed
+    if (savedAccount.password) {
+      savedAccount.password = this.decrypt(savedAccount.password);
+    }
+    return savedAccount;
+  }
+
+  async remove(id: string): Promise<void> {
+    await this.accountsRepository.delete(id);
+  }
+}
