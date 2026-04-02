@@ -1,45 +1,58 @@
-
-> email-client@0.0.0 start
-> ng serve
-
 ❯ Building...
 ✔ Building...
 Initial chunk files | Names                  |  Raw size
-styles.css          | styles                 |  39.63 kB |
-main.js             | main                   |   3.72 kB |
-chunk-GOMI4DH3.js   | -                      |   1.37 kB |
+styles.css          | styles                 |  39.71 kB |
+chunk-FTMCLAVD.js   | -                      |   4.78 kB |
+main.js             | main                   |   4.33 kB |
+chunk-CJNF7J5P.js   | -                      |   1.49 kB |
 
-                    | Initial total          |  44.72 kB
+                    | Initial total          |  50.30 kB
 
 Lazy chunk files    | Names                  |  Raw size
-chunk-CRLJB4MM.js   | layout-component       | 167.10 kB |
-chunk-3XGS5CUS.js   | email-list-component   |  30.99 kB |
-chunk-MBM576F4.js   | email-detail-component |  29.75 kB |
-chunk-36QUNGU7.js   | login-component        |  21.25 kB |
-chunk-QIZ2IPYA.js   | -                      |  11.44 kB |
-chunk-XRSIOT3W.js   | -                      |   2.59 kB |
+chunk-BBP77TYM.js   | layout-component       | 167.07 kB |
+chunk-LXGNKDGW.js   | email-list-component   |  30.96 kB |
+chunk-C2JJVC66.js   | email-detail-component |  29.72 kB |
+chunk-6S75VTCF.js   | login-component        |  19.11 kB |
+chunk-4VARWOQK.js   | register-component     |  11.51 kB |
+chunk-HGNSUWGL.js   | -                      |  11.40 kB |
 chunk-LO56YWFZ.js   | -                      |   1.57 kB |
-chunk-WGIFB4UJ.js   | -                      | 170 bytes |
 
-Application bundle generation complete. [4.563 seconds] - 2026-04-02T07:05:31.390Z
+Application bundle generation complete. [5.926 seconds] - 2026-04-02T20:40:21.185Z
 
 Watch mode enabled. Watching for file changes...
 NOTE: Raw file sizes do not reflect development server per-request transformations.
+8:40:21 PM [vite] (client) Re-optimizing dependencies because lockfile has changed
   ➜  Local:   http://localhost:4200/
-7:10:02 AM [vite] http proxy error: /api/folders
-AggregateError [ECONNREFUSED]:
-    at internalConnectMultiple (node:net:1134:18)
-    at afterConnectMultiple (node:net:1715:7)
-7:10:02 AM [vite] http proxy error: /api/emails/INBOX?page=1&pageSize=50
-AggregateError [ECONNREFUSED]:
-    at internalConnectMultiple (node:net:1134:18)
-    at afterConnectMultiple (node:net:1715:7)
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Initial chunk files | Names            |  Raw size
+main.js             | main             |   4.33 kB |
+
+Lazy chunk files    | Names            |  Raw size
+chunk-SCYNOCGG.js   | layout-component | 168.41 kB |
+
+Application bundle generation complete. [1.428 seconds] - 2026-04-02T20:46:58.579Z
+
+Component update sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Initial chunk files | Names            |  Raw size
+styles.css          | styles           |  39.83 kB |
+main.js             | main             |   4.33 kB |
+
+Lazy chunk files    | Names            |  Raw size
+chunk-LJBN4AKV.js   | layout-component | 170.34 kB |
+
+Application bundle generation complete. [0.624 seconds] - 2026-04-02T20:49:49.778Z
+
+Stylesheet update sent to client(s).
+Component update sent to client(s).
 ❯ Changes detected. Rebuilding...
 ✔ Changes detected. Rebuilding...
 
 No output file changes.
 
-Application bundle generation complete. [0.308 seconds] - 2026-04-02T07:25:09.970Z
+Application bundle generation complete. [0.092 seconds] - 2026-04-02T20:54:59.905Z
 
 Page reload sent to client(s).
 ❯ Changes detected. Rebuilding...
@@ -47,7 +60,7 @@ Page reload sent to client(s).
 
 No output file changes.
 
-Application bundle generation complete. [0.211 seconds] - 2026-04-02T07:26:05.397Z
+Application bundle generation complete. [0.070 seconds] - 2026-04-02T20:55:04.102Z
 
 Page reload sent to client(s).
 ❯ Changes detected. Rebuilding...
@@ -55,7 +68,7 @@ Page reload sent to client(s).
 
 No output file changes.
 
-Application bundle generation complete. [0.019 seconds] - 2026-04-02T07:26:09.553Z
+Application bundle generation complete. [0.052 seconds] - 2026-04-02T20:55:54.455Z
 
 Page reload sent to client(s).
 ❯ Changes detected. Rebuilding...
@@ -63,7 +76,7 @@ Page reload sent to client(s).
 
 No output file changes.
 
-Application bundle generation complete. [0.009 seconds] - 2026-04-02T07:26:09.909Z
+Application bundle generation complete. [0.105 seconds] - 2026-04-02T20:55:59.110Z
 
 Page reload sent to client(s).
 ❯ Changes detected. Rebuilding...
@@ -71,7 +84,7 @@ Page reload sent to client(s).
 
 No output file changes.
 
-Application bundle generation complete. [0.098 seconds] - 2026-04-02T07:26:33.640Z
+Application bundle generation complete. [0.009 seconds] - 2026-04-02T20:56:01.658Z
 
 Page reload sent to client(s).
 ❯ Changes detected. Rebuilding...
@@ -79,7 +92,7 @@ Page reload sent to client(s).
 
 No output file changes.
 
-Application bundle generation complete. [0.070 seconds] - 2026-04-02T07:26:39.553Z
+Application bundle generation complete. [0.008 seconds] - 2026-04-02T20:56:02.559Z
 
 Page reload sent to client(s).
 ❯ Changes detected. Rebuilding...
@@ -87,7 +100,7 @@ Page reload sent to client(s).
 
 No output file changes.
 
-Application bundle generation complete. [0.082 seconds] - 2026-04-02T07:30:53.274Z
+Application bundle generation complete. [0.014 seconds] - 2026-04-02T20:57:00.511Z
 
 Page reload sent to client(s).
 ❯ Changes detected. Rebuilding...
@@ -95,7 +108,7 @@ Page reload sent to client(s).
 
 No output file changes.
 
-Application bundle generation complete. [0.007 seconds] - 2026-04-02T07:30:56.753Z
+Application bundle generation complete. [0.011 seconds] - 2026-04-02T20:57:03.227Z
 
 Page reload sent to client(s).
 ❯ Changes detected. Rebuilding...
@@ -103,6 +116,110 @@ Page reload sent to client(s).
 
 No output file changes.
 
-Application bundle generation complete. [0.008 seconds] - 2026-04-02T07:30:57.058Z
+Application bundle generation complete. [0.006 seconds] - 2026-04-02T20:57:04.077Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Initial chunk files | Names              |  Raw size
+chunk-7SY4EHW6.js   | -                  |   5.46 kB |
+main.js             | main               |   4.33 kB |
+
+Lazy chunk files    | Names              |  Raw size
+chunk-U2PMYSQM.js   | layout-component   | 170.34 kB |
+chunk-VAL5OAC5.js   | login-component    |  19.11 kB |
+chunk-JHTAMX24.js   | register-component |  11.51 kB |
+
+Application bundle generation complete. [0.597 seconds] - 2026-04-02T21:00:49.808Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.080 seconds] - 2026-04-02T21:01:23.630Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Initial chunk files | Names            |  Raw size
+main.js             | main             |   4.33 kB |
+
+Lazy chunk files    | Names            |  Raw size
+chunk-JZ6SN6NQ.js   | layout-component | 171.96 kB |
+
+Application bundle generation complete. [2.214 seconds] - 2026-04-02T21:02:28.560Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Initial chunk files | Names            |  Raw size
+styles.css          | styles           |  39.99 kB |
+main.js             | main             |   4.33 kB |
+
+Lazy chunk files    | Names            |  Raw size
+chunk-IZ46S42F.js   | layout-component | 180.25 kB |
+
+Application bundle generation complete. [0.562 seconds] - 2026-04-02T21:03:09.574Z
+
+Stylesheet update sent to client(s).
+Component update sent to client(s).
+9:04:24 PM [vite] (client) ✨ new dependencies optimized: qrcode
+9:04:24 PM [vite] (client) ✨ optimized dependencies changed. reloading
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.080 seconds] - 2026-04-02T21:07:21.430Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.077 seconds] - 2026-04-02T21:07:54.208Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.009 seconds] - 2026-04-02T21:07:56.800Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.007 seconds] - 2026-04-02T21:07:57.637Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.007 seconds] - 2026-04-02T21:08:58.067Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.011 seconds] - 2026-04-02T21:09:00.637Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.007 seconds] - 2026-04-02T21:09:01.470Z
 
 Page reload sent to client(s).

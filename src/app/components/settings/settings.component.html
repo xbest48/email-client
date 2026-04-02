@@ -60,6 +60,20 @@
     </button>
     <button
       type="button"
+      (click)="activeTab.set('security')"
+      class="px-4 py-3 text-sm font-medium border-b-2 transition-colors
+             focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-t"
+      [class.border-amber-500]="activeTab() === 'security'"
+      [class.text-amber-700]="activeTab() === 'security'"
+      [class.border-transparent]="activeTab() !== 'security'"
+      [class.text-gray-500]="activeTab() !== 'security'"
+      [class.hover:text-gray-700]="activeTab() !== 'security'"
+      role="tab"
+      [attr.aria-selected]="activeTab() === 'security'">
+      Sécurité
+    </button>
+    <button
+      type="button"
       (click)="activeTab.set('general')"
       class="px-4 py-3 text-sm font-medium border-b-2 transition-colors
              focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-t"
@@ -254,6 +268,61 @@
             }
           </ul>
         }
+      </div>
+    }
+
+    <!-- Security tab -->
+    @if (activeTab() === 'security') {
+      <div class="space-y-6 settings-content">
+        <!-- 2FA Section -->
+        <div>
+          <h3 class="text-sm font-semibold text-gray-800 mb-3">Authentification a deux facteurs (2FA)</h3>
+          <div class="p-4 bg-gray-50 rounded-lg border border-gray-200">
+            @if (twoFactorEnabled()) {
+              <div class="flex items-center gap-2 text-green-600">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                <span class="text-sm font-medium">La 2FA est activee sur votre compte.</span>
+              </div>
+            } @else if (qrCodeUrl()) {
+              <p class="text-sm text-gray-600 mb-4">Scannez ce QR code avec votre application d'authentification (Google Authenticator, Authy...) :</p>
+              <div class="mb-4">
+                <img [src]="qrCodeUrl()" alt="QR Code 2FA" class="border border-gray-300 rounded">
+              </div>
+              <div class="flex items-center gap-3">
+                <input type="text" [(ngModel)]="twoFactorCode" name="twoFactorCode"
+                       class="w-32 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
+                       placeholder="Code à 6 chiffres">
+                <button type="button" (click)="confirm2FA()"
+                        class="px-4 py-2 text-sm bg-amber-500 text-white font-medium rounded-lg hover:bg-amber-600 transition-colors">
+                  Activer
+                </button>
+              </div>
+            } @else {
+              <p class="text-sm text-gray-600 mb-4">Securisez votre compte en ajoutant une etape de verification supplementaire lors de la connexion.</p>
+              <button type="button" (click)="setup2FA()"
+                      class="px-4 py-2 text-sm bg-gray-800 text-white font-medium rounded-lg hover:bg-gray-700 transition-colors">
+                Configurer la 2FA
+              </button>
+            }
+          </div>
+        </div>
+
+        <!-- Passkeys Section -->
+        <div>
+          <h3 class="text-sm font-semibold text-gray-800 mb-3">Passkeys (WebAuthn)</h3>
+          <div class="p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <p class="text-sm text-gray-600 mb-4">Connectez-vous rapidement et en toute securite en utilisant la biometrie (empreinte digitale, reconnaissance faciale) ou la cle de securite de votre appareil.</p>
+            <button type="button" (click)="registerPasskey()"
+                    class="px-4 py-2 text-sm bg-amber-500 text-white font-medium rounded-lg hover:bg-amber-600 transition-colors flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4" />
+              </svg>
+              Ajouter un Passkey
+            </button>
+          </div>
+        </div>
       </div>
     }
 

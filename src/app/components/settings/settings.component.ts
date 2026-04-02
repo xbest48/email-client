@@ -2,8 +2,11 @@ import { Component, inject, signal, output, ChangeDetectionStrategy, viewChild }
 import { FormsModule } from '@angular/forms';
 import { SettingsService, EmailSignature } from '../../services/settings.service';
 import { RichEditorComponent } from '../rich-editor/rich-editor.component';
+import { AuthService } from '../../services/auth.service';
+import * as QRCode from 'qrcode';
+import { startRegistration } from '@simplewebauthn/browser';
 
-type SettingsTab = 'accounts' | 'signatures' | 'general';
+type SettingsTab = 'accounts' | 'signatures' | 'security' | 'general';
 
 @Component({
   selector: 'app-settings',
@@ -16,7 +19,13 @@ export class SettingsComponent {
   protected readonly settingsService = inject(SettingsService);
   readonly close = output<void>();
 
+  protected readonly authService = inject(AuthService);
   readonly activeTab = signal<SettingsTab>('accounts');
+
+  // Security
+  readonly qrCodeUrl = signal<string | null>(null);
+  readonly twoFactorCode = signal('');
+  readonly twoFactorEnabled = signal(false);
 
   // Account form
   readonly accountEmail = signal('');
@@ -109,6 +118,43 @@ export class SettingsComponent {
     this.signatureName.set('');
     this.signatureIsDefault.set(false);
     this.signatureEditor()?.clear();
+  }
+
+  async setup2FA(): Promise<void> {
+    try {
+      const { otpauthUrl } = await this.authService.generate2FA();
+      const qrUrl = await QRCode.toDataURL(otpauthUrl);
+      this.qrCodeUrl.set(qrUrl);
+    } catch (e) {
+      console.error('Failed to setup 2FA', e);
+    }
+  }
+
+  async confirm2FA(): Promise<void> {
+    if (!this.twoFactorCode()) return;
+    const success = await this.authService.turnOn2FA(this.twoFactorCode());
+    if (success) {
+      this.twoFactorEnabled.set(true);
+      this.qrCodeUrl.set(null);
+      this.twoFactorCode.set('');
+    } else {
+      alert('Code invalide');
+    }
+  }
+
+  async registerPasskey(): Promise<void> {
+    try {
+      const options = await this.authService.generateWebAuthnRegisterOptions();
+      const attResp = await startRegistration({ optionsJSON: options });
+      const verified = await this.authService.verifyWebAuthnRegister(attResp);
+      if (verified) {
+        alert('Passkey enregistre avec succes !');
+      } else {
+        alert('Echec de l\'enregistrement du passkey');
+      }
+    } catch (e) {
+      console.error('Passkey registration failed', e);
+    }
   }
 
   savePageSize(): void {

@@ -1,9 +1,13 @@
-import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, ManyToOne } from 'typeorm';
+import { User } from '../users/user.entity';
 
 @Entity()
 export class Account {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @ManyToOne(() => User, user => user.accounts, { onDelete: 'CASCADE' })
+  user: User;
 
   @Column()
   email: string;

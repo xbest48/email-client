@@ -33,8 +33,8 @@ export class AccountsService {
     return decrypted.toString();
   }
 
-  async findAll(): Promise<Account[]> {
-    const accounts = await this.accountsRepository.find();
+  async findAll(userId: string): Promise<Account[]> {
+    const accounts = await this.accountsRepository.find({ where: { user: { id: userId } } });
     return accounts.map(acc => {
       if (acc.password) {
         try {
@@ -47,8 +47,8 @@ export class AccountsService {
     });
   }
 
-  async findOne(id: string): Promise<Account | null> {
-    const acc = await this.accountsRepository.findOneBy({ id });
+  async findOne(id: string, userId: string): Promise<Account | null> {
+    const acc = await this.accountsRepository.findOne({ where: { id, user: { id: userId } } });
     if (acc && acc.password) {
       try {
         acc.password = this.decrypt(acc.password);
@@ -73,7 +73,7 @@ export class AccountsService {
     return savedAccount;
   }
 
-  async remove(id: string): Promise<void> {
-    await this.accountsRepository.delete(id);
+  async remove(id: string, userId: string): Promise<void> {
+    await this.accountsRepository.delete({ id, user: { id: userId } });
   }
 }
