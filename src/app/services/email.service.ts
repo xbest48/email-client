@@ -22,6 +22,7 @@ export class EmailService {
   private trashFolder = '';
 
   async fetchFolders(): Promise<void> {
+    if (!this.settingsService.activeAccountId()) return;
     try {
       const folders = await firstValueFrom(
         this.http.get<ImapFolder[]>(`${this.apiUrl}/folders`, { withCredentials: true })
@@ -60,6 +61,11 @@ export class EmailService {
   }
 
   async fetchEmails(folder: string, query = '', page = 1): Promise<void> {
+    if (!this.settingsService.activeAccountId()) {
+      this.currentEmails.set([]);
+      this.currentTotal.set(0);
+      return;
+    }
     this.loading.set(true);
     try {
       const pageSize = this.settingsService.pageSize;
@@ -90,6 +96,7 @@ export class EmailService {
   }
 
   async fetchEmail(folder: string, uid: number): Promise<Email | null> {
+    if (!this.settingsService.activeAccountId()) return null;
     try {
       return await firstValueFrom(
         this.http.get<Email>(

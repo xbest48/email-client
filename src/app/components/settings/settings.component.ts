@@ -1,4 +1,4 @@
-import { Component, inject, signal, output, ChangeDetectionStrategy, viewChild } from '@angular/core';
+import { Component, inject, signal, computed, output, ChangeDetectionStrategy, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { SettingsService, EmailSignature } from '../../services/settings.service';
 import { RichEditorComponent } from '../rich-editor/rich-editor.component';
@@ -42,11 +42,13 @@ export class SettingsComponent {
 
   // General
   readonly pageSize = signal(this.settingsService.pageSize);
-  readonly darkMode = signal(this.authService.user()?.darkMode ?? false);
-  readonly blockTrackingPixels = signal(this.authService.user()?.blockTrackingPixels ?? false);
-  readonly undoSendDelay = signal(this.authService.user()?.undoSendDelay ?? 0);
+  readonly darkMode = computed(() => this.authService.user()?.darkMode ?? false);
+  readonly blockTrackingPixels = computed(() => this.authService.user()?.blockTrackingPixels ?? false);
+  readonly undoSendDelay = computed(() => this.authService.user()?.undoSendDelay ?? 0);
 
   readonly signatureEditor = viewChild<RichEditorComponent>('signatureEditor');
+
+  readonly testConnectionLoading = signal(false);
 
   onAccountEmailChange(): void {
     const email = this.accountEmail();
@@ -54,6 +56,30 @@ export class SettingsComponent {
     if (domain && !this.accountImapHost()) {
       this.accountImapHost.set(`imap.${domain}`);
       this.accountSmtpHost.set(`smtp.${domain}`);
+    }
+  }
+
+  async testConnection(): Promise<void> {
+    if (!this.accountEmail() || !this.accountPassword() || !this.accountImapHost() || !this.accountSmtpHost()) {
+        alert('Veuillez remplir tous les champs de connexion.');
+        return;
+    }
+
+    this.testConnectionLoading.set(true);
+    const result = await this.settingsService.testAccountConnection({
+      email: this.accountEmail(),
+      password: this.accountPassword(),
+      imapHost: this.accountImapHost(),
+      imapPort: this.accountImapPort(),
+      smtpHost: this.accountSmtpHost(),
+      smtpPort: this.accountSmtpPort(),
+    });
+    this.testConnectionLoading.set(false);
+
+    if (result.success) {
+      alert('Connexion reussie !');
+    } else {
+      alert('Echec de la connexion : ' + result.message);
     }
   }
 
@@ -164,12 +190,14 @@ export class SettingsComponent {
     this.settingsService.setPageSize(this.pageSize());
   }
 
-  async saveUserSettings(): Promise<void> {
+  async updateSetting(key: 'darkMode' | 'undoSendDelay' | 'blockTrackingPixels', value: any): Promise<void> {
     try {
+      const current = this.authService.user() || { email: '' };
       await this.authService.updateSettings({
-        darkMode: this.darkMode(),
-        undoSendDelay: this.undoSendDelay(),
-        blockTrackingPixels: this.blockTrackingPixels()
+        darkMode: current.darkMode,
+        undoSendDelay: current.undoSendDelay,
+        blockTrackingPixels: current.blockTrackingPixels,
+        [key]: value
       });
     } catch (e) {
       console.error('Failed to save settings', e);

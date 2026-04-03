@@ -78,6 +78,23 @@ export class SettingsService {
 
   // --- Accounts ---
 
+  activeAccountId(): string | null {
+    const accs = this.accounts;
+    return accs.length > 0 ? accs[0].id : null;
+  }
+
+  async testAccountConnection(account: Omit<EmailAccount, 'id'>): Promise<{ success: boolean; message?: string }> {
+    try {
+      const res = await firstValueFrom(
+        this.http.post<{ success: boolean; message?: string }>('/api/accounts/test', account)
+      );
+      return res;
+    } catch (err: any) {
+      console.error('Test connection failed', err);
+      return { success: false, message: err.message || 'Connection failed' };
+    }
+  }
+
   async addAccount(account: Omit<EmailAccount, 'id'>): Promise<void> {
     try {
       const newAccount = await firstValueFrom(this.http.post<EmailAccount>('/api/accounts', account));

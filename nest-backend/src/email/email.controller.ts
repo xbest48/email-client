@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Param, Query, Body, Headers, BadRequestException, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Query, Body, Headers, BadRequestException, UseGuards, Request, Inject, forwardRef } from '@nestjs/common';
 import { ImapService, EmailCredentials } from './imap/imap.service';
 import type { SendEmailDto } from './smtp/smtp.service';
 import { SmtpService } from './smtp/smtp.service';
@@ -11,6 +11,7 @@ export class EmailController {
   constructor(
     private readonly imapService: ImapService,
     private readonly smtpService: SmtpService,
+    @Inject(forwardRef(() => AccountsService))
     private readonly accountsService: AccountsService,
   ) {}
 
