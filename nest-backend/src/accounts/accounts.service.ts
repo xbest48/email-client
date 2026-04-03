@@ -36,18 +36,19 @@ export class AccountsService {
   async findAll(userId: string): Promise<Account[]> {
     const accounts = await this.accountsRepository.find({ where: { user: { id: userId } } });
     return accounts.map(acc => {
-      if (acc.password) {
-        try {
-          acc.password = this.decrypt(acc.password);
-        } catch (e) {
-          console.error('Failed to decrypt password for account', acc.id);
-        }
-      }
-      return acc;
+      const { password, ...accountWithoutPassword } = acc;
+      return accountWithoutPassword as Account;
     });
   }
 
   async findOne(id: string, userId: string): Promise<Account | null> {
+    const acc = await this.accountsRepository.findOne({ where: { id, user: { id: userId } } });
+    if (!acc) return null;
+    const { password, ...accountWithoutPassword } = acc;
+    return accountWithoutPassword as Account;
+  }
+
+  async findOneWithPassword(id: string, userId: string): Promise<Account | null> {
     const acc = await this.accountsRepository.findOne({ where: { id, user: { id: userId } } });
     if (acc && acc.password) {
       try {
@@ -66,11 +67,8 @@ export class AccountsService {
     const newAccount = this.accountsRepository.create(account);
     const savedAccount = await this.accountsRepository.save(newAccount);
 
-    // Return decrypted password to frontend if needed
-    if (savedAccount.password) {
-      savedAccount.password = this.decrypt(savedAccount.password);
-    }
-    return savedAccount;
+    const { password, ...accountWithoutPassword } = savedAccount;
+    return accountWithoutPassword as Account;
   }
 
   async remove(id: string, userId: string): Promise<void> {

@@ -18,7 +18,8 @@ export class EmailController {
     const accountId = headers['x-account-id'];
     if (!accountId) throw new BadRequestException('Missing x-account-id header');
 
-    const account = await this.accountsService.findOne(accountId, req.user.id);
+    // We must use findOneWithPassword internally to connect
+    const account = await this.accountsService.findOneWithPassword(accountId, req.user.id);
     if (!account) throw new BadRequestException('Account not found');
 
     return {

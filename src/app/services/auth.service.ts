@@ -29,8 +29,15 @@ export class AuthService {
   readonly isAuthenticated = computed(() => this.authenticated());
   readonly user = computed(() => this.userProfile());
 
+  // We keep a promise to ensure we only load once on startup
+  private initialLoadPromise: Promise<void> | null = null;
+
   constructor() {
-    this.checkAuthStatus();
+    this.initialLoadPromise = this.checkAuthStatus();
+  }
+
+  getInitialLoadPromise(): Promise<void> | null {
+    return this.initialLoadPromise;
   }
 
   getToken(): string | null {
