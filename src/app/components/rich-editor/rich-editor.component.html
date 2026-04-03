@@ -1,6 +1,6 @@
 <div class="rich-editor flex flex-col" [class.flex-col-reverse]="toolbarPosition() === 'bottom'">
   <!-- Toolbar -->
-  <div class="flex items-center gap-0.5 flex-wrap px-2 py-1.5 bg-gray-50 border-gray-200"
+  <div class="flex items-center gap-0.5 flex-wrap px-2 py-1.5 bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
        [class.border-b]="toolbarPosition() === 'top'"
        [class.border-t]="toolbarPosition() === 'bottom'"
        role="toolbar"
@@ -9,7 +9,7 @@
     <!-- Font size -->
     <select
       (change)="changeFontSize($event)"
-      class="text-xs px-1 py-1 border border-gray-200 rounded bg-white text-gray-700
+      class="text-xs px-1 py-1 border border-gray-200 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200
              focus:outline-none focus:ring-1 focus:ring-amber-400 mr-1"
       aria-label="Taille de police">
       <option value="">Taille</option>
@@ -21,7 +21,7 @@
 
     <!-- Text color -->
     <label class="relative mr-1 cursor-pointer" aria-label="Couleur du texte">
-      <span class="flex items-center justify-center w-7 h-7 rounded text-xs hover:bg-gray-200 transition-colors"
+      <span class="flex items-center justify-center w-7 h-7 rounded text-xs hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors dark:text-gray-200"
             title="Couleur du texte">A</span>
       <input type="color" value="#000000" (input)="changeColor($event)"
              class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
@@ -29,13 +29,13 @@
 
     @for (tool of toolItems; track $index) {
       @if (tool.cmd === 'separator') {
-        <div class="w-px h-5 bg-gray-300 mx-1" aria-hidden="true"></div>
+        <div class="w-px h-5 bg-gray-300 dark:bg-gray-600 mx-1" aria-hidden="true"></div>
       } @else {
         <button
           type="button"
           (click)="execCommand(tool.cmd)"
-          class="flex items-center justify-center w-7 h-7 rounded text-xs text-gray-700
-                 hover:bg-gray-200 transition-colors
+          class="flex items-center justify-center w-7 h-7 rounded text-xs text-gray-700 dark:text-gray-200
+                 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors
                  focus:outline-none focus:ring-1 focus:ring-amber-400"
           [title]="tool.title"
           [attr.aria-label]="tool.title">
@@ -77,8 +77,8 @@
   <div
     #editor
     contenteditable="true"
-    class="flex-1 px-4 py-3 text-sm text-gray-800 overflow-y-auto focus:outline-none
-           prose prose-sm max-w-none"
+    class="flex-1 px-4 py-3 text-sm text-gray-800 dark:text-gray-200 overflow-y-auto focus:outline-none
+           prose prose-sm max-w-none dark:prose-invert"
     [style.min-height]="minHeight()"
     [attr.data-placeholder]="placeholder()"
     (input)="onInput()"

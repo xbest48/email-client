@@ -223,3 +223,657 @@ No output file changes.
 Application bundle generation complete. [0.007 seconds] - 2026-04-02T21:09:01.470Z
 
 Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.448 seconds] - 2026-04-03T07:13:20.575Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.100 seconds] - 2026-04-03T07:14:24.222Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.547 seconds] - 2026-04-03T07:14:32.612Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.022 seconds] - 2026-04-03T07:14:38.094Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.010 seconds] - 2026-04-03T07:14:39.078Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Initial chunk files | Names              |  Raw size
+chunk-XY6FEAOK.js   | -                  |   5.63 kB |
+main.js             | main               |   4.33 kB |
+
+Lazy chunk files    | Names              |  Raw size
+chunk-OKQ26KQ3.js   | layout-component   | 180.25 kB |
+chunk-6NYLG42K.js   | login-component    |  19.11 kB |
+chunk-ZTKWIIRB.js   | register-component |  11.51 kB |
+
+Application bundle generation complete. [3.336 seconds] - 2026-04-03T07:16:12.496Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Initial chunk files | Names                  |  Raw size
+main.js             | main                   |   4.33 kB |
+
+Lazy chunk files    | Names                  |  Raw size
+chunk-7P27N3WN.js   | layout-component       | 180.25 kB |
+chunk-NEBLMY4O.js   | email-list-component   |  30.96 kB |
+chunk-RLWQE66Q.js   | email-detail-component |  29.72 kB |
+chunk-5CRIFN5U.js   | -                      |  12.50 kB |
+
+Application bundle generation complete. [4.599 seconds] - 2026-04-03T07:17:24.511Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Initial chunk files | Names            |  Raw size
+main.js             | main             |   4.33 kB |
+
+Lazy chunk files    | Names            |  Raw size
+chunk-TZEHR67L.js   | layout-component | 180.52 kB |
+
+Application bundle generation complete. [1.171 seconds] - 2026-04-03T07:18:33.054Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Initial chunk files | Names            |  Raw size
+main.js             | main             |   4.33 kB |
+
+Lazy chunk files    | Names            |  Raw size
+chunk-LEDIWF2G.js   | layout-component | 180.52 kB |
+
+Application bundle generation complete. [0.550 seconds] - 2026-04-03T07:19:38.523Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Initial chunk files | Names            |  Raw size
+styles.css          | styles           |  40.83 kB |
+main.js             | main             |   4.33 kB |
+
+Lazy chunk files    | Names            |  Raw size
+chunk-CROMYKYO.js   | layout-component | 183.12 kB |
+
+Application bundle generation complete. [0.901 seconds] - 2026-04-03T07:20:13.380Z
+
+Stylesheet update sent to client(s).
+Component update sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Initial chunk files | Names                  | Raw size
+main.js             | main                   |  4.33 kB |
+
+Lazy chunk files    | Names                  | Raw size
+chunk-JSTDIGTI.js   | email-detail-component | 30.42 kB |
+
+Application bundle generation complete. [0.864 seconds] - 2026-04-03T07:20:55.465Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Application bundle generation failed. [0.603 seconds] - 2026-04-03T07:21:27.616Z
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mTS2341: Property 'authService' is private and only accessible within class 'EmailDetailComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/components/email-detail/email-detail.component.html:96:13:
+[37m      96 │         @if ([32mauthService[37m.user()?.blockTrackingPixels && !allowExte...
+         ╵              [32m~~~~~~~~~~~[0m
+
+  Error occurs in the template of component EmailDetailComponent.
+
+    src/app/components/email-detail/email-detail.component.ts:13:15:
+[37m      13 │   templateUrl: [32m'./email-detail.component.html'[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Application bundle generation failed. [0.951 seconds] - 2026-04-03T07:24:18.076Z
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mTS2341: Property 'authService' is private and only accessible within class 'EmailDetailComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/components/email-detail/email-detail.component.html:96:13:
+[37m      96 │         @if ([32mauthService[37m.user()?.blockTrackingPixels && !allowExte...
+         ╵              [32m~~~~~~~~~~~[0m
+
+  Error occurs in the template of component EmailDetailComponent.
+
+    src/app/components/email-detail/email-detail.component.ts:13:15:
+[37m      13 │   templateUrl: [32m'./email-detail.component.html'[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Application bundle generation failed. [0.744 seconds] - 2026-04-03T07:26:05.092Z
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mTS2341: Property 'authService' is private and only accessible within class 'EmailDetailComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/components/email-detail/email-detail.component.html:96:13:
+[37m      96 │         @if ([32mauthService[37m.user()?.blockTrackingPixels && !allowExte...
+         ╵              [32m~~~~~~~~~~~[0m
+
+  Error occurs in the template of component EmailDetailComponent.
+
+    src/app/components/email-detail/email-detail.component.ts:13:15:
+[37m      13 │   templateUrl: [32m'./email-detail.component.html'[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Application bundle generation failed. [0.902 seconds] - 2026-04-03T07:26:42.756Z
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mTS2341: Property 'authService' is private and only accessible within class 'EmailDetailComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/components/email-detail/email-detail.component.html:96:13:
+[37m      96 │         @if ([32mauthService[37m.user()?.blockTrackingPixels && !allowExte...
+         ╵              [32m~~~~~~~~~~~[0m
+
+  Error occurs in the template of component EmailDetailComponent.
+
+    src/app/components/email-detail/email-detail.component.ts:13:15:
+[37m      13 │   templateUrl: [32m'./email-detail.component.html'[37m,
+         ╵                [32m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Initial chunk files | Names                  |  Raw size
+styles.css          | styles                 |  44.53 kB |
+chunk-XY6FEAOK.js   | -                      |   5.63 kB |
+main.js             | main                   |   4.65 kB |
+chunk-CJNF7J5P.js   | -                      |   1.49 kB |
+
+                    | Initial total          |  56.30 kB
+
+Lazy chunk files    | Names                  |  Raw size
+chunk-UQNNFYXW.js   | layout-component       | 193.68 kB |
+chunk-GR5MGBH4.js   | email-detail-component |  32.48 kB |
+chunk-NEBLMY4O.js   | email-list-component   |  30.96 kB |
+chunk-6NYLG42K.js   | login-component        |  19.11 kB |
+chunk-5CRIFN5U.js   | -                      |  12.50 kB |
+chunk-ZTKWIIRB.js   | register-component     |  11.51 kB |
+chunk-LO56YWFZ.js   | -                      |   1.57 kB |
+
+Application bundle generation complete. [0.855 seconds] - 2026-04-03T07:32:18.728Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.060 seconds] - 2026-04-03T07:34:33.451Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.151 seconds] - 2026-04-03T07:35:56.992Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.065 seconds] - 2026-04-03T07:37:16.728Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.132 seconds] - 2026-04-03T07:41:20.544Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.011 seconds] - 2026-04-03T07:41:23.458Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.007 seconds] - 2026-04-03T07:41:24.341Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.013 seconds] - 2026-04-03T07:43:08.151Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.011 seconds] - 2026-04-03T07:43:10.890Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.006 seconds] - 2026-04-03T07:43:11.760Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.081 seconds] - 2026-04-03T08:06:28.346Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Initial chunk files | Names            |  Raw size
+main.js             | main             |   4.65 kB |
+
+Lazy chunk files    | Names            |  Raw size
+chunk-VUF5JZOG.js   | layout-component | 193.73 kB |
+
+Application bundle generation complete. [1.376 seconds] - 2026-04-03T08:12:00.052Z
+
+Component update sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.080 seconds] - 2026-04-03T08:17:27.931Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.072 seconds] - 2026-04-03T08:27:13.254Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.080 seconds] - 2026-04-03T08:29:54.477Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.006 seconds] - 2026-04-03T08:29:57.204Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.007 seconds] - 2026-04-03T08:29:58.002Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.010 seconds] - 2026-04-03T08:29:59.603Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.006 seconds] - 2026-04-03T08:30:02.125Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.006 seconds] - 2026-04-03T08:30:02.951Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.532 seconds] - 2026-04-03T09:14:54.466Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.253 seconds] - 2026-04-03T09:15:04.506Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.073 seconds] - 2026-04-03T09:17:13.142Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.095 seconds] - 2026-04-03T09:17:17.983Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Application bundle generation failed. [4.677 seconds] - 2026-04-03T09:18:45.407Z
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'userId' does not exist on type '{ success: boolean; requires2FA?: boolean | undefined; tempToken?: string | undefined; }'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/components/login/login.component.ts:50:37:
+[37m      50 │     if (result.requires2FA && result.[32muserId[37m) {
+         ╵                                      [32m~~~~~~[0m
+
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'userId' does not exist on type '{ success: boolean; requires2FA?: boolean | undefined; tempToken?: string | undefined; }'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/components/login/login.component.ts:52:34:
+[37m      52 │       this.pendingUserId = result.[32muserId[37m;
+         ╵                                   [32m~~~~~~[0m
+
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'userId' does not exist on type '{ success: boolean; requires2FA?: boolean | undefined; tempToken?: string | undefined; }'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/components/login/login.component.ts:72:39:
+[37m      72 │       if (result.requires2FA && result.[32muserId[37m) {
+         ╵                                        [32m~~~~~~[0m
+
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'userId' does not exist on type '{ success: boolean; requires2FA?: boolean | undefined; tempToken?: string | undefined; }'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/components/login/login.component.ts:74:36:
+[37m      74 │         this.pendingUserId = result.[32muserId[37m;
+         ╵                                     [32m~~~~~~[0m
+
+
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Application bundle generation failed. [0.522 seconds] - 2026-04-03T09:19:33.534Z
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'userId' does not exist on type '{ success: boolean; requires2FA?: boolean | undefined; tempToken?: string | undefined; }'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/components/login/login.component.ts:72:39:
+[37m      72 │       if (result.requires2FA && result.[32muserId[37m) {
+         ╵                                        [32m~~~~~~[0m
+
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'pendingUserId' does not exist on type 'LoginComponent'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/components/login/login.component.ts:74:13:
+[37m      74 │         this.[32mpendingUserId[37m = result.userId;
+         ╵              [32m~~~~~~~~~~~~~[0m
+
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mTS2339: Property 'userId' does not exist on type '{ success: boolean; requires2FA?: boolean | undefined; tempToken?: string | undefined; }'.[0m [1m[35m[plugin angular-compiler][0m
+
+    src/app/components/login/login.component.ts:74:36:
+[37m      74 │         this.pendingUserId = result.[32muserId[37m;
+         ╵                                     [32m~~~~~~[0m
+
+
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Initial chunk files | Names                  |  Raw size
+styles.css          | styles                 |  44.53 kB |
+chunk-5YOU5ATT.js   | -                      |   5.65 kB |
+main.js             | main                   |   4.65 kB |
+chunk-CJNF7J5P.js   | -                      |   1.49 kB |
+
+                    | Initial total          |  56.32 kB
+
+Lazy chunk files    | Names                  |  Raw size
+chunk-4IGJO57B.js   | layout-component       | 193.73 kB |
+chunk-GPWKNU7P.js   | email-detail-component |  32.48 kB |
+chunk-NEBLMY4O.js   | email-list-component   |  30.96 kB |
+chunk-5CBLQMCB.js   | login-component        |  19.13 kB |
+chunk-5CRIFN5U.js   | -                      |  12.50 kB |
+chunk-E25EID7P.js   | register-component     |  11.51 kB |
+chunk-LO56YWFZ.js   | -                      |   1.57 kB |
+
+Application bundle generation complete. [0.457 seconds] - 2026-04-03T09:20:17.339Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.283 seconds] - 2026-04-03T09:27:16.542Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Initial chunk files | Names            |  Raw size
+styles.css          | styles           |  45.03 kB |
+main.js             | main             |   4.65 kB |
+
+Lazy chunk files    | Names            |  Raw size
+chunk-WD72KXYQ.js   | layout-component | 194.13 kB |
+
+Application bundle generation complete. [0.683 seconds] - 2026-04-03T09:28:43.352Z
+
+Stylesheet update sent to client(s).
+Component update sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Initial chunk files | Names            |  Raw size
+styles.css          | styles           |  45.65 kB |
+main.js             | main             |   4.65 kB |
+
+Lazy chunk files    | Names            |  Raw size
+chunk-VULCT4AF.js   | layout-component | 194.74 kB |
+
+Application bundle generation complete. [0.747 seconds] - 2026-04-03T09:29:29.490Z
+
+Stylesheet update sent to client(s).
+Component update sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Initial chunk files | Names            |  Raw size
+styles.css          | styles           |  46.03 kB |
+main.js             | main             |   4.65 kB |
+
+Lazy chunk files    | Names            |  Raw size
+chunk-53GSHPMX.js   | layout-component | 195.29 kB |
+
+Application bundle generation complete. [0.742 seconds] - 2026-04-03T09:29:39.598Z
+
+Stylesheet update sent to client(s).
+Component update sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Initial chunk files | Names            |  Raw size
+styles.css          | styles           |  46.31 kB |
+main.js             | main             |   4.65 kB |
+
+Lazy chunk files    | Names            |  Raw size
+chunk-GFG7WB5P.js   | layout-component | 197.01 kB |
+
+Application bundle generation complete. [0.813 seconds] - 2026-04-03T09:34:45.110Z
+
+Stylesheet update sent to client(s).
+Component update sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Initial chunk files | Names            |  Raw size
+main.js             | main             |   4.65 kB |
+
+Lazy chunk files    | Names            |  Raw size
+chunk-3322CPJC.js   | layout-component | 197.73 kB |
+
+Application bundle generation complete. [0.859 seconds] - 2026-04-03T09:39:15.070Z
+
+Component update sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Initial chunk files | Names            |  Raw size
+styles.css          | styles           |  46.74 kB |
+main.js             | main             |   4.65 kB |
+
+Lazy chunk files    | Names            |  Raw size
+chunk-NEJ25ZGR.js   | layout-component | 198.16 kB |
+
+Application bundle generation complete. [0.757 seconds] - 2026-04-03T09:40:04.941Z
+
+Stylesheet update sent to client(s).
+Component update sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Initial chunk files | Names            |  Raw size
+styles.css          | styles           |  46.82 kB |
+main.js             | main             |   4.65 kB |
+
+Lazy chunk files    | Names            |  Raw size
+chunk-NCWE6UFW.js   | layout-component | 198.78 kB |
+
+Application bundle generation complete. [0.723 seconds] - 2026-04-03T09:45:27.079Z
+
+Stylesheet update sent to client(s).
+Component update sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Initial chunk files | Names            |  Raw size
+styles.css          | styles           |  47.09 kB |
+main.js             | main             |   4.65 kB |
+
+Lazy chunk files    | Names            |  Raw size
+chunk-U732TRFH.js   | layout-component | 199.56 kB |
+
+Application bundle generation complete. [0.713 seconds] - 2026-04-03T09:46:53.934Z
+
+Stylesheet update sent to client(s).
+Component update sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Initial chunk files | Names                  | Raw size
+styles.css          | styles                 | 48.72 kB |
+main.js             | main                   |  4.65 kB |
+
+Lazy chunk files    | Names                  | Raw size
+chunk-UUG2FRTC.js   | email-detail-component | 34.26 kB |
+
+Application bundle generation complete. [0.701 seconds] - 2026-04-03T09:48:40.313Z
+
+Stylesheet update sent to client(s).
+Component update sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+Initial chunk files | Names                | Raw size
+styles.css          | styles               | 51.23 kB |
+main.js             | main                 |  4.65 kB |
+
+Lazy chunk files    | Names                | Raw size
+chunk-J5MISYIH.js   | email-list-component | 33.00 kB |
+
+Application bundle generation complete. [0.578 seconds] - 2026-04-03T09:50:08.113Z
+
+Stylesheet update sent to client(s).
+Component update sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.229 seconds] - 2026-04-03T09:59:14.333Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.010 seconds] - 2026-04-03T09:59:18.302Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.007 seconds] - 2026-04-03T09:59:19.238Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.012 seconds] - 2026-04-03T09:59:20.878Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.008 seconds] - 2026-04-03T09:59:23.658Z
+
+Page reload sent to client(s).
+❯ Changes detected. Rebuilding...
+✔ Changes detected. Rebuilding...
+
+No output file changes.
+
+Application bundle generation complete. [0.009 seconds] - 2026-04-03T09:59:24.504Z
+
+Page reload sent to client(s).

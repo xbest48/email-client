@@ -21,9 +21,26 @@ export class AuthController {
   }
 
   @Post('2fa/authenticate')
-  async authenticate2FA(@Body() body: { userId: string; code: string }) {
-    await this.authService.verifyTwoFactorCode(body.userId, body.code);
-    const user = await this.usersService.findById(body.userId);
+  async authenticate2FA(@Body() body: { tempToken: string; code: string }) {
+    // We decode and verify the temporary token here
+    let payload;
+    try {
+      payload = this.authService.verifyTempToken(body.tempToken);
+    } catch (e) {
+      throw new UnauthorizedException('Invalid or expired temporary token');
+    }
+
+    if (!payload.isTemp2FA) {
+      throw new UnauthorizedException('Invalid token type');
+    }
+
+    const userId = payload.sub;
+
+    const isCodeValid = await this.authService.verifyTwoFactorCode(userId, body.code);
+    if (!isCodeValid) {
+       throw new UnauthorizedException('Invalid 2FA code');
+    }
+    const user = await this.usersService.findById(userId);
     return this.authService.generateToken(user);
   }
 
@@ -43,8 +60,30 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Get('profile')
-  getProfile(@Request() req: any) {
-    return req.user;
+  async getProfile(@Request() req: any) {
+    const user = await this.usersService.findById(req.user.id);
+    if (!user) {
+      return req.user;
+    }
+    return {
+      id: user.id,
+      email: user.email,
+      darkMode: user.darkMode,
+      undoSendDelay: user.undoSendDelay,
+      blockTrackingPixels: user.blockTrackingPixels,
+    };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('profile/settings')
+  async updateSettings(@Request() req: any, @Body() body: any) {
+    const { darkMode, undoSendDelay, blockTrackingPixels } = body;
+    await this.usersService.update(req.user.id, {
+      darkMode,
+      undoSendDelay,
+      blockTrackingPixels,
+    });
+    return { success: true };
   }
 
   // --- WebAuthn ---

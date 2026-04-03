@@ -1,7 +1,7 @@
-<div class="flex flex-col h-full">
+<div class="flex flex-col h-full bg-white dark:bg-gray-900">
   <!-- Header -->
-  <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white/80 backdrop-blur-sm">
-    <h2 class="text-lg font-semibold text-gray-800">{{ title() }}</h2>
+  <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
+    <h2 class="text-lg font-semibold text-gray-800 dark:text-white">{{ title() }}</h2>
     <div class="flex items-center gap-2">
       <!-- Select all -->
       <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
@@ -15,7 +15,7 @@
       <!-- Refresh -->
       <button
         (click)="refresh()"
-        class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors
+        class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-800 rounded-lg transition-colors
                focus:outline-none focus:ring-2 focus:ring-amber-400"
         type="button"
         [attr.aria-label]="emailService.loading() ? 'Chargement...' : 'Actualiser'"
@@ -31,11 +31,11 @@
 
   <!-- Bulk actions -->
   @if (selectedIds().size > 0) {
-    <div class="flex items-center gap-2 px-4 py-2 bg-amber-50 border-b border-amber-100">
-      <span class="text-sm text-amber-800 font-medium">{{ selectedIds().size }} selectionne(s)</span>
+    <div class="flex items-center gap-2 px-4 py-2 bg-amber-50 dark:bg-amber-900/30 border-b border-amber-100 dark:border-amber-900/50">
+      <span class="text-sm text-amber-800 dark:text-amber-200 font-medium">{{ selectedIds().size }} selectionne(s)</span>
       <div class="flex items-center gap-1 ml-auto">
         <button (click)="bulkTrash()" type="button"
-                class="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors
+                class="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:text-gray-400 dark:hover:text-red-400 dark:hover:bg-red-900/30 rounded-lg transition-colors
                        focus:outline-none focus:ring-2 focus:ring-red-400"
                 aria-label="Supprimer la selection">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -43,7 +43,7 @@
           </svg>
         </button>
         <button (click)="bulkMarkRead()" type="button"
-                class="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-amber-100 rounded-lg transition-colors
+                class="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-amber-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-amber-900/30 rounded-lg transition-colors
                        focus:outline-none focus:ring-2 focus:ring-amber-400"
                 aria-label="Marquer comme lu">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -59,10 +59,10 @@
     @if (emailService.loading() && emails().length === 0) {
       <div class="flex flex-col items-center justify-center py-16" role="status" aria-label="Chargement">
         <div class="w-8 h-8 border-3 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
-        <p class="mt-3 text-sm text-gray-500">Chargement des emails...</p>
+        <p class="mt-3 text-sm text-gray-500 dark:text-gray-400">Chargement des emails...</p>
       </div>
     } @else if (emails().length === 0) {
-      <div class="flex flex-col items-center justify-center py-16 text-gray-400">
+      <div class="flex flex-col items-center justify-center py-16 text-gray-400 dark:text-gray-500">
         <svg class="w-16 h-16 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
         </svg>
@@ -71,11 +71,14 @@
     } @else {
       @for (email of emails(); track emailKey(email)) {
         <div
-          class="flex items-center gap-3 px-4 py-3 border-b border-gray-100 cursor-pointer
-                 hover:bg-gray-50 transition-colors duration-100 group"
-          [class.bg-white]="email.isRead"
-          [class.bg-blue-50/40]="!email.isRead"
+          class="flex items-center gap-3 px-4 py-3 border-b border-gray-100 dark:border-gray-800 cursor-pointer
+                 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors duration-100 group"
+          [class.bg-white]="email.isRead && !isSelected(email)"
+          [class.dark:bg-gray-900]="email.isRead && !isSelected(email)"
+          [class.bg-blue-50/40]="!email.isRead && !isSelected(email)"
+          [class.dark:bg-blue-900/20]="!email.isRead && !isSelected(email)"
           [class.bg-amber-50]="isSelected(email)"
+          [class.dark:bg-amber-900/30]="isSelected(email)"
           (click)="openEmail(email)"
           (keydown.enter)="openEmail(email)"
           role="listitem"
@@ -108,17 +111,17 @@
 
           <!-- Sender -->
           <div class="w-36 shrink-0 truncate" [class.font-semibold]="!email.isRead">
-            <span class="text-sm text-gray-800">{{ email.from.name || email.from.email }}</span>
+            <span class="text-sm text-gray-800 dark:text-gray-200">{{ email.from.name || email.from.email }}</span>
           </div>
 
           <!-- Subject + snippet -->
           <div class="flex-1 min-w-0 flex items-baseline gap-2">
             <span class="text-sm truncate" [class.font-semibold]="!email.isRead" [class.text-gray-900]="!email.isRead"
-                  [class.text-gray-700]="email.isRead">
+                  [class.dark:text-white]="!email.isRead" [class.text-gray-700]="email.isRead" [class.dark:text-gray-300]="email.isRead">
               {{ email.subject }}
             </span>
             @if (email.snippet) {
-              <span class="text-sm text-gray-400 truncate hidden sm:inline">
+              <span class="text-sm text-gray-400 dark:text-gray-500 truncate hidden sm:inline">
                 — {{ email.snippet }}
               </span>
             }
@@ -126,7 +129,7 @@
 
           <!-- Attachment icon -->
           @if (email.hasAttachments) {
-            <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24"
+            <svg class="w-4 h-4 text-gray-400 dark:text-gray-500 shrink-0" fill="none" viewBox="0 0 24 24"
                  stroke="currentColor" stroke-width="2" aria-label="Piece jointe">
               <path stroke-linecap="round" stroke-linejoin="round"
                     d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
@@ -134,7 +137,7 @@
           }
 
           <!-- Date -->
-          <span class="text-xs text-gray-500 shrink-0 w-20 text-right" [class.font-semibold]="!email.isRead">
+          <span class="text-xs text-gray-500 dark:text-gray-400 shrink-0 w-20 text-right" [class.font-semibold]="!email.isRead">
             {{ email.date | relativeTime }}
           </span>
         </div>
@@ -145,7 +148,7 @@
         <div class="flex justify-center py-4">
           <button
             (click)="loadMore()"
-            class="px-4 py-2 text-sm text-amber-700 bg-amber-50 hover:bg-amber-100
+            class="px-4 py-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-900/50
                    rounded-lg transition-colors font-medium
                    focus:outline-none focus:ring-2 focus:ring-amber-400"
             type="button"

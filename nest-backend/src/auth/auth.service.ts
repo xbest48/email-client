@@ -43,10 +43,19 @@ export class AuthService {
     }
 
     if (user.isTwoFactorEnabled) {
-      return { isTwoFactorRequired: true, userId: user.id };
+      return { isTwoFactorRequired: true, temp_token: this.generateTemp2FAToken(user) };
     }
 
     return this.generateToken(user);
+  }
+
+  generateTemp2FAToken(user: any) {
+    const payload = { sub: user.id, isTemp2FA: true };
+    return this.jwtService.sign(payload, { expiresIn: '5m' });
+  }
+
+  verifyTempToken(token: string) {
+    return this.jwtService.verify(token);
   }
 
   generateToken(user: any) {
@@ -219,7 +228,7 @@ export class AuthService {
       await this.usersService.update(user.id, { currentChallenge: undefined });
 
       if (user.isTwoFactorEnabled) {
-        return { isTwoFactorRequired: true, userId: user.id };
+        return { isTwoFactorRequired: true, temp_token: this.generateTemp2FAToken(user) };
       }
 
       return this.generateToken(user);

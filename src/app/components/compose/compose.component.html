@@ -8,7 +8,7 @@
 
 <!-- Compose dialog -->
 <div
-  class="fixed z-50 flex flex-col bg-white shadow-2xl border border-gray-200"
+  class="fixed z-50 flex flex-col bg-white dark:bg-gray-800 shadow-2xl border border-gray-200 dark:border-gray-700"
   [class.bottom-0]="!maximized()"
   [class.right-4]="!maximized()"
   [class.md:right-8]="!maximized()"
@@ -24,7 +24,7 @@
   aria-label="Nouveau message">
 
   <!-- Header -->
-  <div class="flex items-center justify-between px-4 py-3 bg-gray-800"
+  <div class="flex items-center justify-between px-4 py-3 bg-gray-800 dark:bg-gray-900"
        [class.rounded-t-2xl]="true">
     <h2 class="text-sm font-semibold text-white">Nouveau message</h2>
     <div class="flex items-center gap-1">
@@ -73,14 +73,14 @@
   @if (!minimized()) {
     <form (submit)="onSend($event)" class="flex flex-col flex-1 overflow-hidden">
       <!-- To -->
-      <div class="flex items-center border-b border-gray-100 px-4">
+      <div class="flex items-center border-b border-gray-100 dark:border-gray-700 px-4">
         <label for="compose-to" class="text-sm text-gray-500 w-8 shrink-0">A</label>
         <input
           id="compose-to"
           type="email"
           [(ngModel)]="to"
           name="to"
-          class="flex-1 py-2.5 text-sm text-gray-800 focus:outline-none"
+          class="flex-1 py-2.5 text-sm text-gray-800 dark:text-gray-200 bg-transparent focus:outline-none"
           placeholder="destinataire@email.com"
           required
           autocomplete="email">
@@ -97,37 +97,37 @@
       }
 
       @if (showCc()) {
-        <div class="flex items-center border-b border-gray-100 px-4">
+        <div class="flex items-center border-b border-gray-100 dark:border-gray-700 px-4">
           <label for="compose-cc" class="text-sm text-gray-500 w-8 shrink-0">Cc</label>
           <input
             id="compose-cc"
             type="text"
             [(ngModel)]="cc"
             name="cc"
-            class="flex-1 py-2.5 text-sm text-gray-800 focus:outline-none"
+            class="flex-1 py-2.5 text-sm text-gray-800 dark:text-gray-200 bg-transparent focus:outline-none"
             placeholder="cc@email.com">
         </div>
-        <div class="flex items-center border-b border-gray-100 px-4">
+        <div class="flex items-center border-b border-gray-100 dark:border-gray-700 px-4">
           <label for="compose-bcc" class="text-sm text-gray-500 w-8 shrink-0">Cci</label>
           <input
             id="compose-bcc"
             type="text"
             [(ngModel)]="bcc"
             name="bcc"
-            class="flex-1 py-2.5 text-sm text-gray-800 focus:outline-none"
+            class="flex-1 py-2.5 text-sm text-gray-800 dark:text-gray-200 bg-transparent focus:outline-none"
             placeholder="cci@email.com">
         </div>
       }
 
       <!-- Subject -->
-      <div class="flex items-center border-b border-gray-100 px-4">
+      <div class="flex items-center border-b border-gray-100 dark:border-gray-700 px-4">
         <label for="compose-subject" class="text-sm text-gray-500 w-14 shrink-0">Objet</label>
         <input
           id="compose-subject"
           type="text"
           [(ngModel)]="subject"
           name="subject"
-          class="flex-1 py-2.5 text-sm text-gray-800 focus:outline-none"
+          class="flex-1 py-2.5 text-sm text-gray-800 dark:text-gray-200 bg-transparent focus:outline-none"
           placeholder="Objet du message">
       </div>
 
@@ -144,7 +144,7 @@
       </div>
 
       <!-- Footer: Send button + trash, next to toolbar -->
-      <div class="flex items-center justify-between px-4 py-2 border-t border-gray-100 bg-gray-50/50">
+      <div class="flex items-center justify-between px-4 py-2 border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
         <button
           type="submit"
           class="px-6 py-2 bg-amber-500 text-white text-sm font-semibold rounded-xl

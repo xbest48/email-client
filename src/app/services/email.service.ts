@@ -163,7 +163,45 @@ export class EmailService {
     }
   }
 
+  readonly pendingSends = signal<{ id: string; to: string; subject: string; timeoutId: any; cancel: () => void }[]>([]);
+
   async sendEmail(
+    to: string,
+    subject: string,
+    text: string,
+    cc = '',
+    bcc = '',
+    inReplyTo = '',
+    references = '',
+    delayMs = 0
+  ): Promise<void> {
+    if (delayMs > 0) {
+      return new Promise((resolve, reject) => {
+        const id = Math.random().toString(36).substring(2, 9);
+        const timeoutId = setTimeout(async () => {
+          this.pendingSends.update(sends => sends.filter(s => s.id !== id));
+          try {
+            await this.executeSend(to, subject, text, cc, bcc, inReplyTo, references);
+            resolve();
+          } catch (e) {
+            reject(e);
+          }
+        }, delayMs);
+
+        const cancel = () => {
+          clearTimeout(timeoutId);
+          this.pendingSends.update(sends => sends.filter(s => s.id !== id));
+          resolve(); // Resolve instead of reject to treat cancellation as a handled case
+        };
+
+        this.pendingSends.update(sends => [...sends, { id, to, subject, timeoutId, cancel }]);
+      });
+    } else {
+      await this.executeSend(to, subject, text, cc, bcc, inReplyTo, references);
+    }
+  }
+
+  private async executeSend(
     to: string,
     subject: string,
     text: string,

@@ -24,13 +24,13 @@ export class LoginComponent {
   readonly totpCode = signal('');
   readonly loading = signal(false);
   readonly requires2FA = signal(false);
-  private pendingUserId: string | null = null;
+  private pendingTempToken: string | null = null;
 
   async onSignIn(): Promise<void> {
     if (this.requires2FA()) {
       if (!this.totpCode()) return;
       this.loading.set(true);
-      const success = await this.auth.verify2FA(this.pendingUserId!, this.totpCode());
+      const success = await this.auth.verify2FA(this.pendingTempToken!, this.totpCode());
       this.loading.set(false);
       if (success) {
         this.router.navigate(['/inbox']);
@@ -47,9 +47,9 @@ export class LoginComponent {
     });
     this.loading.set(false);
 
-    if (result.requires2FA && result.userId) {
+    if (result.requires2FA && result.tempToken) {
       this.requires2FA.set(true);
-      this.pendingUserId = result.userId;
+      this.pendingTempToken = result.tempToken;
     } else if (result.success) {
       this.router.navigate(['/inbox']);
     }
@@ -69,9 +69,9 @@ export class LoginComponent {
 
       const result = await this.auth.signInWithWebAuthn(this.email(), asseResp);
 
-      if (result.requires2FA && result.userId) {
+      if (result.requires2FA && result.tempToken) {
         this.requires2FA.set(true);
-        this.pendingUserId = result.userId;
+        this.pendingTempToken = result.tempToken;
       } else if (result.success) {
         this.router.navigate(['/inbox']);
       }

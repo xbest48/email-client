@@ -19,7 +19,7 @@ import { EmailService } from '../../services/email.service';
 })
 export class LayoutComponent implements OnInit {
   private readonly auth = inject(AuthService);
-  private readonly emailService = inject(EmailService);
+  protected readonly emailService = inject(EmailService);
   private readonly router = inject(Router);
 
   readonly sidebarOpen = signal(true);

@@ -42,6 +42,9 @@ export class SettingsComponent {
 
   // General
   readonly pageSize = signal(this.settingsService.pageSize);
+  readonly darkMode = signal(this.authService.user()?.darkMode ?? false);
+  readonly blockTrackingPixels = signal(this.authService.user()?.blockTrackingPixels ?? false);
+  readonly undoSendDelay = signal(this.authService.user()?.undoSendDelay ?? 0);
 
   readonly signatureEditor = viewChild<RichEditorComponent>('signatureEditor');
 
@@ -159,6 +162,18 @@ export class SettingsComponent {
 
   savePageSize(): void {
     this.settingsService.setPageSize(this.pageSize());
+  }
+
+  async saveUserSettings(): Promise<void> {
+    try {
+      await this.authService.updateSettings({
+        darkMode: this.darkMode(),
+        undoSendDelay: this.undoSendDelay(),
+        blockTrackingPixels: this.blockTrackingPixels()
+      });
+    } catch (e) {
+      console.error('Failed to save settings', e);
+    }
   }
 
   private resetAccountForm(): void {

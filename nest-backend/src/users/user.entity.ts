@@ -21,6 +21,15 @@ export class User {
   @Column({ nullable: true })
   currentChallenge?: string; // Used for WebAuthn
 
+  @Column({ default: false })
+  darkMode: boolean;
+
+  @Column({ default: 0 })
+  undoSendDelay: number;
+
+  @Column({ default: false })
+  blockTrackingPixels: boolean;
+
   @OneToMany(() => Account, account => account.user)
   accounts: Account[];
 }

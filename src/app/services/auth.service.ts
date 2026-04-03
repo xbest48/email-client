@@ -6,6 +6,9 @@ import { environment } from '../environments/environment';
 export interface UserProfile {
   id?: string;
   email: string;
+  darkMode?: boolean;
+  undoSendDelay?: number;
+  blockTrackingPixels?: boolean;
 }
 
 export interface LoginCredentials {
@@ -84,18 +87,18 @@ export class AuthService {
     }
   }
 
-  async signIn(credentials: LoginCredentials): Promise<{ success: boolean; requires2FA?: boolean; userId?: string }> {
+  async signIn(credentials: LoginCredentials): Promise<{ success: boolean; requires2FA?: boolean; tempToken?: string }> {
     this.loginError.set('');
     try {
       const res = await firstValueFrom(
-        this.http.post<{ access_token?: string; isTwoFactorRequired?: boolean; userId?: string }>(
+        this.http.post<{ access_token?: string; isTwoFactorRequired?: boolean; temp_token?: string }>(
           `${this.apiUrl}/auth/login`,
           credentials
         )
       );
 
       if (res.isTwoFactorRequired) {
-        return { success: true, requires2FA: true, userId: res.userId };
+        return { success: true, requires2FA: true, tempToken: res.temp_token };
       }
 
       if (res.access_token) {
@@ -111,11 +114,11 @@ export class AuthService {
     }
   }
 
-  async verify2FA(userId: string, code: string): Promise<boolean> {
+  async verify2FA(tempToken: string, code: string): Promise<boolean> {
     this.loginError.set('');
     try {
       const res = await firstValueFrom(
-        this.http.post<{ access_token: string }>(`${this.apiUrl}/auth/2fa/authenticate`, { userId, code })
+        this.http.post<{ access_token: string }>(`${this.apiUrl}/auth/2fa/authenticate`, { tempToken, code })
       );
       this.setToken(res.access_token);
       await this.checkAuthStatus();
@@ -127,18 +130,18 @@ export class AuthService {
     }
   }
 
-  async signInWithWebAuthn(email: string, response: any): Promise<{ success: boolean; requires2FA?: boolean; userId?: string }> {
+  async signInWithWebAuthn(email: string, response: any): Promise<{ success: boolean; requires2FA?: boolean; tempToken?: string }> {
     this.loginError.set('');
     try {
       const res = await firstValueFrom(
-        this.http.post<{ access_token?: string; isTwoFactorRequired?: boolean; userId?: string }>(
+        this.http.post<{ access_token?: string; isTwoFactorRequired?: boolean; temp_token?: string }>(
           `${this.apiUrl}/auth/webauthn/login/verify`,
           { email, response }
         )
       );
 
       if (res.isTwoFactorRequired) {
-        return { success: true, requires2FA: true, userId: res.userId };
+        return { success: true, requires2FA: true, tempToken: res.temp_token };
       }
 
       if (res.access_token) {
@@ -186,6 +189,13 @@ export class AuthService {
     } catch {
       return false;
     }
+  }
+
+  async updateSettings(settings: Partial<UserProfile>): Promise<void> {
+    await firstValueFrom(
+      this.http.post(`${this.apiUrl}/auth/profile/settings`, settings)
+    );
+    await this.checkAuthStatus();
   }
 
   signOut(): void {
