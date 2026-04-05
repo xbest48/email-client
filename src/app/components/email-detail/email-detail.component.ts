@@ -48,15 +48,15 @@ export class EmailDetailComponent implements OnInit {
   });
 
   ngOnInit(): void {
-    const selected = this.emailService.selectedEmail();
-    if (selected) {
-      this.email.set(selected);
-    }
-
     this.route.params.subscribe(async (params) => {
       const folder = params['folder'];
       const uid = params['uid'];
-      if (folder && uid && !this.email()) {
+
+      const selected = this.emailService.selectedEmail();
+      if (selected && selected.uid === parseInt(uid, 10) && selected.folder === folder) {
+        this.email.set(selected);
+      } else if (folder && uid) {
+        // If the route doesn't match the selected email (e.g. direct link or reload), fetch it.
         const msg = await this.emailService.fetchEmail(folder, parseInt(uid, 10));
         if (msg) {
           this.email.set(msg);

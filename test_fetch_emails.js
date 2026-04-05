@@ -23,12 +23,54 @@ const { chromium } = require('playwright');
     throw e;
   }
 
-  console.log("Checking spam fetching...");
-  await page.goto('http://localhost:4200/spam');
+  // Add an account if none exists
+  try {
+    await page.waitForSelector('text="Paramètres"', { timeout: 3000 });
+    await page.click('text="Paramètres"');
+    await page.waitForSelector('input[placeholder="Adresse e-mail"]', { timeout: 3000 });
+    await page.fill('input[placeholder="Adresse e-mail"]', 'foo@example.com');
+    await page.fill('input[placeholder="Serveur IMAP"]', 'imap.example.com');
+    await page.fill('input[placeholder="Port IMAP"]', '993');
+    await page.fill('input[placeholder="Serveur SMTP"]', 'smtp.example.com');
+    await page.fill('input[placeholder="Port SMTP"]', '465');
+    await page.click('button:has-text("Ajouter le compte")');
+    console.log("Added account.");
+  } catch (e) {
+    console.log("Maybe already has account.", e.message);
+  }
 
-  await page.waitForTimeout(3000); // Give it some time to load
-  await page.screenshot({ path: 'spam_auto_load.png' });
-  console.log("Saved spam_auto_load.png");
+  await page.goto('http://localhost:4200/inbox');
+  await page.waitForTimeout(1000);
+
+  // Fake add an email
+  await page.evaluate(() => {
+     const emailService = window.ng.getComponent(document.querySelector('app-root')).emailService;
+     emailService.currentEmails.set([{
+        uid: 1,
+        folder: 'INBOX',
+        subject: 'Test Email',
+        from: { name: 'Test User', email: 'test@example.com' },
+        to: [{ name: 'You', email: 'you@example.com' }],
+        date: new Date().toISOString(),
+        isRead: false,
+        isStarred: false,
+        hasAttachments: false,
+        size: 1024,
+        body: 'Hello world',
+        htmlBody: '<p>Hello world</p>'
+     }]);
+  });
+
+  await page.waitForTimeout(1000);
+
+  try {
+    await page.click('text="Test Email"');
+    await page.waitForTimeout(2000);
+    await page.screenshot({ path: 'email_detail.png' });
+    console.log("Saved email_detail.png");
+  } catch (e) {
+    console.log("Could not find email");
+  }
 
   await browser.close();
 })();

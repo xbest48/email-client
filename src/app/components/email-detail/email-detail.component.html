@@ -63,12 +63,12 @@
         <div class="flex items-start gap-3 mb-6">
           <div class="w-10 h-10 rounded-full bg-amber-200 dark:bg-amber-900/50 flex items-center justify-center text-amber-800 dark:text-amber-400
                       font-semibold text-sm shrink-0" aria-hidden="true">
-            {{ mail.from.name.charAt(0).toUpperCase() }}
+            {{ mail.from?.name?.charAt(0)?.toUpperCase() || '?' }}
           </div>
           <div class="flex-1 min-w-0">
             <div class="flex items-center flex-wrap gap-x-2">
-              <span class="font-semibold text-gray-900 dark:text-white text-sm">{{ mail.from.name }}</span>
-              <span class="text-xs text-gray-500 dark:text-gray-400">&lt;{{ mail.from.email }}&gt;</span>
+              <span class="font-semibold text-gray-900 dark:text-white text-sm">{{ mail.from?.name || mail.from?.email }}</span>
+              <span class="text-xs text-gray-500 dark:text-gray-400">&lt;{{ mail.from?.email }}&gt;</span>
             </div>
             <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
               <span>a {{ formatRecipients(mail.to) }}</span>
