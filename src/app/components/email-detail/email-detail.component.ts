@@ -1,15 +1,15 @@
 import { Component, inject, signal, computed, ChangeDetectionStrategy, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { EmailService } from '../../services/email.service';
 import { RelativeTimePipe } from '../../pipes/relative-time.pipe';
 import { Email } from '../../models/email.model';
 import { AuthService } from '../../services/auth.service';
+import { SandboxedHtmlDirective } from '../../directives/sandboxed-html.directive';
 
 @Component({
   selector: 'app-email-detail',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RelativeTimePipe],
+  imports: [RelativeTimePipe, SandboxedHtmlDirective],
   templateUrl: './email-detail.component.html',
   styleUrl: './email-detail.component.css',
 })
@@ -17,7 +17,6 @@ export class EmailDetailComponent implements OnInit {
   private readonly emailService = inject(EmailService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
-  private readonly sanitizer = inject(DomSanitizer);
   protected readonly authService = inject(AuthService);
 
   readonly email = signal<Email | null>(null);
@@ -25,7 +24,7 @@ export class EmailDetailComponent implements OnInit {
   readonly replyBody = signal('');
   readonly allowExternalImages = signal(false);
 
-  readonly sanitizedHtml = computed<SafeHtml | null>(() => {
+  readonly sanitizedHtml = computed<string | null>(() => {
     const mail = this.email();
     if (!mail?.htmlBody) return null;
 
@@ -33,9 +32,6 @@ export class EmailDetailComponent implements OnInit {
     const blockPixels = this.authService.user()?.blockTrackingPixels;
 
     if (blockPixels && !this.allowExternalImages()) {
-        // Simple regex to block external images. Replaces the src attribute to a fake one
-        // and adds a data-original-src attribute if we want to restore them later,
-        // though our current implementation just regenerates the computed signal when allowExternalImages is true.
         html = html.replace(/<img[^>]+src="([^">]+)"/gi, (match, src) => {
             if (src.startsWith('http') && !src.includes(window.location.host)) {
                 return match.replace(src, 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7');
@@ -44,7 +40,7 @@ export class EmailDetailComponent implements OnInit {
         });
     }
 
-    return this.sanitizer.bypassSecurityTrustHtml(html);
+    return html;
   });
 
   ngOnInit(): void {

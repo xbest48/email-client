@@ -126,9 +126,9 @@
         }
 
         <!-- Email body -->
-        <div class="prose prose-sm max-w-none dark:prose-invert text-gray-800 dark:text-gray-200 leading-relaxed">
+        <div class="w-full text-gray-800 dark:text-gray-200 leading-relaxed">
           @if (sanitizedHtml()) {
-            <div [innerHTML]="sanitizedHtml()"></div>
+            <div class="w-full" [appSandboxedHtml]="sanitizedHtml()"></div>
           } @else {
             <pre class="whitespace-pre-wrap font-sans text-sm">{{ mail.body }}</pre>
           }
