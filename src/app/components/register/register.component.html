@@ -1,0 +1,70 @@
+<div class="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-xl p-8 md:p-12 max-w-md w-full">
+    <div class="text-center mb-8">
+      <h1 class="text-3xl font-bold text-gray-900 mb-2">Creer un compte</h1>
+      <p class="text-gray-500">Bienvenue sur MailFlow</p>
+    </div>
+
+    <form (submit)="$event.preventDefault(); onRegister()">
+      <!-- Email -->
+      <div class="mb-4">
+        <label for="register-email" class="block text-sm font-medium text-gray-700 mb-1">Adresse email principale</label>
+        <input
+          id="register-email"
+          type="email"
+          [(ngModel)]="email"
+          name="email"
+          class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm
+                 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400
+                 transition-colors"
+          placeholder="vous@exemple.com"
+          required
+          autocomplete="email">
+      </div>
+
+      <!-- Password -->
+      <div class="mb-4">
+        <label for="register-password" class="block text-sm font-medium text-gray-700 mb-1">Mot de passe maitre</label>
+        <input
+          id="register-password"
+          type="password"
+          [(ngModel)]="password"
+          name="password"
+          class="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm
+                 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400
+                 transition-colors"
+          placeholder="Mot de passe"
+          required
+          autocomplete="new-password">
+      </div>
+
+      <!-- Error message -->
+      @if (auth.loginError()) {
+        <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700" role="alert">
+          {{ auth.loginError() }}
+        </div>
+      }
+
+      <!-- Submit -->
+      <button
+        type="submit"
+        class="w-full flex items-center justify-center gap-2 px-6 py-3
+               bg-amber-500 hover:bg-amber-600 text-white font-semibold
+               rounded-xl shadow-md hover:shadow-lg transition-all duration-200
+               focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2
+               disabled:opacity-50 disabled:cursor-not-allowed"
+        [disabled]="loading() || !email() || !password()">
+        @if (loading()) {
+          <div class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+          Creation...
+        } @else {
+          S'inscrire
+        }
+      </button>
+    </form>
+
+    <div class="mt-6 text-center">
+      <a routerLink="/login" class="text-sm text-amber-600 hover:text-amber-700">Vous avez deja un compte ? Se connecter</a>
+    </div>
+  </div>
+</div>

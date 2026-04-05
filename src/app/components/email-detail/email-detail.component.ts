@@ -4,6 +4,7 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { EmailService } from '../../services/email.service';
 import { RelativeTimePipe } from '../../pipes/relative-time.pipe';
 import { Email } from '../../models/email.model';
+import { AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'app-email-detail',
@@ -17,27 +18,45 @@ export class EmailDetailComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly sanitizer = inject(DomSanitizer);
+  protected readonly authService = inject(AuthService);
 
   readonly email = signal<Email | null>(null);
   readonly showReply = signal(false);
   readonly replyBody = signal('');
+  readonly allowExternalImages = signal(false);
 
   readonly sanitizedHtml = computed<SafeHtml | null>(() => {
     const mail = this.email();
     if (!mail?.htmlBody) return null;
-    return this.sanitizer.bypassSecurityTrustHtml(mail.htmlBody);
+
+    let html = mail.htmlBody;
+    const blockPixels = this.authService.user()?.blockTrackingPixels;
+
+    if (blockPixels && !this.allowExternalImages()) {
+        // Simple regex to block external images. Replaces the src attribute to a fake one
+        // and adds a data-original-src attribute if we want to restore them later,
+        // though our current implementation just regenerates the computed signal when allowExternalImages is true.
+        html = html.replace(/<img[^>]+src="([^">]+)"/gi, (match, src) => {
+            if (src.startsWith('http') && !src.includes(window.location.host)) {
+                return match.replace(src, 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7');
+            }
+            return match;
+        });
+    }
+
+    return this.sanitizer.bypassSecurityTrustHtml(html);
   });
 
   ngOnInit(): void {
-    const selected = this.emailService.selectedEmail();
-    if (selected) {
-      this.email.set(selected);
-    }
-
     this.route.params.subscribe(async (params) => {
       const folder = params['folder'];
       const uid = params['uid'];
-      if (folder && uid && !this.email()) {
+
+      const selected = this.emailService.selectedEmail();
+      if (selected && selected.uid === parseInt(uid, 10) && selected.folder === folder) {
+        this.email.set(selected);
+      } else if (folder && uid) {
+        // If the route doesn't match the selected email (e.g. direct link or reload), fetch it.
         const msg = await this.emailService.fetchEmail(folder, parseInt(uid, 10));
         if (msg) {
           this.email.set(msg);
@@ -104,6 +123,7 @@ export class EmailDetailComponent implements OnInit {
   }
 
   formatRecipients(addresses: { name: string; email: string }[]): string {
+    if (!addresses) return '';
     return addresses.map((a) => a.name || a.email).join(', ');
   }
 

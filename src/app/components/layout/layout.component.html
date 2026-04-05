@@ -1,4 +1,4 @@
-<div class="flex h-screen bg-white overflow-hidden">
+<div class="flex h-screen bg-white dark:bg-gray-900 overflow-hidden">
   <!-- Mobile sidebar backdrop -->
   @if (sidebarOpen() && isMobile()) {
     <div
@@ -23,11 +23,11 @@
   <!-- Main content -->
   <div class="flex-1 flex flex-col min-w-0">
     <!-- Top bar -->
-    <header class="flex items-center gap-3 px-4 py-2.5 border-b border-gray-200 bg-white shrink-0">
+    <header class="flex items-center gap-3 px-4 py-2.5 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shrink-0">
       <!-- Hamburger menu (mobile) -->
       <button
         (click)="sidebarOpen.set(!sidebarOpen())"
-        class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors
+        class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-300 rounded-lg transition-colors
                lg:hidden focus:outline-none focus:ring-2 focus:ring-amber-400"
         type="button"
         aria-label="Ouvrir le menu">
@@ -42,7 +42,7 @@
       <!-- Settings button -->
       <button
         (click)="showSettings.set(true)"
-        class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors
+        class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-300 rounded-lg transition-colors
                focus:outline-none focus:ring-2 focus:ring-amber-400"
         type="button"
         aria-label="Parametres">
@@ -68,5 +68,21 @@
   <!-- Settings overlay -->
   @if (showSettings()) {
     <app-settings (close)="showSettings.set(false)"/>
+  }
+
+  <!-- Undo Send Toast/Snackbar -->
+  @if (emailService.pendingSends().length > 0) {
+    <div class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2">
+      @for (send of emailService.pendingSends(); track send.id) {
+        <div class="bg-gray-900 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-4 text-sm w-72 max-w-[90vw]">
+          <span class="flex-1 truncate">Envoi a {{ send.to }}...</span>
+          <button (click)="send.cancel()"
+                  class="text-amber-400 hover:text-amber-300 font-medium focus:outline-none"
+                  type="button">
+            Annuler
+          </button>
+        </div>
+      }
+    </div>
   }
 </div>

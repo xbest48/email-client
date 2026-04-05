@@ -2,6 +2,7 @@ import { Component, inject, signal, output, ChangeDetectionStrategy, viewChild, 
 import { FormsModule } from '@angular/forms';
 import { EmailService } from '../../services/email.service';
 import { SettingsService } from '../../services/settings.service';
+import { AuthService } from '../../services/auth.service';
 import { RichEditorComponent } from '../rich-editor/rich-editor.component';
 
 @Component({
@@ -14,6 +15,7 @@ import { RichEditorComponent } from '../rich-editor/rich-editor.component';
 export class ComposeComponent implements OnInit {
   private readonly emailService = inject(EmailService);
   private readonly settingsService = inject(SettingsService);
+  private readonly authService = inject(AuthService);
 
   readonly close = output<void>();
 
@@ -58,7 +60,14 @@ export class ComposeComponent implements OnInit {
     this.sending.set(true);
     try {
       const html = editor.getHtml();
-      await this.emailService.sendEmail(this.to(), this.subject(), html, this.cc(), this.bcc());
+      const delay = this.authService.user()?.undoSendDelay || 0;
+      // We don't await here if there is a delay, we want to close the composer immediately
+      // and let the service handle the background sending.
+      if (delay > 0) {
+        this.emailService.sendEmail(this.to(), this.subject(), html, this.cc(), this.bcc(), '', '', delay * 1000);
+      } else {
+        await this.emailService.sendEmail(this.to(), this.subject(), html, this.cc(), this.bcc());
+      }
       this.close.emit();
     } catch (err) {
       console.error('Failed to send email', err);

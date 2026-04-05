@@ -1,53 +1,88 @@
 import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../services/auth.service';
+import { HttpClient } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
+import { environment } from '../../environments/environment';
+import { startAuthentication } from '@simplewebauthn/browser';
 
 @Component({
   selector: 'app-login',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule],
+  imports: [FormsModule, RouterLink],
   templateUrl: './login.component.html',
   styleUrl: './login.component.css',
 })
 export class LoginComponent {
   protected readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly http = inject(HttpClient);
 
   readonly email = signal('');
   readonly password = signal('');
-  readonly imapHost = signal('');
-  readonly imapPort = signal(993);
-  readonly smtpHost = signal('');
-  readonly smtpPort = signal(465);
+  readonly totpCode = signal('');
   readonly loading = signal(false);
-  readonly showAdvanced = signal(false);
+  readonly requires2FA = signal(false);
+  private pendingTempToken: string | null = null;
 
   async onSignIn(): Promise<void> {
-    if (!this.email() || !this.password() || !this.imapHost() || !this.smtpHost()) return;
+    if (this.requires2FA()) {
+      if (!this.totpCode()) return;
+      this.loading.set(true);
+      const success = await this.auth.verify2FA(this.pendingTempToken!, this.totpCode());
+      this.loading.set(false);
+      if (success) {
+        this.router.navigate(['/inbox']);
+      }
+      return;
+    }
+
+    if (!this.email() || !this.password()) return;
 
     this.loading.set(true);
-    const success = await this.auth.signIn({
+    const result = await this.auth.signIn({
       email: this.email(),
       password: this.password(),
-      imapHost: this.imapHost(),
-      imapPort: this.imapPort(),
-      smtpHost: this.smtpHost(),
-      smtpPort: this.smtpPort(),
     });
     this.loading.set(false);
 
-    if (success) {
+    if (result.requires2FA && result.tempToken) {
+      this.requires2FA.set(true);
+      this.pendingTempToken = result.tempToken;
+    } else if (result.success) {
       this.router.navigate(['/inbox']);
     }
   }
 
-  onEmailChange(): void {
-    const email = this.email();
-    const domain = email.split('@')[1];
-    if (domain && !this.imapHost()) {
-      this.imapHost.set(`imap.${domain}`);
-      this.smtpHost.set(`smtp.${domain}`);
+  async onPasskeySignIn(): Promise<void> {
+    if (!this.email()) return;
+    this.loading.set(true);
+    this.auth.loginError.set('');
+
+    try {
+      const options = await firstValueFrom(
+        this.http.post<any>(`${environment.apiUrl}/auth/webauthn/login/generate-options`, { email: this.email() })
+      );
+
+      const asseResp = await startAuthentication({ optionsJSON: options });
+
+      const result = await this.auth.signInWithWebAuthn(this.email(), asseResp);
+
+      if (result.requires2FA && result.tempToken) {
+        this.requires2FA.set(true);
+        this.pendingTempToken = result.tempToken;
+      } else if (result.success) {
+        this.router.navigate(['/inbox']);
+      }
+    } catch (err: any) {
+      this.auth.loginError.set(err.message || 'Authentification Passkey echouee');
+    } finally {
+      this.loading.set(false);
     }
+  }
+
+  onEmailChange(): void {
+    // Only used for UI feedback if needed
   }
 }
