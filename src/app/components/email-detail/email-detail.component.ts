@@ -52,11 +52,7 @@ export class EmailDetailComponent implements OnInit {
       const folder = params['folder'];
       const uid = params['uid'];
 
-      const selected = this.emailService.selectedEmail();
-      if (selected && selected.uid === parseInt(uid, 10) && selected.folder === folder) {
-        this.email.set(selected);
-      } else if (folder && uid) {
-        // If the route doesn't match the selected email (e.g. direct link or reload), fetch it.
+      if (folder && uid) {
         const msg = await this.emailService.fetchEmail(folder, parseInt(uid, 10));
         if (msg) {
           this.email.set(msg);

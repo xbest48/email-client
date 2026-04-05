@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import * as bcrypt from 'bcryptjs';
-import { TOTP, generateSecret } from 'otplib';
+import { authenticator } from 'otplib';
 import * as qrcode from 'qrcode';
 import { generateRegistrationOptions, verifyRegistrationResponse, generateAuthenticationOptions, verifyAuthenticationResponse } from '@simplewebauthn/server';
 
@@ -12,14 +12,10 @@ const origin = `http://${rpID}:4200`;
 
 @Injectable()
 export class AuthService {
-  private readonly totp: TOTP;
-
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
-  ) {
-    this.totp = new TOTP();
-  }
+  ) {}
 
   async register(email: string, pass: string) {
     const existing = await this.usersService.findByEmail(email);
@@ -66,7 +62,6 @@ export class AuthService {
   }
 
   async generateTwoFactorSecret(user: any) {
-    const { authenticator } = require('otplib');
     const secret = authenticator.generateSecret();
     const otpauthUrl = authenticator.keyuri(user.email, rpName, secret);
     await this.usersService.update(user.id, { twoFactorSecret: secret });
@@ -93,7 +88,6 @@ export class AuthService {
       throw new UnauthorizedException('Invalid user or 2FA not enabled');
     }
 
-    const { authenticator } = require('otplib');
     const isCodeValid = authenticator.check(code, user.twoFactorSecret);
 
     if (!isCodeValid) {
