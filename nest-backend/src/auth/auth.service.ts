@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import * as bcrypt from 'bcryptjs';
-import { authenticator } from 'otplib';
+import { TOTP, NobleCryptoPlugin, ScureBase32Plugin } from 'otplib';
 import * as qrcode from 'qrcode';
 import { generateRegistrationOptions, verifyRegistrationResponse, generateAuthenticationOptions, verifyAuthenticationResponse } from '@simplewebauthn/server';
 
@@ -12,10 +12,17 @@ const origin = `http://${rpID}:4200`;
 
 @Injectable()
 export class AuthService {
+  private readonly totp: TOTP;
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
-  ) {}
+  ) {
+    this.totp = new TOTP({
+      crypto: new NobleCryptoPlugin(),
+      base32: new ScureBase32Plugin(),
+    });
+  }
 
   async register(email: string, pass: string) {
     const existing = await this.usersService.findByEmail(email);
@@ -62,8 +69,8 @@ export class AuthService {
   }
 
   async generateTwoFactorSecret(user: any) {
-    const secret = authenticator.generateSecret();
-    const otpauthUrl = authenticator.keyuri(user.email, rpName, secret);
+    const secret = this.totp.generateSecret();
+    const otpauthUrl = this.totp.toURI({ issuer: rpName, label: user.email, secret });
     await this.usersService.update(user.id, { twoFactorSecret: secret });
 
     const qrCodeDataUrl = await qrcode.toDataURL(otpauthUrl);
@@ -88,13 +95,13 @@ export class AuthService {
       throw new UnauthorizedException('Invalid user or 2FA not enabled');
     }
 
-    const isCodeValid = authenticator.check(code, user.twoFactorSecret);
+    const result = await this.totp.verify(code, { secret: user.twoFactorSecret });
 
-    if (!isCodeValid) {
+    if (!result.valid) {
       throw new UnauthorizedException('Invalid 2FA code');
     }
 
-    return isCodeValid;
+    return true;
   }
 
   // --- WebAuthn / Passkeys ---
