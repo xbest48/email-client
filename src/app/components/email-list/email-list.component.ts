@@ -42,9 +42,14 @@ export class EmailListComponent implements OnInit {
   });
 
   ngOnInit(): void {
-    this.route.params.subscribe((params) => {
+    this.route.params.subscribe(async (params) => {
       const label = params['label'] ?? 'inbox';
       const folderParam = params['folder'];
+
+      // Ensure folders are loaded so we can resolve special folders accurately
+      if (this.emailService.folders().length === 0) {
+        await this.emailService.fetchFolders();
+      }
 
       if (folderParam) {
         this.currentFolder = folderParam;

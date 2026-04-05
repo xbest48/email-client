@@ -123,6 +123,7 @@ export class EmailDetailComponent implements OnInit {
   }
 
   formatRecipients(addresses: { name: string; email: string }[]): string {
+    if (!addresses) return '';
     return addresses.map((a) => a.name || a.email).join(', ');
   }
 

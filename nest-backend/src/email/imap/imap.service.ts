@@ -38,6 +38,12 @@ export class ImapService implements OnModuleDestroy {
       logger: false,
     });
 
+    client.on('error', (err) => {
+      console.warn(`ImapFlow background error for ${credentials.email}:`, err);
+      // Remove the broken connection from the pool so a new one can be created next time
+      this.connections.delete(key);
+    });
+
     await client.connect();
     this.connections.set(key, client);
     return client;
@@ -83,22 +89,39 @@ export class ImapService implements OnModuleDestroy {
 
   async getFolderStatus(credentials: EmailCredentials, folder: string) {
     const client = await this.getConnection(credentials);
-    const status = await client.status(folder, {
-      messages: true,
-      unseen: true,
-      recent: true,
-    });
-    return {
-      path: folder,
-      messages: status.messages,
-      unseen: status.unseen,
-      recent: status.recent,
-    };
+    try {
+      const status = await client.status(folder, {
+        messages: true,
+        unseen: true,
+        recent: true,
+      });
+      return {
+        path: folder,
+        messages: status.messages,
+        unseen: status.unseen,
+        recent: status.recent,
+      };
+    } catch (err) {
+      console.warn(`Failed to get status for ${folder}`, err);
+      return {
+        path: folder,
+        messages: 0,
+        unseen: 0,
+        recent: 0,
+      }
+    }
   }
 
   async fetchEmails(credentials: EmailCredentials, folder: string, page = 1, pageSize = 25) {
     const client = await this.getConnection(credentials);
-    const lock = await client.getMailboxLock(folder);
+
+    let lock;
+    try {
+      lock = await client.getMailboxLock(folder);
+    } catch (e) {
+      console.warn(`Mailbox ${folder} does not exist, returning empty list`);
+      return { emails: [], total: 0, page, pageSize };
+    }
 
     try {
       const mailbox = client.mailbox as any;
@@ -131,7 +154,12 @@ export class ImapService implements OnModuleDestroy {
 
   async searchEmails(credentials: EmailCredentials, folder: string, query: string) {
     const client = await this.getConnection(credentials);
-    const lock = await client.getMailboxLock(folder);
+    let lock;
+    try {
+      lock = await client.getMailboxLock(folder);
+    } catch (e) {
+      return { emails: [], total: 0 };
+    }
 
     try {
       const searchCriteria = this.buildSearchCriteria(query);

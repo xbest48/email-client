@@ -69,7 +69,17 @@ export class EmailController {
     @Query('q') q?: string,
   ) {
     const creds = await this.getCredentials(req, headers);
-    const decodedFolder = decodeURIComponent(folder);
+    let decodedFolder = decodeURIComponent(folder);
+
+    // Map special frontend routes to actual IMAP folders if needed.
+    const folderMap: Record<string, string> = {
+      'inbox': 'INBOX',
+    };
+
+    if (folderMap[decodedFolder.toLowerCase()]) {
+       decodedFolder = folderMap[decodedFolder.toLowerCase()];
+    }
+
     const pageNum = parseInt(page || '1', 10);
     const sizeNum = parseInt(pageSize || '25', 10);
 

@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AccountsController } from './accounts.controller';
 import { AccountsService } from './accounts.service';
+import { ImapService } from '../email/imap/imap.service';
 
 describe('AccountsController', () => {
   let controller: AccountsController;
@@ -13,6 +14,10 @@ describe('AccountsController', () => {
           provide: AccountsService,
           useValue: {},
         },
+        {
+          provide: ImapService,
+          useValue: {},
+        }
       ],
     }).compile();
 

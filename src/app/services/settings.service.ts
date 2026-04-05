@@ -40,8 +40,10 @@ export class SettingsService {
   private readonly http = inject(HttpClient);
   readonly settings = signal<AppSettings>({ ...DEFAULT_SETTINGS });
 
+  readonly loadPromise: Promise<void>;
+
   constructor() {
-    this.load();
+    this.loadPromise = this.load();
   }
 
   get pageSize(): number {

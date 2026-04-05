@@ -32,6 +32,7 @@ export class EmailService {
 
 
   async fetchFolders(): Promise<void> {
+    await this.settingsService.loadPromise;
     if (!this.settingsService.activeAccountId()) return;
     try {
       const folders = await firstValueFrom(
@@ -71,6 +72,7 @@ export class EmailService {
   }
 
   async fetchEmails(folder: string, query = '', page = 1): Promise<void> {
+    await this.settingsService.loadPromise;
     if (!this.settingsService.activeAccountId()) {
       this.currentEmails.set([]);
       this.currentTotal.set(0);
