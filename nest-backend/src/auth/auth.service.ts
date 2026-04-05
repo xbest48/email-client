@@ -71,10 +71,11 @@ export class AuthService {
     const otpauthUrl = authenticator.keyuri(user.email, rpName, secret);
     await this.usersService.update(user.id, { twoFactorSecret: secret });
 
+    const qrCodeDataUrl = await qrcode.toDataURL(otpauthUrl);
     return {
       secret,
       otpauthUrl,
-      qrCodeDataUrl: await qrcode.toDataURL(otpauthUrl),
+      qrCodeDataUrl,
     };
   }
 

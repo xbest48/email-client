@@ -94,7 +94,11 @@ export class EmailService {
       );
 
       if (page > 1) {
-        this.currentEmails.update((prev) => [...prev, ...res.emails]);
+        this.currentEmails.update((prev) => {
+          const existing = new Set(prev.map(e => `${e.folder}:${e.uid}`));
+          const newEmails = res.emails.filter(e => !existing.has(`${e.folder}:${e.uid}`));
+          return [...prev, ...newEmails];
+        });
       } else {
         this.currentEmails.set(res.emails);
       }
