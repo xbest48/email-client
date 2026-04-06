@@ -177,6 +177,21 @@ export class EmailController {
   @Post('send')
   async sendEmail(@Request() req: any, @Headers() headers: any, @Body() dto: SendEmailDto) {
     const creds = await this.getCredentials(req, headers);
-    return this.smtpService.sendEmail(creds, dto);
+    const result = await this.smtpService.sendEmail(creds, dto);
+
+    // Append sent message to IMAP Sent folder
+    if (result.rawMessage) {
+      try {
+        await this.imapService.appendToSentFolder(creds, result.rawMessage);
+      } catch (err) {
+        console.warn('Failed to append message to Sent folder', err);
+      }
+    }
+
+    return {
+      messageId: result.messageId,
+      accepted: result.accepted,
+      rejected: result.rejected,
+    };
   }
 }

@@ -421,6 +421,21 @@ export class ImapService implements OnModuleDestroy {
     await client.mailboxCreate(folderPath);
   }
 
+  async appendToSentFolder(credentials: EmailCredentials, rawMessage: string | Buffer): Promise<void> {
+    const client = await this.getConnection(credentials);
+    const folders = await client.list();
+    const sentFolder = folders.find(
+      (f: any) => f.specialUse === '\\Sent',
+    );
+
+    if (!sentFolder) {
+      console.warn('No Sent folder found, skipping append');
+      return;
+    }
+
+    await client.append(sentFolder.path, rawMessage, ['\\Seen']);
+  }
+
   async deleteFolder(credentials: EmailCredentials, folderPath: string) {
     const client = await this.getConnection(credentials);
     await client.mailboxDelete(folderPath);

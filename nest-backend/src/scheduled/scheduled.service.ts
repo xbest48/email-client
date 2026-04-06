@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThanOrEqual } from 'typeorm';
 import { ScheduledEmail } from './scheduled-email.entity';
 import { SmtpService } from '../email/smtp/smtp.service';
+import { ImapService } from '../email/imap/imap.service';
 import { AccountsService } from '../accounts/accounts.service';
 
 @Injectable()
@@ -14,6 +15,8 @@ export class ScheduledService {
     private readonly scheduledEmailRepository: Repository<ScheduledEmail>,
     @Inject(forwardRef(() => SmtpService))
     private readonly smtpService: SmtpService,
+    @Inject(forwardRef(() => ImapService))
+    private readonly imapService: ImapService,
     @Inject(forwardRef(() => AccountsService))
     private readonly accountsService: AccountsService,
   ) {
@@ -60,23 +63,31 @@ export class ScheduledService {
           continue;
         }
 
-        await this.smtpService.sendEmail(
-          {
-            email: account.email,
-            password: account.password,
-            imapHost: account.imapHost,
-            imapPort: account.imapPort,
-            smtpHost: account.smtpHost,
-            smtpPort: account.smtpPort,
-          },
-          {
-            to: email.to,
-            subject: email.subject,
-            html: email.body,
-            cc: email.cc || undefined,
-            bcc: email.bcc || undefined,
-          },
-        );
+        const creds = {
+          email: account.email,
+          password: account.password,
+          imapHost: account.imapHost,
+          imapPort: account.imapPort,
+          smtpHost: account.smtpHost,
+          smtpPort: account.smtpPort,
+        };
+
+        const result = await this.smtpService.sendEmail(creds, {
+          to: email.to,
+          subject: email.subject,
+          html: email.body,
+          cc: email.cc || undefined,
+          bcc: email.bcc || undefined,
+        });
+
+        // Append to Sent folder
+        if (result.rawMessage) {
+          try {
+            await this.imapService.appendToSentFolder(creds, result.rawMessage);
+          } catch (err) {
+            console.warn('Failed to append scheduled email to Sent folder', err);
+          }
+        }
 
         email.status = 'sent';
         await this.scheduledEmailRepository.save(email);

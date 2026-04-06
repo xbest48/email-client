@@ -61,10 +61,26 @@ export class SmtpService {
     const info = await transporter.sendMail(mailOptions);
     transporter.close();
 
+    // Build raw RFC822 message for IMAP Sent folder append
+    let rawMessage: Buffer | null = null;
+    try {
+      const MailComposer = require('nodemailer/lib/mail-composer');
+      const composer = new MailComposer(mailOptions);
+      rawMessage = await new Promise<Buffer>((resolve, reject) => {
+        composer.compile().build((err: any, message: Buffer) => {
+          if (err) return reject(err);
+          resolve(message);
+        });
+      });
+    } catch {
+      // Fallback: ignore if we can't build raw message
+    }
+
     return {
       messageId: info.messageId,
       accepted: info.accepted,
       rejected: info.rejected,
+      rawMessage,
     };
   }
 
