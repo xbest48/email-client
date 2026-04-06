@@ -149,6 +149,23 @@
       [attr.aria-selected]="activeTab() === 'templates'">
       Modeles
     </button>
+    <button
+      type="button"
+      (click)="activeTab.set('privacy')"
+      class="px-4 py-3 text-sm font-medium border-b-2 transition-colors
+             focus:outline-none focus:ring-2 focus:ring-amber-400 rounded-t"
+      [class.border-amber-500]="activeTab() === 'privacy'"
+      [class.text-amber-700]="activeTab() === 'privacy'"
+      [class.dark:text-amber-400]="activeTab() === 'privacy'"
+      [class.border-transparent]="activeTab() !== 'privacy'"
+      [class.text-gray-500]="activeTab() !== 'privacy'"
+      [class.dark:text-gray-400]="activeTab() !== 'privacy'"
+      [class.hover:text-gray-700]="activeTab() !== 'privacy'"
+      [class.dark:hover:text-gray-300]="activeTab() !== 'privacy'"
+      role="tab"
+      [attr.aria-selected]="activeTab() === 'privacy'">
+      Confidentialite
+    </button>
   </div>
 
   <!-- Tab content -->
@@ -838,6 +855,145 @@
             }
           </ul>
         }
+      </div>
+    }
+
+    <!-- Privacy tab -->
+    @if (activeTab() === 'privacy') {
+      <div class="space-y-6">
+        <!-- Image policy -->
+        <div>
+          <h3 class="text-sm font-semibold text-gray-800 dark:text-white mb-3">Affichage des images externes</h3>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Les images externes peuvent etre utilisees pour suivre la lecture de vos emails (pixels espions).</p>
+          <div class="space-y-2">
+            <label class="flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors"
+                   [class.border-amber-400]="imagePolicy() === 'ask'"
+                   [class.bg-amber-50]="imagePolicy() === 'ask'"
+                   [class.dark:bg-amber-900/20]="imagePolicy() === 'ask'"
+                   [class.border-gray-200]="imagePolicy() !== 'ask'"
+                   [class.dark:border-gray-700]="imagePolicy() !== 'ask'"
+                   [class.hover:border-gray-300]="imagePolicy() !== 'ask'">
+              <input type="radio" name="imagePolicy" value="ask"
+                     [checked]="imagePolicy() === 'ask'"
+                     (change)="updateImagePolicy('ask')"
+                     class="text-amber-500 focus:ring-amber-400">
+              <div>
+                <span class="text-sm font-medium text-gray-800 dark:text-gray-200">Demander a chaque fois</span>
+                <p class="text-xs text-gray-500 dark:text-gray-400">Afficher un bandeau pour charger les images manuellement</p>
+              </div>
+            </label>
+            <label class="flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors"
+                   [class.border-amber-400]="imagePolicy() === 'always'"
+                   [class.bg-amber-50]="imagePolicy() === 'always'"
+                   [class.dark:bg-amber-900/20]="imagePolicy() === 'always'"
+                   [class.border-gray-200]="imagePolicy() !== 'always'"
+                   [class.dark:border-gray-700]="imagePolicy() !== 'always'"
+                   [class.hover:border-gray-300]="imagePolicy() !== 'always'">
+              <input type="radio" name="imagePolicy" value="always"
+                     [checked]="imagePolicy() === 'always'"
+                     (change)="updateImagePolicy('always')"
+                     class="text-amber-500 focus:ring-amber-400">
+              <div>
+                <span class="text-sm font-medium text-gray-800 dark:text-gray-200">Toujours autoriser</span>
+                <p class="text-xs text-gray-500 dark:text-gray-400">Charger automatiquement toutes les images externes</p>
+              </div>
+            </label>
+            <label class="flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors"
+                   [class.border-amber-400]="imagePolicy() === 'never'"
+                   [class.bg-amber-50]="imagePolicy() === 'never'"
+                   [class.dark:bg-amber-900/20]="imagePolicy() === 'never'"
+                   [class.border-gray-200]="imagePolicy() !== 'never'"
+                   [class.dark:border-gray-700]="imagePolicy() !== 'never'"
+                   [class.hover:border-gray-300]="imagePolicy() !== 'never'">
+              <input type="radio" name="imagePolicy" value="never"
+                     [checked]="imagePolicy() === 'never'"
+                     (change)="updateImagePolicy('never')"
+                     class="text-amber-500 focus:ring-amber-400">
+              <div>
+                <span class="text-sm font-medium text-gray-800 dark:text-gray-200">Jamais</span>
+                <p class="text-xs text-gray-500 dark:text-gray-400">Ne jamais charger les images externes</p>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Allowed domains -->
+        <div class="pt-4 border-t border-gray-100 dark:border-gray-700">
+          <h3 class="text-sm font-semibold text-gray-800 dark:text-white mb-2">Domaines toujours autorises</h3>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Les images de ces domaines seront toujours chargees, quel que soit le parametre ci-dessus.</p>
+          <form (submit)="$event.preventDefault(); addAllowedDomain()" class="flex gap-2 mb-3">
+            <input type="text" [(ngModel)]="newAllowedDomain" name="newAllowedDomain"
+                   class="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg
+                          focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white dark:bg-gray-700 dark:text-white"
+                   placeholder="ex: exemple.com">
+            <button type="submit"
+                    class="px-4 py-2 text-sm bg-amber-500 text-white font-medium rounded-lg hover:bg-amber-600 transition-colors
+                           focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:opacity-50"
+                    [disabled]="!newAllowedDomain().trim()">
+              Ajouter
+            </button>
+          </form>
+          @if (imageAllowedDomains().length) {
+            <ul class="space-y-1">
+              @for (domain of imageAllowedDomains(); track domain) {
+                <li class="flex items-center justify-between px-3 py-2 bg-green-50 dark:bg-green-900/20 rounded-lg text-sm">
+                  <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-green-500" aria-hidden="true"></span>
+                    <span class="text-gray-800 dark:text-gray-200">{{ domain }}</span>
+                  </div>
+                  <button type="button" (click)="removeAllowedDomain(domain)"
+                          class="text-gray-400 hover:text-red-500 transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 rounded p-1"
+                          [attr.aria-label]="'Retirer ' + domain">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                  </button>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="text-xs text-gray-400 italic">Aucun domaine autorise</p>
+          }
+        </div>
+
+        <!-- Blocked domains -->
+        <div class="pt-4 border-t border-gray-100 dark:border-gray-700">
+          <h3 class="text-sm font-semibold text-gray-800 dark:text-white mb-2">Domaines toujours bloques</h3>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Les images de ces domaines ne seront jamais chargees, meme si la politique est "Toujours autoriser".</p>
+          <form (submit)="$event.preventDefault(); addBlockedDomain()" class="flex gap-2 mb-3">
+            <input type="text" [(ngModel)]="newBlockedDomain" name="newBlockedDomain"
+                   class="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg
+                          focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white dark:bg-gray-700 dark:text-white"
+                   placeholder="ex: tracking.exemple.com">
+            <button type="submit"
+                    class="px-4 py-2 text-sm bg-amber-500 text-white font-medium rounded-lg hover:bg-amber-600 transition-colors
+                           focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:opacity-50"
+                    [disabled]="!newBlockedDomain().trim()">
+              Ajouter
+            </button>
+          </form>
+          @if (imageBlockedDomains().length) {
+            <ul class="space-y-1">
+              @for (domain of imageBlockedDomains(); track domain) {
+                <li class="flex items-center justify-between px-3 py-2 bg-red-50 dark:bg-red-900/20 rounded-lg text-sm">
+                  <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-red-500" aria-hidden="true"></span>
+                    <span class="text-gray-800 dark:text-gray-200">{{ domain }}</span>
+                  </div>
+                  <button type="button" (click)="removeBlockedDomain(domain)"
+                          class="text-gray-400 hover:text-red-500 transition-colors focus:outline-none focus:ring-2 focus:ring-red-400 rounded p-1"
+                          [attr.aria-label]="'Retirer ' + domain">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                  </button>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="text-xs text-gray-400 italic">Aucun domaine bloque</p>
+          }
+        </div>
       </div>
     }
   </div>

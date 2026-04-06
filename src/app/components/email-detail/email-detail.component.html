@@ -209,13 +209,15 @@
         </div>
 
         <!-- Tracking Pixel Notice -->
-        @if (authService.user()?.blockTrackingPixels && !allowExternalImages() && mail.htmlBody && mail.htmlBody.includes('<img')) {
+        @if (shouldBlockImages() && mail.htmlBody && mail.htmlBody.includes('<img')) {
           <div class="mb-4 p-3 bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-xl border border-blue-100 dark:border-blue-800/50 flex items-center justify-between">
             <span class="text-sm">Les images externes ont ete bloquees pour proteger votre vie privee.</span>
-            <button (click)="allowExternalImages.set(true)"
-                    class="text-sm font-medium hover:underline focus:outline-none focus:ring-2 focus:ring-amber-400 rounded px-2 py-1">
-              Afficher les images
-            </button>
+            @if (authService.user()?.imagePolicy !== 'never') {
+              <button (click)="allowExternalImages.set(true)"
+                      class="text-sm font-medium hover:underline focus:outline-none focus:ring-2 focus:ring-amber-400 rounded px-2 py-1">
+                Afficher les images
+              </button>
+            }
           </div>
         }
 

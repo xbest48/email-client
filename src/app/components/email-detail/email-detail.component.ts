@@ -44,26 +44,49 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
   readonly customSnoozeDate = signal('');
   readonly previewAttachment = signal<{ url: string; mimeType: string; filename: string } | null>(null);
 
+  readonly shouldBlockImages = computed(() => {
+    const user = this.authService.user();
+    const policy = user?.imagePolicy ?? 'ask';
+    if (policy === 'always') return false;
+    if (policy === 'never') return true;
+    // 'ask' mode: block by default, user can click to allow
+    return !this.allowExternalImages();
+  });
+
   readonly sanitizedHtml = computed<string | null>(() => {
     const mail = this.email();
     if (!mail?.htmlBody) return null;
 
     let html = mail.htmlBody;
-    const blockPixels = this.authService.user()?.blockTrackingPixels;
+    const user = this.authService.user();
+    const allowedDomains: string[] = user?.imageAllowedDomains ?? [];
+    const blockedDomains: string[] = user?.imageBlockedDomains ?? [];
+    const blockImages = this.shouldBlockImages();
 
-    if (blockPixels && !this.allowExternalImages()) {
-      const placeholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-      html = html.replace(/<img\b[^>]*>/gi, (imgTag) => {
-        const srcMatch = imgTag.match(/\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|(\S+))/i);
-        if (srcMatch) {
-          const src = srcMatch[1] ?? srcMatch[2] ?? srcMatch[3];
-          if (src && src.startsWith('http') && !src.includes(window.location.host)) {
-            return imgTag.replace(srcMatch[0], `src="${placeholder}"`);
-          }
-        }
+    const placeholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+    html = html.replace(/<img\b[^>]*>/gi, (imgTag) => {
+      const srcMatch = imgTag.match(/\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|(\S+))/i);
+      if (!srcMatch) return imgTag;
+      const src = srcMatch[1] ?? srcMatch[2] ?? srcMatch[3];
+      if (!src || !src.startsWith('http') || src.includes(window.location.host)) return imgTag;
+
+      let domain = '';
+      try { domain = new URL(src).hostname; } catch { return imgTag; }
+
+      // Blocked domains always block
+      if (blockedDomains.some(d => domain === d || domain.endsWith('.' + d))) {
+        return imgTag.replace(srcMatch[0], `src="${placeholder}"`);
+      }
+      // Allowed domains always allow
+      if (allowedDomains.some(d => domain === d || domain.endsWith('.' + d))) {
         return imgTag;
-      });
-    }
+      }
+      // Apply general policy
+      if (blockImages) {
+        return imgTag.replace(srcMatch[0], `src="${placeholder}"`);
+      }
+      return imgTag;
+    });
 
     return html;
   });

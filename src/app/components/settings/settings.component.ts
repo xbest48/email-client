@@ -9,7 +9,7 @@ import { PgpService } from '../../services/pgp.service';
 import * as QRCode from 'qrcode';
 import { startRegistration } from '@simplewebauthn/browser';
 
-type SettingsTab = 'accounts' | 'signatures' | 'security' | 'general' | 'labels' | 'filters' | 'templates';
+type SettingsTab = 'accounts' | 'signatures' | 'security' | 'general' | 'labels' | 'filters' | 'templates' | 'privacy';
 
 @Component({
   selector: 'app-settings',
@@ -85,6 +85,13 @@ export class SettingsComponent {
   readonly pgpContactEmail = signal('');
   readonly pgpContactKey = signal('');
   readonly generatingKey = signal(false);
+
+  // Privacy
+  readonly imagePolicy = computed(() => this.authService.user()?.imagePolicy ?? 'ask');
+  readonly imageAllowedDomains = computed(() => this.authService.user()?.imageAllowedDomains ?? []);
+  readonly imageBlockedDomains = computed(() => this.authService.user()?.imageBlockedDomains ?? []);
+  readonly newAllowedDomain = signal('');
+  readonly newBlockedDomain = signal('');
 
   onAccountEmailChange(): void {
     const email = this.accountEmail();
@@ -256,13 +263,16 @@ export class SettingsComponent {
     this.settingsService.setPageSize(this.pageSize());
   }
 
-  async updateSetting(key: 'darkMode' | 'undoSendDelay' | 'blockTrackingPixels', value: any): Promise<void> {
+  async updateSetting(key: string, value: unknown): Promise<void> {
     try {
       const current = this.authService.user() || { email: '' };
       await this.authService.updateSettings({
         darkMode: current.darkMode,
         undoSendDelay: current.undoSendDelay,
         blockTrackingPixels: current.blockTrackingPixels,
+        imagePolicy: current.imagePolicy,
+        imageAllowedDomains: current.imageAllowedDomains,
+        imageBlockedDomains: current.imageBlockedDomains,
         [key]: value
       });
     } catch (e) {
@@ -418,6 +428,39 @@ export class SettingsComponent {
 
   removePgpContact(email: string): void {
     this.pgpService.removeContactKey(email);
+  }
+
+  // Privacy
+  async updateImagePolicy(policy: string): Promise<void> {
+    await this.updateSetting('imagePolicy' as any, policy);
+  }
+
+  async addAllowedDomain(): Promise<void> {
+    const domain = this.newAllowedDomain().trim().toLowerCase();
+    if (!domain) return;
+    const current = this.imageAllowedDomains();
+    if (current.includes(domain)) { this.newAllowedDomain.set(''); return; }
+    await this.updateSetting('imageAllowedDomains' as any, [...current, domain]);
+    this.newAllowedDomain.set('');
+  }
+
+  async removeAllowedDomain(domain: string): Promise<void> {
+    const current = this.imageAllowedDomains();
+    await this.updateSetting('imageAllowedDomains' as any, current.filter(d => d !== domain));
+  }
+
+  async addBlockedDomain(): Promise<void> {
+    const domain = this.newBlockedDomain().trim().toLowerCase();
+    if (!domain) return;
+    const current = this.imageBlockedDomains();
+    if (current.includes(domain)) { this.newBlockedDomain.set(''); return; }
+    await this.updateSetting('imageBlockedDomains' as any, [...current, domain]);
+    this.newBlockedDomain.set('');
+  }
+
+  async removeBlockedDomain(domain: string): Promise<void> {
+    const current = this.imageBlockedDomains();
+    await this.updateSetting('imageBlockedDomains' as any, current.filter(d => d !== domain));
   }
 
   private resetAccountForm(): void {

@@ -3,12 +3,17 @@ import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../environments/environment';
 
+export type ImagePolicy = 'ask' | 'always' | 'never';
+
 export interface UserProfile {
   id?: string;
   email: string;
   darkMode?: boolean;
   undoSendDelay?: number;
   blockTrackingPixels?: boolean;
+  imagePolicy?: ImagePolicy;
+  imageAllowedDomains?: string[];
+  imageBlockedDomains?: string[];
 }
 
 export interface LoginCredentials {

@@ -71,18 +71,21 @@ export class AuthController {
       darkMode: user.darkMode,
       undoSendDelay: user.undoSendDelay,
       blockTrackingPixels: user.blockTrackingPixels,
+      imagePolicy: user.imagePolicy || 'ask',
+      imageAllowedDomains: JSON.parse(user.imageAllowedDomains || '[]'),
+      imageBlockedDomains: JSON.parse(user.imageBlockedDomains || '[]'),
     };
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('profile/settings')
   async updateSettings(@Request() req: any, @Body() body: any) {
-    const { darkMode, undoSendDelay, blockTrackingPixels } = body;
-    await this.usersService.update(req.user.id, {
-      darkMode,
-      undoSendDelay,
-      blockTrackingPixels,
-    });
+    const { darkMode, undoSendDelay, blockTrackingPixels, imagePolicy, imageAllowedDomains, imageBlockedDomains } = body;
+    const updateData: any = { darkMode, undoSendDelay, blockTrackingPixels };
+    if (imagePolicy !== undefined) updateData.imagePolicy = imagePolicy;
+    if (imageAllowedDomains !== undefined) updateData.imageAllowedDomains = JSON.stringify(imageAllowedDomains);
+    if (imageBlockedDomains !== undefined) updateData.imageBlockedDomains = JSON.stringify(imageBlockedDomains);
+    await this.usersService.update(req.user.id, updateData);
     return { success: true };
   }
 
