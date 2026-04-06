@@ -53,6 +53,8 @@ export class SettingsComponent {
   readonly undoSendDelay = computed(() => this.authService.user()?.undoSendDelay ?? 0);
 
   readonly signatureEditor = viewChild<RichEditorComponent>('signatureEditor');
+  readonly signatureSourceMode = signal(false);
+  readonly signatureHtmlSource = signal('');
 
   readonly testConnectionLoading = signal(false);
 
@@ -134,12 +136,37 @@ export class SettingsComponent {
     this.settingsService.removeAccount(id);
   }
 
+  toggleSignatureSourceMode(): void {
+    const sourceMode = this.signatureSourceMode();
+    const editor = this.signatureEditor();
+    if (sourceMode) {
+      // Switching from source to visual: apply HTML source to editor
+      if (editor) {
+        editor.setHtml(this.signatureHtmlSource());
+      }
+    } else {
+      // Switching from visual to source: copy editor content to textarea
+      if (editor) {
+        this.signatureHtmlSource.set(editor.getHtml());
+      }
+    }
+    this.signatureSourceMode.set(!sourceMode);
+  }
+
   saveSignature(): void {
     const name = this.signatureName();
-    const editor = this.signatureEditor();
-    if (!name || !editor) return;
+    if (!name) return;
 
-    const html = editor.getHtml();
+    let html: string;
+    if (this.signatureSourceMode()) {
+      html = this.signatureHtmlSource();
+    } else {
+      const editor = this.signatureEditor();
+      if (!editor) return;
+      html = editor.getHtml();
+    }
+
+    if (!html) return;
     const editId = this.editingSignatureId();
 
     if (editId) {
@@ -163,9 +190,14 @@ export class SettingsComponent {
     this.editingSignatureId.set(sig.id);
     this.signatureName.set(sig.name);
     this.signatureIsDefault.set(sig.isDefault);
-    const editor = this.signatureEditor();
-    if (editor) {
-      editor.setHtml(sig.html);
+    this.signatureHtmlSource.set(sig.html);
+    if (this.signatureSourceMode()) {
+      // Already in source mode, just update the textarea
+    } else {
+      const editor = this.signatureEditor();
+      if (editor) {
+        editor.setHtml(sig.html);
+      }
     }
   }
 
@@ -401,6 +433,8 @@ export class SettingsComponent {
     this.editingSignatureId.set(null);
     this.signatureName.set('');
     this.signatureIsDefault.set(false);
+    this.signatureSourceMode.set(false);
+    this.signatureHtmlSource.set('');
     this.signatureEditor()?.clear();
   }
 }

@@ -207,7 +207,7 @@ export class EmailService {
   async sendEmail(
     to: string,
     subject: string,
-    text: string,
+    html: string,
     cc = '',
     bcc = '',
     inReplyTo = '',
@@ -220,7 +220,7 @@ export class EmailService {
         const timeoutId = setTimeout(async () => {
           this.pendingSends.update(sends => sends.filter(s => s.id !== id));
           try {
-            await this.executeSend(to, subject, text, cc, bcc, inReplyTo, references);
+            await this.executeSend(to, subject, html, cc, bcc, inReplyTo, references);
             resolve();
           } catch (e) {
             reject(e);
@@ -236,14 +236,14 @@ export class EmailService {
         this.pendingSends.update(sends => [...sends, { id, to, subject, timeoutId, cancel }]);
       });
     } else {
-      await this.executeSend(to, subject, text, cc, bcc, inReplyTo, references);
+      await this.executeSend(to, subject, html, cc, bcc, inReplyTo, references);
     }
   }
 
   private async executeSend(
     to: string,
     subject: string,
-    text: string,
+    html: string,
     cc = '',
     bcc = '',
     inReplyTo = '',
@@ -252,7 +252,7 @@ export class EmailService {
     await firstValueFrom(
       this.http.post(
         `${this.apiUrl}/send`,
-        { to, subject, text, cc: cc || undefined, bcc: bcc || undefined, inReplyTo: inReplyTo || undefined, references: references || undefined },
+        { to, subject, html, cc: cc || undefined, bcc: bcc || undefined, inReplyTo: inReplyTo || undefined, references: references || undefined },
         { headers: this.getHeaders(), withCredentials: true }
       )
     );
