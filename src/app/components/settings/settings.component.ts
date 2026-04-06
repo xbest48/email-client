@@ -1,12 +1,15 @@
 import { Component, inject, signal, computed, output, ChangeDetectionStrategy, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { SettingsService, EmailSignature } from '../../services/settings.service';
+import { SettingsService, EmailSignature, EmailTemplate } from '../../services/settings.service';
 import { RichEditorComponent } from '../rich-editor/rich-editor.component';
 import { AuthService } from '../../services/auth.service';
+import { LabelService, Label } from '../../services/label.service';
+import { FilterService, FilterRule } from '../../services/filter.service';
+import { PgpService } from '../../services/pgp.service';
 import * as QRCode from 'qrcode';
 import { startRegistration } from '@simplewebauthn/browser';
 
-type SettingsTab = 'accounts' | 'signatures' | 'security' | 'general';
+type SettingsTab = 'accounts' | 'signatures' | 'security' | 'general' | 'labels' | 'filters' | 'templates';
 
 @Component({
   selector: 'app-settings',
@@ -20,6 +23,9 @@ export class SettingsComponent {
   readonly close = output<void>();
 
   protected readonly authService = inject(AuthService);
+  protected readonly labelService = inject(LabelService);
+  protected readonly filterService = inject(FilterService);
+  protected readonly pgpService = inject(PgpService);
   readonly activeTab = signal<SettingsTab>('accounts');
 
   // Security
@@ -49,6 +55,34 @@ export class SettingsComponent {
   readonly signatureEditor = viewChild<RichEditorComponent>('signatureEditor');
 
   readonly testConnectionLoading = signal(false);
+
+  // Labels
+  readonly labelName = signal('');
+  readonly labelColor = signal('#3b82f6');
+  readonly editingLabelId = signal<string | null>(null);
+
+  // Filters
+  readonly filterName = signal('');
+  readonly filterConditionField = signal<FilterRule['conditionField']>('from');
+  readonly filterConditionOperator = signal<FilterRule['conditionOperator']>('contains');
+  readonly filterConditionValue = signal('');
+  readonly filterActionType = signal<FilterRule['actionType']>('move');
+  readonly filterActionValue = signal('');
+  readonly editingFilterId = signal<string | null>(null);
+
+  // Templates
+  readonly templateName = signal('');
+  readonly templateSubject = signal('');
+  readonly editingTemplateId = signal<string | null>(null);
+  readonly templateEditorRef = viewChild<RichEditorComponent>('templateEditor');
+
+  // PGP
+  readonly pgpName = signal('');
+  readonly pgpEmail = signal('');
+  readonly pgpPassphrase = signal('');
+  readonly pgpContactEmail = signal('');
+  readonly pgpContactKey = signal('');
+  readonly generatingKey = signal(false);
 
   onAccountEmailChange(): void {
     const email = this.accountEmail();
@@ -202,6 +236,156 @@ export class SettingsComponent {
     } catch (e) {
       console.error('Failed to save settings', e);
     }
+  }
+
+  // Labels
+  async saveLabel(): Promise<void> {
+    const name = this.labelName();
+    const color = this.labelColor();
+    if (!name) return;
+    const editId = this.editingLabelId();
+    if (editId) {
+      await this.labelService.update(editId, { name, color });
+    } else {
+      await this.labelService.create(name, color);
+    }
+    this.resetLabelForm();
+  }
+
+  editLabel(label: Label): void {
+    this.editingLabelId.set(label.id);
+    this.labelName.set(label.name);
+    this.labelColor.set(label.color);
+  }
+
+  async deleteLabel(id: string): Promise<void> {
+    await this.labelService.remove(id);
+    if (this.editingLabelId() === id) this.resetLabelForm();
+  }
+
+  private resetLabelForm(): void {
+    this.editingLabelId.set(null);
+    this.labelName.set('');
+    this.labelColor.set('#3b82f6');
+  }
+
+  // Filters
+  async saveFilter(): Promise<void> {
+    const name = this.filterName();
+    if (!name || !this.filterConditionValue()) return;
+    const data = {
+      name,
+      conditionField: this.filterConditionField(),
+      conditionOperator: this.filterConditionOperator(),
+      conditionValue: this.filterConditionValue(),
+      actionType: this.filterActionType(),
+      actionValue: this.filterActionValue(),
+      isEnabled: true,
+    };
+    const editId = this.editingFilterId();
+    if (editId) {
+      await this.filterService.update(editId, data);
+    } else {
+      await this.filterService.create(data as Omit<FilterRule, 'id'>);
+    }
+    this.resetFilterForm();
+  }
+
+  editFilter(filter: FilterRule): void {
+    this.editingFilterId.set(filter.id);
+    this.filterName.set(filter.name);
+    this.filterConditionField.set(filter.conditionField);
+    this.filterConditionOperator.set(filter.conditionOperator);
+    this.filterConditionValue.set(filter.conditionValue);
+    this.filterActionType.set(filter.actionType);
+    this.filterActionValue.set(filter.actionValue);
+  }
+
+  async deleteFilter(id: string): Promise<void> {
+    await this.filterService.remove(id);
+    if (this.editingFilterId() === id) this.resetFilterForm();
+  }
+
+  async applyFilter(id: string): Promise<void> {
+    const result = await this.filterService.apply(id, 'INBOX');
+    alert(`Filtre applique a ${result.applied} message(s).`);
+  }
+
+  private resetFilterForm(): void {
+    this.editingFilterId.set(null);
+    this.filterName.set('');
+    this.filterConditionField.set('from');
+    this.filterConditionOperator.set('contains');
+    this.filterConditionValue.set('');
+    this.filterActionType.set('move');
+    this.filterActionValue.set('');
+  }
+
+  // Templates
+  saveTemplate(): void {
+    const name = this.templateName();
+    const editor = this.templateEditorRef();
+    if (!name || !editor) return;
+    const htmlBody = editor.getHtml();
+    const editId = this.editingTemplateId();
+    if (editId) {
+      this.settingsService.updateTemplate(editId, { name, subject: this.templateSubject(), htmlBody });
+    } else {
+      this.settingsService.addTemplate({ name, subject: this.templateSubject(), htmlBody });
+    }
+    this.resetTemplateForm();
+  }
+
+  editTemplate(tpl: EmailTemplate): void {
+    this.editingTemplateId.set(tpl.id);
+    this.templateName.set(tpl.name);
+    this.templateSubject.set(tpl.subject);
+    const editor = this.templateEditorRef();
+    if (editor) editor.setHtml(tpl.htmlBody);
+  }
+
+  deleteTemplate(id: string): void {
+    this.settingsService.removeTemplate(id);
+    if (this.editingTemplateId() === id) this.resetTemplateForm();
+  }
+
+  private resetTemplateForm(): void {
+    this.editingTemplateId.set(null);
+    this.templateName.set('');
+    this.templateSubject.set('');
+    this.templateEditorRef()?.clear();
+  }
+
+  // PGP
+  async generatePgpKey(): Promise<void> {
+    const name = this.pgpName();
+    const email = this.pgpEmail();
+    const passphrase = this.pgpPassphrase();
+    if (!name || !email || !passphrase) return;
+    this.generatingKey.set(true);
+    try {
+      await this.pgpService.generateKeyPair(name, email, passphrase);
+      this.pgpName.set('');
+      this.pgpEmail.set('');
+      this.pgpPassphrase.set('');
+    } catch (e) {
+      console.error('PGP key generation failed', e);
+    } finally {
+      this.generatingKey.set(false);
+    }
+  }
+
+  importPgpContact(): void {
+    const email = this.pgpContactEmail();
+    const key = this.pgpContactKey();
+    if (!email || !key) return;
+    this.pgpService.importPublicKey(email, key);
+    this.pgpContactEmail.set('');
+    this.pgpContactKey.set('');
+  }
+
+  removePgpContact(email: string): void {
+    this.pgpService.removeContactKey(email);
   }
 
   private resetAccountForm(): void {

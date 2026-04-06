@@ -4,11 +4,13 @@ import { firstValueFrom } from 'rxjs';
 import { environment } from '../environments/environment';
 import { Email, ImapFolder, FolderStatus, EmailListResponse } from '../models/email.model';
 import { SettingsService } from './settings.service';
+import { OfflineService } from './offline.service';
 
 @Injectable({ providedIn: 'root' })
 export class EmailService {
   private readonly http = inject(HttpClient);
   private readonly settingsService = inject(SettingsService);
+  private readonly offlineService = inject(OfflineService);
   private readonly apiUrl = environment.apiUrl;
 
   readonly loading = signal(false);
@@ -39,6 +41,7 @@ export class EmailService {
         this.http.get<ImapFolder[]>(`${this.apiUrl}/folders`, { headers: this.getHeaders(), withCredentials: true })
       );
       this.folders.set(folders);
+      this.offlineService.cacheFolders(folders);
 
       // Find trash folder
       const trash = folders.find(
@@ -50,6 +53,9 @@ export class EmailService {
       this.fetchFolderStatuses(folders);
     } catch (err) {
       console.error('Failed to fetch folders', err);
+      // Fallback to cached folders
+      const cached = await this.offlineService.getCachedFolders();
+      if (cached.length) this.folders.set(cached);
     }
   }
 
@@ -104,8 +110,16 @@ export class EmailService {
       }
       this.currentTotal.set(res.total);
       this.currentPage.set(page);
+      this.offlineService.cacheEmails(folder, res.emails);
     } catch (err) {
       console.error('Failed to fetch emails', err);
+      if (page === 1) {
+        const cached = await this.offlineService.getCachedEmails(folder);
+        if (cached.length) {
+          this.currentEmails.set(cached);
+          this.currentTotal.set(cached.length);
+        }
+      }
     } finally {
       this.loading.set(false);
     }
@@ -114,15 +128,17 @@ export class EmailService {
   async fetchEmail(folder: string, uid: number): Promise<Email | null> {
     if (!this.settingsService.activeAccountId()) return null;
     try {
-      return await firstValueFrom(
+      const email = await firstValueFrom(
         this.http.get<Email>(
           `${this.apiUrl}/email/${encodeURIComponent(folder)}/${uid}`,
           { headers: this.getHeaders(), withCredentials: true }
         )
       );
+      if (email) this.offlineService.cacheEmail(email);
+      return email;
     } catch (err) {
       console.error('Failed to fetch email', err);
-      return null;
+      return this.offlineService.getCachedEmail(folder, uid);
     }
   }
 
@@ -258,6 +274,23 @@ export class EmailService {
 
   hasMoreEmails(): boolean {
     return this.currentEmails().length < this.currentTotal();
+  }
+
+  getAttachmentUrl(folder: string, uid: number, attachmentId: string): string {
+    return `${this.apiUrl}/email/${encodeURIComponent(folder)}/${uid}/attachment/${attachmentId}`;
+  }
+
+  async fetchThread(folder: string, uid: number): Promise<Email[]> {
+    try {
+      return await firstValueFrom(
+        this.http.get<Email[]>(
+          `${this.apiUrl}/email/${encodeURIComponent(folder)}/${uid}/thread`,
+          { headers: this.getHeaders(), withCredentials: true }
+        )
+      );
+    } catch {
+      return [];
+    }
   }
 
   private async setFlag(email: Email, flag: string, value: boolean): Promise<void> {

@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Delete, Param, Query, Body, Headers, BadRequestException, UseGuards, Request, Inject, forwardRef } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Query, Body, Headers, BadRequestException, UseGuards, Request, Inject, forwardRef, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { ImapService, EmailCredentials } from './imap/imap.service';
 import type { SendEmailDto } from './smtp/smtp.service';
 import { SmtpService } from './smtp/smtp.service';
@@ -138,6 +139,39 @@ export class EmailController {
     const creds = await this.getCredentials(req, headers);
     await this.imapService.deleteEmail(creds, decodeURIComponent(folder), parseInt(uid, 10), trash);
     return { success: true };
+  }
+
+  @Get('email/:folder/:uid/attachment/:attachmentId')
+  async getAttachment(
+    @Request() req: any,
+    @Headers() headers: any,
+    @Param('folder') folder: string,
+    @Param('uid') uid: string,
+    @Param('attachmentId') attachmentId: string,
+    @Res() res: Response,
+  ) {
+    const creds = await this.getCredentials(req, headers);
+    const attachment = await this.imapService.fetchAttachment(
+      creds,
+      decodeURIComponent(folder),
+      parseInt(uid, 10),
+      parseInt(attachmentId, 10),
+    );
+    if (!attachment) throw new BadRequestException('Attachment not found');
+    res.setHeader('Content-Type', attachment.contentType);
+    res.setHeader('Content-Disposition', `inline; filename="${attachment.filename}"`);
+    res.send(attachment.content);
+  }
+
+  @Get('email/:folder/:uid/thread')
+  async getThread(
+    @Request() req: any,
+    @Headers() headers: any,
+    @Param('folder') folder: string,
+    @Param('uid') uid: string,
+  ) {
+    const creds = await this.getCredentials(req, headers);
+    return this.imapService.fetchThread(creds, decodeURIComponent(folder), parseInt(uid, 10));
   }
 
   @Post('send')

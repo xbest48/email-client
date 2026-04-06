@@ -11,6 +11,8 @@ export interface SendEmailDto {
   html?: string;
   inReplyTo?: string;
   references?: string | string[];
+  requestReadReceipt?: boolean;
+  attachments?: { filename: string; content: Buffer; contentType: string }[];
 }
 
 @Injectable()
@@ -41,6 +43,20 @@ export class SmtpService {
     if (dto.html) mailOptions.html = dto.html;
     if (dto.inReplyTo) mailOptions.inReplyTo = dto.inReplyTo;
     if (dto.references) mailOptions.references = dto.references;
+    if (dto.requestReadReceipt) {
+      mailOptions.headers = {
+        ...((mailOptions.headers as any) || {}),
+        'Disposition-Notification-To': credentials.email,
+        'Return-Receipt-To': credentials.email,
+      };
+    }
+    if (dto.attachments?.length) {
+      mailOptions.attachments = dto.attachments.map((a) => ({
+        filename: a.filename,
+        content: a.content,
+        contentType: a.contentType,
+      }));
+    }
 
     const info = await transporter.sendMail(mailOptions);
     transporter.close();

@@ -22,6 +22,8 @@ export interface Email {
   attachments: Attachment[];
   size: number;
   messageId?: string;
+  readReceiptRequested?: boolean;
+  readReceiptTo?: string;
 }
 
 export interface Attachment {
@@ -64,4 +66,6 @@ export interface SearchFilter {
   after: string;
   before: string;
   isUnread: boolean;
+  minSize?: string;
+  maxSize?: string;
 }

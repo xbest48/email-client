@@ -1,9 +1,14 @@
-import { Component, inject, signal, computed, ChangeDetectionStrategy, OnInit } from '@angular/core';
+import { Component, inject, signal, computed, ChangeDetectionStrategy, OnInit, OnDestroy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { EmailService } from '../../services/email.service';
 import { RelativeTimePipe } from '../../pipes/relative-time.pipe';
 import { Email } from '../../models/email.model';
 import { AuthService } from '../../services/auth.service';
+import { SnoozeService } from '../../services/snooze.service';
+import { LabelService, Label } from '../../services/label.service';
+import { PgpService } from '../../services/pgp.service';
+import { KeyboardShortcutService } from '../../services/keyboard-shortcut.service';
 import { SandboxedHtmlDirective } from '../../directives/sandboxed-html.directive';
 
 @Component({
@@ -13,16 +18,31 @@ import { SandboxedHtmlDirective } from '../../directives/sandboxed-html.directiv
   templateUrl: './email-detail.component.html',
   styleUrl: './email-detail.component.css',
 })
-export class EmailDetailComponent implements OnInit {
+export class EmailDetailComponent implements OnInit, OnDestroy {
   private readonly emailService = inject(EmailService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   protected readonly authService = inject(AuthService);
+  protected readonly snoozeService = inject(SnoozeService);
+  protected readonly labelService = inject(LabelService);
+  protected readonly pgpService = inject(PgpService);
+  private readonly shortcutService = inject(KeyboardShortcutService);
 
   readonly email = signal<Email | null>(null);
   readonly showReply = signal(false);
   readonly replyBody = signal('');
   readonly allowExternalImages = signal(false);
+  readonly showSnoozeMenu = signal(false);
+  readonly showLabelMenu = signal(false);
+  readonly emailLabels = signal<Label[]>([]);
+  readonly threadEmails = signal<Email[]>([]);
+  readonly expandedThreadUids = signal<Set<number>>(new Set());
+  readonly decryptedBody = signal<string | null>(null);
+  readonly pgpPassphrase = signal('');
+  readonly showPgpPrompt = signal(false);
+  readonly readReceiptDismissed = signal(false);
+  readonly customSnoozeDate = signal('');
+  readonly previewAttachment = signal<{ url: string; mimeType: string; filename: string } | null>(null);
 
   readonly sanitizedHtml = computed<string | null>(() => {
     const mail = this.email();
@@ -32,16 +52,23 @@ export class EmailDetailComponent implements OnInit {
     const blockPixels = this.authService.user()?.blockTrackingPixels;
 
     if (blockPixels && !this.allowExternalImages()) {
-        html = html.replace(/<img[^>]+src="([^">]+)"/gi, (match, src) => {
-            if (src.startsWith('http') && !src.includes(window.location.host)) {
-                return match.replace(src, 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7');
-            }
-            return match;
-        });
+      html = html.replace(/<img[^>]+src="([^">]+)"/gi, (match, src) => {
+        if (src.startsWith('http') && !src.includes(window.location.host)) {
+          return match.replace(src, 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7');
+        }
+        return match;
+      });
     }
 
     return html;
   });
+
+  readonly isPgpEncrypted = computed(() => {
+    const mail = this.email();
+    return mail ? this.pgpService.isPgpMessage(mail.body || mail.htmlBody) : false;
+  });
+
+  private shortcutSub?: Subscription;
 
   ngOnInit(): void {
     this.route.params.subscribe(async (params) => {
@@ -53,9 +80,37 @@ export class EmailDetailComponent implements OnInit {
         if (msg) {
           this.email.set(msg);
           this.emailService.markAsRead(msg);
+          this.loadLabels(folder, parseInt(uid, 10));
+          this.loadThread(folder, parseInt(uid, 10));
         }
       }
     });
+
+    this.shortcutSub = this.shortcutService.actions.subscribe((action) => {
+      switch (action) {
+        case 'reply': this.showReply.set(true); break;
+        case 'goBack': this.goBack(); break;
+        case 'toggleStar': this.toggleStar(); break;
+        case 'trash': this.trash(); break;
+        case 'toggleReadUnread': this.toggleUnread(); break;
+      }
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.shortcutSub?.unsubscribe();
+  }
+
+  private async loadLabels(folder: string, uid: number): Promise<void> {
+    try {
+      const labels = await this.labelService.getLabelsForEmail(folder, uid);
+      this.emailLabels.set(labels);
+    } catch { /* ignore */ }
+  }
+
+  private async loadThread(folder: string, uid: number): Promise<void> {
+    const thread = await this.emailService.fetchThread(folder, uid);
+    this.threadEmails.set(thread.filter((e) => e.uid !== uid));
   }
 
   goBack(): void {
@@ -98,13 +153,8 @@ export class EmailDetailComponent implements OnInit {
 
     const subject = mail.subject.startsWith('Re:') ? mail.subject : `Re: ${mail.subject}`;
     await this.emailService.sendEmail(
-      mail.from.email,
-      subject,
-      body,
-      '',
-      '',
-      mail.messageId || '',
-      mail.messageId || ''
+      mail.from.email, subject, body, '', '',
+      mail.messageId || '', mail.messageId || ''
     );
     this.showReply.set(false);
     this.replyBody.set('');
@@ -112,6 +162,105 @@ export class EmailDetailComponent implements OnInit {
 
   onReplyInput(event: Event): void {
     this.replyBody.set((event.target as HTMLTextAreaElement).value);
+  }
+
+  // Snooze
+  async snooze(option: 'laterToday' | 'tomorrowMorning' | 'nextWeek'): Promise<void> {
+    const mail = this.email();
+    if (!mail) return;
+    const until = this.snoozeService.getSnoozeDate(option);
+    await this.snoozeService.snooze(mail.folder, mail.uid, until);
+    this.showSnoozeMenu.set(false);
+    this.goBack();
+  }
+
+  async snoozeCustom(): Promise<void> {
+    const mail = this.email();
+    const dateStr = this.customSnoozeDate();
+    if (!mail || !dateStr) return;
+    await this.snoozeService.snooze(mail.folder, mail.uid, new Date(dateStr));
+    this.showSnoozeMenu.set(false);
+    this.goBack();
+  }
+
+  // Labels
+  async toggleLabel(label: Label): Promise<void> {
+    const mail = this.email();
+    if (!mail) return;
+    const hasLabel = this.emailLabels().some((l) => l.id === label.id);
+    if (hasLabel) {
+      await this.labelService.removeEmailFromLabel(label.id, mail.folder, mail.uid);
+    } else {
+      await this.labelService.addEmailToLabel(label.id, mail.folder, mail.uid);
+    }
+    await this.loadLabels(mail.folder, mail.uid);
+  }
+
+  hasLabel(labelId: string): boolean {
+    return this.emailLabels().some((l) => l.id === labelId);
+  }
+
+  // Thread
+  toggleThreadMessage(uid: number): void {
+    this.expandedThreadUids.update((set) => {
+      const next = new Set(set);
+      if (next.has(uid)) next.delete(uid);
+      else next.add(uid);
+      return next;
+    });
+  }
+
+  isThreadExpanded(uid: number): boolean {
+    return this.expandedThreadUids().has(uid);
+  }
+
+  // PGP
+  async decryptEmail(): Promise<void> {
+    const mail = this.email();
+    const passphrase = this.pgpPassphrase();
+    if (!mail || !passphrase) return;
+    const content = mail.body || mail.htmlBody;
+    const decrypted = await this.pgpService.decrypt(content, passphrase);
+    if (decrypted) {
+      this.decryptedBody.set(decrypted);
+      this.showPgpPrompt.set(false);
+    }
+  }
+
+  // Read receipt
+  async sendReadReceipt(): Promise<void> {
+    const mail = this.email();
+    if (!mail?.readReceiptTo) return;
+    const subject = `Read: ${mail.subject}`;
+    const body = `Your message "${mail.subject}" was read on ${new Date().toLocaleString()}.`;
+    await this.emailService.sendEmail(mail.readReceiptTo, subject, body);
+    this.readReceiptDismissed.set(true);
+  }
+
+  // Attachments
+  getAttachmentUrl(attachmentId: string): string {
+    const mail = this.email();
+    if (!mail) return '';
+    return this.emailService.getAttachmentUrl(mail.folder, mail.uid, attachmentId);
+  }
+
+  isImageAttachment(mimeType: string): boolean {
+    return mimeType.startsWith('image/');
+  }
+
+  isPdfAttachment(mimeType: string): boolean {
+    return mimeType === 'application/pdf';
+  }
+
+  openPreview(attachmentId: string, mimeType: string, filename: string): void {
+    this.previewAttachment.set({
+      url: this.getAttachmentUrl(attachmentId),
+      mimeType, filename,
+    });
+  }
+
+  closePreview(): void {
+    this.previewAttachment.set(null);
   }
 
   formatRecipients(addresses: { name: string; email: string }[]): string {

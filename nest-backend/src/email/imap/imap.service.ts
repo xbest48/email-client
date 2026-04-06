@@ -226,7 +226,150 @@ export class ImapService implements OnModuleDestroy {
         })),
         hasAttachments: (parsed.attachments || []).length > 0,
         size: msg.size,
+        readReceiptRequested: !!(parsed.headers?.get('disposition-notification-to')),
+        readReceiptTo: (parsed.headers?.get('disposition-notification-to') as string) || '',
       };
+    } finally {
+      lock.release();
+    }
+  }
+
+  async fetchAttachment(
+    credentials: EmailCredentials,
+    folder: string,
+    uid: number,
+    attachmentIndex: number,
+  ): Promise<{ filename: string; contentType: string; content: Buffer } | null> {
+    const client = await this.getConnection(credentials);
+    const lock = await client.getMailboxLock(folder);
+
+    try {
+      const msg: any = await client.fetchOne(
+        uid,
+        { source: true },
+        { uid: true },
+      );
+      const parsed = await simpleParser(msg.source);
+      const att = parsed.attachments?.[attachmentIndex];
+      if (!att) return null;
+      return {
+        filename: att.filename || 'attachment',
+        contentType: att.contentType,
+        content: att.content,
+      };
+    } finally {
+      lock.release();
+    }
+  }
+
+  async fetchThread(credentials: EmailCredentials, folder: string, uid: number) {
+    const client = await this.getConnection(credentials);
+    const lock = await client.getMailboxLock(folder);
+
+    try {
+      // 1. Fetch the target email to get its headers
+      const targetMsg: any = await client.fetchOne(uid, {
+        envelope: true,
+        flags: true,
+        bodyStructure: true,
+        uid: true,
+        size: true,
+        source: true,
+      }, { uid: true });
+
+      const parsed = await simpleParser(targetMsg.source);
+      const targetMessageId = targetMsg.envelope.messageId || '';
+      const references: string[] = [];
+
+      if (parsed.references) {
+        if (Array.isArray(parsed.references)) {
+          references.push(...parsed.references);
+        } else {
+          references.push(parsed.references);
+        }
+      }
+      if (parsed.inReplyTo) {
+        const inReplyToId = typeof parsed.inReplyTo === 'string' ? parsed.inReplyTo : String(parsed.inReplyTo);
+        if (!references.includes(inReplyToId)) {
+          references.push(inReplyToId);
+        }
+      }
+      if (targetMessageId && !references.includes(targetMessageId)) {
+        references.push(targetMessageId);
+      }
+
+      const allRelatedUids = new Set<number>();
+      allRelatedUids.add(uid);
+
+      // 2. Search by References/In-Reply-To headers
+      for (const ref of references) {
+        try {
+          const headerResults: any = await client.search({ header: { 'References': ref } }, { uid: true });
+          if (headerResults) headerResults.forEach((u: number) => allRelatedUids.add(u));
+        } catch { /* ignore */ }
+
+        try {
+          const inReplyResults: any = await client.search({ header: { 'In-Reply-To': ref } }, { uid: true });
+          if (inReplyResults) inReplyResults.forEach((u: number) => allRelatedUids.add(u));
+        } catch { /* ignore */ }
+
+        try {
+          const msgIdResults: any = await client.search({ header: { 'Message-ID': ref } }, { uid: true });
+          if (msgIdResults) msgIdResults.forEach((u: number) => allRelatedUids.add(u));
+        } catch { /* ignore */ }
+      }
+
+      // 3. Fallback: search by normalized subject
+      const rawSubject = targetMsg.envelope.subject || '';
+      const normalizedSubject = rawSubject.replace(/^(Re|Fwd|Fw|Tr)\s*:\s*/gi, '').trim();
+      if (normalizedSubject) {
+        try {
+          const subjectResults: any = await client.search({ subject: normalizedSubject }, { uid: true });
+          if (subjectResults) subjectResults.forEach((u: number) => allRelatedUids.add(u));
+        } catch { /* ignore */ }
+      }
+
+      // 4. Fetch all related emails
+      const uids = Array.from(allRelatedUids);
+      if (uids.length <= 1) {
+        return [];
+      }
+
+      const threadEmails = [];
+      for await (const msg of client.fetch(uids, {
+        envelope: true,
+        flags: true,
+        bodyStructure: true,
+        uid: true,
+        size: true,
+        source: true,
+      }, { uid: true })) {
+        const msgParsed = await simpleParser((msg as any).source);
+        threadEmails.push({
+          uid: (msg as any).uid,
+          folder,
+          messageId: (msg as any).envelope.messageId,
+          subject: (msg as any).envelope.subject || '(sans objet)',
+          from: this.formatAddress((msg as any).envelope.from),
+          to: this.formatAddresses((msg as any).envelope.to),
+          cc: this.formatAddresses((msg as any).envelope.cc),
+          date: (msg as any).envelope.date ? (msg as any).envelope.date.toISOString() : null,
+          flags: Array.from((msg as any).flags || []),
+          isRead: (msg as any).flags?.has('\\Seen') || false,
+          body: msgParsed.text || '',
+          htmlBody: msgParsed.html || '',
+          size: (msg as any).size,
+        });
+      }
+
+      // Sort by date ascending
+      threadEmails.sort((a, b) => {
+        const da = a.date ? new Date(a.date).getTime() : 0;
+        const db = b.date ? new Date(b.date).getTime() : 0;
+        return da - db;
+      });
+
+      return threadEmails;
     } finally {
       lock.release();
     }
