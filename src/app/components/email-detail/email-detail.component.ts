@@ -52,11 +52,16 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     const blockPixels = this.authService.user()?.blockTrackingPixels;
 
     if (blockPixels && !this.allowExternalImages()) {
-      html = html.replace(/<img[^>]+src="([^">]+)"/gi, (match, src) => {
-        if (src.startsWith('http') && !src.includes(window.location.host)) {
-          return match.replace(src, 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7');
+      const placeholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+      html = html.replace(/<img\b[^>]*>/gi, (imgTag) => {
+        const srcMatch = imgTag.match(/\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|(\S+))/i);
+        if (srcMatch) {
+          const src = srcMatch[1] ?? srcMatch[2] ?? srcMatch[3];
+          if (src && src.startsWith('http') && !src.includes(window.location.host)) {
+            return imgTag.replace(srcMatch[0], `src="${placeholder}"`);
+          }
         }
-        return match;
+        return imgTag;
       });
     }
 
