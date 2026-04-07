@@ -36,6 +36,7 @@ export class SettingsComponent {
   // Account form
   readonly accountEmail = signal('');
   readonly accountPassword = signal('');
+  readonly accountDisplayName = signal('');
   readonly accountImapHost = signal('');
   readonly accountImapPort = signal(993);
   readonly accountSmtpHost = signal('');
@@ -48,7 +49,6 @@ export class SettingsComponent {
 
   // General
   readonly pageSize = signal(this.settingsService.pageSize);
-  readonly displayName = signal(this.authService.user()?.displayName ?? '');
   readonly darkMode = computed(() => this.authService.user()?.darkMode ?? false);
   readonly blockTrackingPixels = computed(() => this.authService.user()?.blockTrackingPixels ?? false);
   readonly undoSendDelay = computed(() => this.authService.user()?.undoSendDelay ?? 0);
@@ -132,12 +132,17 @@ export class SettingsComponent {
     this.settingsService.addAccount({
       email: this.accountEmail(),
       password: this.accountPassword(),
+      displayName: this.accountDisplayName(),
       imapHost: this.accountImapHost(),
       imapPort: this.accountImapPort(),
       smtpHost: this.accountSmtpHost(),
       smtpPort: this.accountSmtpPort(),
     });
     this.resetAccountForm();
+  }
+
+  async updateAccountDisplayName(accountId: string, displayName: string): Promise<void> {
+    await this.settingsService.updateAccount(accountId, { displayName });
   }
 
   removeAccount(id: string): void {
@@ -268,7 +273,6 @@ export class SettingsComponent {
     try {
       const current = this.authService.user() || { email: '' };
       await this.authService.updateSettings({
-        displayName: current.displayName,
         darkMode: current.darkMode,
         undoSendDelay: current.undoSendDelay,
         blockTrackingPixels: current.blockTrackingPixels,
@@ -468,6 +472,7 @@ export class SettingsComponent {
   private resetAccountForm(): void {
     this.accountEmail.set('');
     this.accountPassword.set('');
+    this.accountDisplayName.set('');
     this.accountImapHost.set('');
     this.accountImapPort.set(993);
     this.accountSmtpHost.set('');

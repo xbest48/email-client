@@ -184,11 +184,14 @@ export class EmailController {
   async sendEmail(@Request() req: any, @Headers() headers: any, @Body() dto: SendEmailDto, @UploadedFiles() files?: Express.Multer.File[]) {
     const creds = await this.getCredentials(req, headers);
 
-    // Set sender display name from user profile
+    // Set sender display name from account
     if (!dto.senderName) {
-      const user = await this.usersService.findById(req.user.id);
-      if (user?.displayName) {
-        dto.senderName = user.displayName;
+      const accountId = headers['x-account-id'];
+      if (accountId) {
+        const account = await this.accountsService.findOne(accountId, req.user.id);
+        if (account?.displayName) {
+          dto.senderName = account.displayName;
+        }
       }
     }
 

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Body, Param, UseGuards, Request, BadRequestException, Inject, forwardRef } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { AccountsService } from './accounts.service';
 import { Account } from './account.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -38,6 +38,11 @@ export class AccountsController {
   @Post()
   create(@Request() req: any, @Body() account: Partial<Account>): Promise<Account> {
     return this.accountsService.create({ ...account, user: req.user.id } as any);
+  }
+
+  @Put(':id')
+  async update(@Request() req: any, @Param('id') id: string, @Body() body: Partial<Account>): Promise<Account | null> {
+    return this.accountsService.update(id, req.user.id, body);
   }
 
   @Delete(':id')

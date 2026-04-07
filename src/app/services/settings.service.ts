@@ -5,6 +5,7 @@ import { firstValueFrom } from 'rxjs';
 export interface EmailAccount {
   id: string;
   email: string;
+  displayName?: string;
   password?: string;
   imapHost: string;
   imapPort: number;
@@ -125,6 +126,18 @@ export class SettingsService {
       });
     } catch (err) {
       console.error('Failed to add account', err);
+    }
+  }
+
+  async updateAccount(id: string, data: Partial<EmailAccount>): Promise<void> {
+    try {
+      const updated = await firstValueFrom(this.http.put<EmailAccount>(`/api/accounts/${id}`, data));
+      this.settings.update((s) => ({
+        ...s,
+        accounts: s.accounts.map((a) => (a.id === id ? { ...a, ...updated } : a)),
+      }));
+    } catch (err) {
+      console.error('Failed to update account', err);
     }
   }
 
