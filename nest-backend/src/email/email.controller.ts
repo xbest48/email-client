@@ -6,6 +6,7 @@ import type { SendEmailDto } from './smtp/smtp.service';
 import { SmtpService } from './smtp/smtp.service';
 import { AccountsService } from '../accounts/accounts.service';
 import { ContactsService } from '../contacts/contacts.service';
+import { UsersService } from '../users/users.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @UseGuards(JwtAuthGuard)
@@ -17,6 +18,7 @@ export class EmailController {
     @Inject(forwardRef(() => AccountsService))
     private readonly accountsService: AccountsService,
     private readonly contactsService: ContactsService,
+    private readonly usersService: UsersService,
   ) {}
 
   private async getCredentials(req: any, headers: any): Promise<EmailCredentials> {
@@ -181,6 +183,14 @@ export class EmailController {
   @UseInterceptors(FilesInterceptor('files', 20))
   async sendEmail(@Request() req: any, @Headers() headers: any, @Body() dto: SendEmailDto, @UploadedFiles() files?: Express.Multer.File[]) {
     const creds = await this.getCredentials(req, headers);
+
+    // Set sender display name from user profile
+    if (!dto.senderName) {
+      const user = await this.usersService.findById(req.user.id);
+      if (user?.displayName) {
+        dto.senderName = user.displayName;
+      }
+    }
 
     // Map uploaded files to attachment DTO format
     if (files?.length) {

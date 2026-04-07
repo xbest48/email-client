@@ -48,6 +48,7 @@ export class SettingsComponent {
 
   // General
   readonly pageSize = signal(this.settingsService.pageSize);
+  readonly displayName = signal(this.authService.user()?.displayName ?? '');
   readonly darkMode = computed(() => this.authService.user()?.darkMode ?? false);
   readonly blockTrackingPixels = computed(() => this.authService.user()?.blockTrackingPixels ?? false);
   readonly undoSendDelay = computed(() => this.authService.user()?.undoSendDelay ?? 0);
@@ -267,6 +268,7 @@ export class SettingsComponent {
     try {
       const current = this.authService.user() || { email: '' };
       await this.authService.updateSettings({
+        displayName: current.displayName,
         darkMode: current.darkMode,
         undoSendDelay: current.undoSendDelay,
         blockTrackingPixels: current.blockTrackingPixels,

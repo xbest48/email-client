@@ -39,6 +39,7 @@ export class EmailListComponent implements OnInit, OnDestroy {
 
   readonly emails = computed(() => this.emailService.currentEmails());
   readonly title = signal('Boite de reception');
+  readonly isSentFolder = signal(false);
 
   readonly allSelected = computed(() => {
     const emails = this.emails();
@@ -60,9 +61,11 @@ export class EmailListComponent implements OnInit, OnDestroy {
       if (folderParam) {
         this.currentFolder = folderParam;
         this.title.set(folderParam);
+        this.isSentFolder.set(false);
       } else {
         this.currentFolder = this.resolveFolder(label);
         this.title.set(FOLDER_TITLES[label] ?? label);
+        this.isSentFolder.set(label === 'sent');
       }
 
       this.selectedIds.set(new Set());

@@ -68,6 +68,7 @@ export class AuthController {
     return {
       id: user.id,
       email: user.email,
+      displayName: user.displayName || '',
       darkMode: user.darkMode,
       undoSendDelay: user.undoSendDelay,
       blockTrackingPixels: user.blockTrackingPixels,
@@ -80,8 +81,9 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Post('profile/settings')
   async updateSettings(@Request() req: any, @Body() body: any) {
-    const { darkMode, undoSendDelay, blockTrackingPixels, imagePolicy, imageAllowedDomains, imageBlockedDomains } = body;
+    const { darkMode, undoSendDelay, blockTrackingPixels, imagePolicy, imageAllowedDomains, imageBlockedDomains, displayName } = body;
     const updateData: any = { darkMode, undoSendDelay, blockTrackingPixels };
+    if (displayName !== undefined) updateData.displayName = displayName;
     if (imagePolicy !== undefined) updateData.imagePolicy = imagePolicy;
     if (imageAllowedDomains !== undefined) updateData.imageAllowedDomains = JSON.stringify(imageAllowedDomains);
     if (imageBlockedDomains !== undefined) updateData.imageBlockedDomains = JSON.stringify(imageBlockedDomains);

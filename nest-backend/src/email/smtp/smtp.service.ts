@@ -13,6 +13,7 @@ export interface SendEmailDto {
   references?: string | string[];
   requestReadReceipt?: boolean;
   attachments?: { filename: string; content: Buffer; contentType: string }[];
+  senderName?: string;
 }
 
 @Injectable()
@@ -32,7 +33,7 @@ export class SmtpService {
     });
 
     const mailOptions: nodemailer.SendMailOptions = {
-      from: credentials.email,
+      from: dto.senderName ? `"${dto.senderName}" <${credentials.email}>` : credentials.email,
       to: dto.to,
       subject: dto.subject,
       text: dto.text,

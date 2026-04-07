@@ -8,6 +8,7 @@ export type ImagePolicy = 'ask' | 'always' | 'never';
 export interface UserProfile {
   id?: string;
   email: string;
+  displayName?: string;
   darkMode?: boolean;
   undoSendDelay?: number;
   blockTrackingPixels?: boolean;

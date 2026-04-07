@@ -4,10 +4,11 @@ import { SmtpService } from './smtp/smtp.service';
 import { EmailController } from './email.controller';
 import { AccountsModule } from '../accounts/accounts.module';
 import { ContactsModule } from '../contacts/contacts.module';
+import { UsersModule } from '../users/users.module';
 import { forwardRef } from '@nestjs/common';
 
 @Module({
-  imports: [forwardRef(() => AccountsModule), ContactsModule],
+  imports: [forwardRef(() => AccountsModule), ContactsModule, UsersModule],
   providers: [ImapService, SmtpService],
   controllers: [EmailController],
   exports: [ImapService, SmtpService],
