@@ -14,19 +14,42 @@ export interface EmailCredentials {
 @Injectable()
 export class ImapService implements OnModuleDestroy {
   private connections = new Map<string, ImapFlow>();
+  private idleTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  private static readonly IDLE_TIMEOUT = 5 * 60 * 1000; // 5 minutes
 
   private getConnectionKey(credentials: EmailCredentials): string {
     return `${credentials.email}:${credentials.imapHost}:${credentials.imapPort}`;
   }
 
-  async getConnection(credentials: EmailCredentials): Promise<ImapFlow> {
-    const key = this.getConnectionKey(credentials);
-    if (this.connections.has(key)) {
-      const client = this.connections.get(key);
-      if (client?.usable) return client;
-      this.connections.delete(key);
-    }
+  private resetIdleTimer(key: string): void {
+    const existing = this.idleTimers.get(key);
+    if (existing) clearTimeout(existing);
 
+    this.idleTimers.set(key, setTimeout(() => {
+      const client = this.connections.get(key);
+      if (client) {
+        client.logout().catch(() => {});
+        this.connections.delete(key);
+      }
+      this.idleTimers.delete(key);
+    }, ImapService.IDLE_TIMEOUT));
+  }
+
+  private removeConnection(key: string): void {
+    const client = this.connections.get(key);
+    if (client) {
+      client.logout().catch(() => {});
+    }
+    this.connections.delete(key);
+    const timer = this.idleTimers.get(key);
+    if (timer) {
+      clearTimeout(timer);
+      this.idleTimers.delete(key);
+    }
+  }
+
+  private async createConnection(credentials: EmailCredentials, key: string): Promise<ImapFlow> {
     const client = new ImapFlow({
       host: credentials.imapHost,
       port: credentials.imapPort || 993,
@@ -38,39 +61,59 @@ export class ImapService implements OnModuleDestroy {
       logger: false,
     });
 
-    client.on('error', (err) => {
-      console.warn(`ImapFlow background error for ${credentials.email}:`, err);
-      // Remove the broken connection from the pool so a new one can be created next time
+    client.on('error', () => {
+      // Silently remove broken connections from the pool
+      this.connections.delete(key);
+      const timer = this.idleTimers.get(key);
+      if (timer) {
+        clearTimeout(timer);
+        this.idleTimers.delete(key);
+      }
+    });
+
+    client.on('close', () => {
       this.connections.delete(key);
     });
 
     await client.connect();
     this.connections.set(key, client);
+    this.resetIdleTimer(key);
     return client;
+  }
+
+  async getConnection(credentials: EmailCredentials): Promise<ImapFlow> {
+    const key = this.getConnectionKey(credentials);
+
+    const cached = this.connections.get(key);
+    if (cached?.usable) {
+      this.resetIdleTimer(key);
+      return cached;
+    }
+
+    // Remove stale entry
+    if (cached) {
+      this.removeConnection(key);
+    }
+
+    // Create fresh connection, retry once on immediate failure
+    try {
+      return await this.createConnection(credentials, key);
+    } catch (err) {
+      this.removeConnection(key);
+      // Single retry
+      return await this.createConnection(credentials, key);
+    }
   }
 
   async closeConnection(credentials: EmailCredentials): Promise<void> {
     const key = this.getConnectionKey(credentials);
-    if (this.connections.has(key)) {
-      const client = this.connections.get(key);
-      try {
-        await client?.logout();
-      } catch {
-        // ignore
-      }
-      this.connections.delete(key);
-    }
+    this.removeConnection(key);
   }
 
   async onModuleDestroy() {
-    for (const [key, client] of this.connections.entries()) {
-      try {
-        await client.logout();
-      } catch {
-        // ignore
-      }
+    for (const key of [...this.connections.keys()]) {
+      this.removeConnection(key);
     }
-    this.connections.clear();
   }
 
   async listFolders(credentials: EmailCredentials) {
