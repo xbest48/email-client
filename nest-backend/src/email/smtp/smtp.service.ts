@@ -11,6 +11,9 @@ export interface SendEmailDto {
   html?: string;
   inReplyTo?: string;
   references?: string | string[];
+  requestReadReceipt?: boolean;
+  attachments?: { filename: string; content: Buffer; contentType: string }[];
+  senderName?: string;
 }
 
 @Injectable()
@@ -30,7 +33,7 @@ export class SmtpService {
     });
 
     const mailOptions: nodemailer.SendMailOptions = {
-      from: credentials.email,
+      from: dto.senderName ? `"${dto.senderName}" <${credentials.email}>` : credentials.email,
       to: dto.to,
       subject: dto.subject,
       text: dto.text,
@@ -41,14 +44,44 @@ export class SmtpService {
     if (dto.html) mailOptions.html = dto.html;
     if (dto.inReplyTo) mailOptions.inReplyTo = dto.inReplyTo;
     if (dto.references) mailOptions.references = dto.references;
+    if (dto.requestReadReceipt) {
+      mailOptions.headers = {
+        ...((mailOptions.headers as any) || {}),
+        'Disposition-Notification-To': credentials.email,
+        'Return-Receipt-To': credentials.email,
+      };
+    }
+    if (dto.attachments?.length) {
+      mailOptions.attachments = dto.attachments.map((a) => ({
+        filename: a.filename,
+        content: a.content,
+        contentType: a.contentType,
+      }));
+    }
 
     const info = await transporter.sendMail(mailOptions);
     transporter.close();
+
+    // Build raw RFC822 message for IMAP Sent folder append
+    let rawMessage: Buffer | null = null;
+    try {
+      const MailComposer = require('nodemailer/lib/mail-composer');
+      const composer = new MailComposer(mailOptions);
+      rawMessage = await new Promise<Buffer>((resolve, reject) => {
+        composer.compile().build((err: any, message: Buffer) => {
+          if (err) return reject(err);
+          resolve(message);
+        });
+      });
+    } catch {
+      // Fallback: ignore if we can't build raw message
+    }
 
     return {
       messageId: info.messageId,
       accepted: info.accepted,
       rejected: info.rejected,
+      rawMessage,
     };
   }
 

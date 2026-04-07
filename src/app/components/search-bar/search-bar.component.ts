@@ -1,4 +1,4 @@
-import { Component, output, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, output, signal, ChangeDetectionStrategy, ElementRef, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 @Component({
@@ -11,6 +11,8 @@ import { FormsModule } from '@angular/forms';
 export class SearchBarComponent {
   readonly search = output<string>();
 
+  readonly searchInput = viewChild<ElementRef<HTMLInputElement>>('searchInput');
+
   readonly query = signal('');
   readonly showFilters = signal(false);
   readonly filterFrom = signal('');
@@ -20,6 +22,8 @@ export class SearchBarComponent {
   readonly filterUnread = signal(false);
   readonly filterAfter = signal('');
   readonly filterBefore = signal('');
+  readonly filterMinSize = signal('');
+  readonly filterMaxSize = signal('');
 
   onSearch(event: Event): void {
     event.preventDefault();
@@ -44,6 +48,12 @@ export class SearchBarComponent {
     this.filterUnread.set(false);
     this.filterAfter.set('');
     this.filterBefore.set('');
+    this.filterMinSize.set('');
+    this.filterMaxSize.set('');
+  }
+
+  focusInput(): void {
+    this.searchInput()?.nativeElement.focus();
   }
 
   private buildQuery(): string {
@@ -62,6 +72,10 @@ export class SearchBarComponent {
     if (after) parts.push(`after:${after}`);
     const before = this.filterBefore();
     if (before) parts.push(`before:${before}`);
+    const minSize = this.filterMinSize();
+    if (minSize) parts.push(`larger:${minSize}`);
+    const maxSize = this.filterMaxSize();
+    if (maxSize) parts.push(`smaller:${maxSize}`);
     return parts.join(' ');
   }
 }

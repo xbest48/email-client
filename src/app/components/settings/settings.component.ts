@@ -1,12 +1,15 @@
 import { Component, inject, signal, computed, output, ChangeDetectionStrategy, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { SettingsService, EmailSignature } from '../../services/settings.service';
+import { SettingsService, EmailSignature, EmailTemplate } from '../../services/settings.service';
 import { RichEditorComponent } from '../rich-editor/rich-editor.component';
 import { AuthService } from '../../services/auth.service';
+import { LabelService, Label } from '../../services/label.service';
+import { FilterService, FilterRule } from '../../services/filter.service';
+import { PgpService } from '../../services/pgp.service';
 import * as QRCode from 'qrcode';
 import { startRegistration } from '@simplewebauthn/browser';
 
-type SettingsTab = 'accounts' | 'signatures' | 'security' | 'general';
+type SettingsTab = 'accounts' | 'signatures' | 'security' | 'general' | 'labels' | 'filters' | 'templates' | 'privacy';
 
 @Component({
   selector: 'app-settings',
@@ -20,6 +23,9 @@ export class SettingsComponent {
   readonly close = output<void>();
 
   protected readonly authService = inject(AuthService);
+  protected readonly labelService = inject(LabelService);
+  protected readonly filterService = inject(FilterService);
+  protected readonly pgpService = inject(PgpService);
   readonly activeTab = signal<SettingsTab>('accounts');
 
   // Security
@@ -30,6 +36,7 @@ export class SettingsComponent {
   // Account form
   readonly accountEmail = signal('');
   readonly accountPassword = signal('');
+  readonly accountDisplayName = signal('');
   readonly accountImapHost = signal('');
   readonly accountImapPort = signal(993);
   readonly accountSmtpHost = signal('');
@@ -47,8 +54,45 @@ export class SettingsComponent {
   readonly undoSendDelay = computed(() => this.authService.user()?.undoSendDelay ?? 0);
 
   readonly signatureEditor = viewChild<RichEditorComponent>('signatureEditor');
+  readonly signatureSourceMode = signal(false);
+  readonly signatureHtmlSource = signal('');
 
   readonly testConnectionLoading = signal(false);
+
+  // Labels
+  readonly labelName = signal('');
+  readonly labelColor = signal('#3b82f6');
+  readonly editingLabelId = signal<string | null>(null);
+
+  // Filters
+  readonly filterName = signal('');
+  readonly filterConditionField = signal<FilterRule['conditionField']>('from');
+  readonly filterConditionOperator = signal<FilterRule['conditionOperator']>('contains');
+  readonly filterConditionValue = signal('');
+  readonly filterActionType = signal<FilterRule['actionType']>('move');
+  readonly filterActionValue = signal('');
+  readonly editingFilterId = signal<string | null>(null);
+
+  // Templates
+  readonly templateName = signal('');
+  readonly templateSubject = signal('');
+  readonly editingTemplateId = signal<string | null>(null);
+  readonly templateEditorRef = viewChild<RichEditorComponent>('templateEditor');
+
+  // PGP
+  readonly pgpName = signal('');
+  readonly pgpEmail = signal('');
+  readonly pgpPassphrase = signal('');
+  readonly pgpContactEmail = signal('');
+  readonly pgpContactKey = signal('');
+  readonly generatingKey = signal(false);
+
+  // Privacy
+  readonly imagePolicy = computed(() => this.authService.user()?.imagePolicy ?? 'ask');
+  readonly imageAllowedDomains = computed(() => this.authService.user()?.imageAllowedDomains ?? []);
+  readonly imageBlockedDomains = computed(() => this.authService.user()?.imageBlockedDomains ?? []);
+  readonly newAllowedDomain = signal('');
+  readonly newBlockedDomain = signal('');
 
   onAccountEmailChange(): void {
     const email = this.accountEmail();
@@ -88,6 +132,7 @@ export class SettingsComponent {
     this.settingsService.addAccount({
       email: this.accountEmail(),
       password: this.accountPassword(),
+      displayName: this.accountDisplayName(),
       imapHost: this.accountImapHost(),
       imapPort: this.accountImapPort(),
       smtpHost: this.accountSmtpHost(),
@@ -96,16 +141,45 @@ export class SettingsComponent {
     this.resetAccountForm();
   }
 
+  async updateAccountDisplayName(accountId: string, displayName: string): Promise<void> {
+    await this.settingsService.updateAccount(accountId, { displayName });
+  }
+
   removeAccount(id: string): void {
     this.settingsService.removeAccount(id);
   }
 
+  toggleSignatureSourceMode(): void {
+    const sourceMode = this.signatureSourceMode();
+    const editor = this.signatureEditor();
+    if (sourceMode) {
+      // Switching from source to visual: apply HTML source to editor
+      if (editor) {
+        editor.setHtml(this.signatureHtmlSource());
+      }
+    } else {
+      // Switching from visual to source: copy editor content to textarea
+      if (editor) {
+        this.signatureHtmlSource.set(editor.getHtml());
+      }
+    }
+    this.signatureSourceMode.set(!sourceMode);
+  }
+
   saveSignature(): void {
     const name = this.signatureName();
-    const editor = this.signatureEditor();
-    if (!name || !editor) return;
+    if (!name) return;
 
-    const html = editor.getHtml();
+    let html: string;
+    if (this.signatureSourceMode()) {
+      html = this.signatureHtmlSource();
+    } else {
+      const editor = this.signatureEditor();
+      if (!editor) return;
+      html = editor.getHtml();
+    }
+
+    if (!html) return;
     const editId = this.editingSignatureId();
 
     if (editId) {
@@ -129,9 +203,14 @@ export class SettingsComponent {
     this.editingSignatureId.set(sig.id);
     this.signatureName.set(sig.name);
     this.signatureIsDefault.set(sig.isDefault);
-    const editor = this.signatureEditor();
-    if (editor) {
-      editor.setHtml(sig.html);
+    this.signatureHtmlSource.set(sig.html);
+    if (this.signatureSourceMode()) {
+      // Already in source mode, just update the textarea
+    } else {
+      const editor = this.signatureEditor();
+      if (editor) {
+        editor.setHtml(sig.html);
+      }
     }
   }
 
@@ -190,13 +269,16 @@ export class SettingsComponent {
     this.settingsService.setPageSize(this.pageSize());
   }
 
-  async updateSetting(key: 'darkMode' | 'undoSendDelay' | 'blockTrackingPixels', value: any): Promise<void> {
+  async updateSetting(key: string, value: unknown): Promise<void> {
     try {
       const current = this.authService.user() || { email: '' };
       await this.authService.updateSettings({
         darkMode: current.darkMode,
         undoSendDelay: current.undoSendDelay,
         blockTrackingPixels: current.blockTrackingPixels,
+        imagePolicy: current.imagePolicy,
+        imageAllowedDomains: current.imageAllowedDomains,
+        imageBlockedDomains: current.imageBlockedDomains,
         [key]: value
       });
     } catch (e) {
@@ -204,9 +286,193 @@ export class SettingsComponent {
     }
   }
 
+  // Labels
+  async saveLabel(): Promise<void> {
+    const name = this.labelName();
+    const color = this.labelColor();
+    if (!name) return;
+    const editId = this.editingLabelId();
+    if (editId) {
+      await this.labelService.update(editId, { name, color });
+    } else {
+      await this.labelService.create(name, color);
+    }
+    this.resetLabelForm();
+  }
+
+  editLabel(label: Label): void {
+    this.editingLabelId.set(label.id);
+    this.labelName.set(label.name);
+    this.labelColor.set(label.color);
+  }
+
+  async deleteLabel(id: string): Promise<void> {
+    await this.labelService.remove(id);
+    if (this.editingLabelId() === id) this.resetLabelForm();
+  }
+
+  private resetLabelForm(): void {
+    this.editingLabelId.set(null);
+    this.labelName.set('');
+    this.labelColor.set('#3b82f6');
+  }
+
+  // Filters
+  async saveFilter(): Promise<void> {
+    const name = this.filterName();
+    if (!name || !this.filterConditionValue()) return;
+    const data = {
+      name,
+      conditionField: this.filterConditionField(),
+      conditionOperator: this.filterConditionOperator(),
+      conditionValue: this.filterConditionValue(),
+      actionType: this.filterActionType(),
+      actionValue: this.filterActionValue(),
+      isEnabled: true,
+    };
+    const editId = this.editingFilterId();
+    if (editId) {
+      await this.filterService.update(editId, data);
+    } else {
+      await this.filterService.create(data as Omit<FilterRule, 'id'>);
+    }
+    this.resetFilterForm();
+  }
+
+  editFilter(filter: FilterRule): void {
+    this.editingFilterId.set(filter.id);
+    this.filterName.set(filter.name);
+    this.filterConditionField.set(filter.conditionField);
+    this.filterConditionOperator.set(filter.conditionOperator);
+    this.filterConditionValue.set(filter.conditionValue);
+    this.filterActionType.set(filter.actionType);
+    this.filterActionValue.set(filter.actionValue);
+  }
+
+  async deleteFilter(id: string): Promise<void> {
+    await this.filterService.remove(id);
+    if (this.editingFilterId() === id) this.resetFilterForm();
+  }
+
+  async applyFilter(id: string): Promise<void> {
+    const result = await this.filterService.apply(id, 'INBOX');
+    alert(`Filtre applique a ${result.applied} message(s).`);
+  }
+
+  private resetFilterForm(): void {
+    this.editingFilterId.set(null);
+    this.filterName.set('');
+    this.filterConditionField.set('from');
+    this.filterConditionOperator.set('contains');
+    this.filterConditionValue.set('');
+    this.filterActionType.set('move');
+    this.filterActionValue.set('');
+  }
+
+  // Templates
+  saveTemplate(): void {
+    const name = this.templateName();
+    const editor = this.templateEditorRef();
+    if (!name || !editor) return;
+    const htmlBody = editor.getHtml();
+    const editId = this.editingTemplateId();
+    if (editId) {
+      this.settingsService.updateTemplate(editId, { name, subject: this.templateSubject(), htmlBody });
+    } else {
+      this.settingsService.addTemplate({ name, subject: this.templateSubject(), htmlBody });
+    }
+    this.resetTemplateForm();
+  }
+
+  editTemplate(tpl: EmailTemplate): void {
+    this.editingTemplateId.set(tpl.id);
+    this.templateName.set(tpl.name);
+    this.templateSubject.set(tpl.subject);
+    const editor = this.templateEditorRef();
+    if (editor) editor.setHtml(tpl.htmlBody);
+  }
+
+  deleteTemplate(id: string): void {
+    this.settingsService.removeTemplate(id);
+    if (this.editingTemplateId() === id) this.resetTemplateForm();
+  }
+
+  private resetTemplateForm(): void {
+    this.editingTemplateId.set(null);
+    this.templateName.set('');
+    this.templateSubject.set('');
+    this.templateEditorRef()?.clear();
+  }
+
+  // PGP
+  async generatePgpKey(): Promise<void> {
+    const name = this.pgpName();
+    const email = this.pgpEmail();
+    const passphrase = this.pgpPassphrase();
+    if (!name || !email || !passphrase) return;
+    this.generatingKey.set(true);
+    try {
+      await this.pgpService.generateKeyPair(name, email, passphrase);
+      this.pgpName.set('');
+      this.pgpEmail.set('');
+      this.pgpPassphrase.set('');
+    } catch (e) {
+      console.error('PGP key generation failed', e);
+    } finally {
+      this.generatingKey.set(false);
+    }
+  }
+
+  async importPgpContact(): Promise<void> {
+    const email = this.pgpContactEmail();
+    const key = this.pgpContactKey();
+    if (!email || !key) return;
+    await this.pgpService.importPublicKey(email, key);
+    this.pgpContactEmail.set('');
+    this.pgpContactKey.set('');
+  }
+
+  async removePgpContact(email: string): Promise<void> {
+    await this.pgpService.removeContactKey(email);
+  }
+
+  // Privacy
+  async updateImagePolicy(policy: string): Promise<void> {
+    await this.updateSetting('imagePolicy' as any, policy);
+  }
+
+  async addAllowedDomain(): Promise<void> {
+    const domain = this.newAllowedDomain().trim().toLowerCase();
+    if (!domain) return;
+    const current = this.imageAllowedDomains();
+    if (current.includes(domain)) { this.newAllowedDomain.set(''); return; }
+    await this.updateSetting('imageAllowedDomains' as any, [...current, domain]);
+    this.newAllowedDomain.set('');
+  }
+
+  async removeAllowedDomain(domain: string): Promise<void> {
+    const current = this.imageAllowedDomains();
+    await this.updateSetting('imageAllowedDomains' as any, current.filter(d => d !== domain));
+  }
+
+  async addBlockedDomain(): Promise<void> {
+    const domain = this.newBlockedDomain().trim().toLowerCase();
+    if (!domain) return;
+    const current = this.imageBlockedDomains();
+    if (current.includes(domain)) { this.newBlockedDomain.set(''); return; }
+    await this.updateSetting('imageBlockedDomains' as any, [...current, domain]);
+    this.newBlockedDomain.set('');
+  }
+
+  async removeBlockedDomain(domain: string): Promise<void> {
+    const current = this.imageBlockedDomains();
+    await this.updateSetting('imageBlockedDomains' as any, current.filter(d => d !== domain));
+  }
+
   private resetAccountForm(): void {
     this.accountEmail.set('');
     this.accountPassword.set('');
+    this.accountDisplayName.set('');
     this.accountImapHost.set('');
     this.accountImapPort.set(993);
     this.accountSmtpHost.set('');
@@ -217,6 +483,8 @@ export class SettingsComponent {
     this.editingSignatureId.set(null);
     this.signatureName.set('');
     this.signatureIsDefault.set(false);
+    this.signatureSourceMode.set(false);
+    this.signatureHtmlSource.set('');
     this.signatureEditor()?.clear();
   }
 }

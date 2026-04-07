@@ -12,6 +12,9 @@ export class Account {
   @Column()
   email: string;
 
+  @Column({ default: '' })
+  displayName: string;
+
   @Column({ nullable: true })
   password?: string;
 

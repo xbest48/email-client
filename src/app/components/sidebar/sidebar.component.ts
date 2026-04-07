@@ -4,6 +4,8 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
 import { EmailService } from '../../services/email.service';
 import { AuthService } from '../../services/auth.service';
 import { SettingsService } from '../../services/settings.service';
+import { LabelService } from '../../services/label.service';
+import { SnoozeService } from '../../services/snooze.service';
 import { ImapFolder } from '../../models/email.model';
 
 interface NavItem {
@@ -25,11 +27,14 @@ export class SidebarComponent {
   protected readonly auth = inject(AuthService);
   protected readonly emailService = inject(EmailService);
   protected readonly settingsService = inject(SettingsService);
+  protected readonly labelService = inject(LabelService);
+  protected readonly snoozeService = inject(SnoozeService);
 
   readonly isOpen = input(true);
   readonly compose = output<void>();
   readonly signOut = output<void>();
 
+  readonly showLabelsSection = signal(true);
   readonly showAddFolder = signal(false);
   readonly newFolderName = signal('');
   readonly contextMenu = signal<{ x: number; y: number; folder: ImapFolder } | null>(null);

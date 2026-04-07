@@ -4,11 +4,13 @@ import { firstValueFrom } from 'rxjs';
 import { environment } from '../environments/environment';
 import { Email, ImapFolder, FolderStatus, EmailListResponse } from '../models/email.model';
 import { SettingsService } from './settings.service';
+import { OfflineService } from './offline.service';
 
 @Injectable({ providedIn: 'root' })
 export class EmailService {
   private readonly http = inject(HttpClient);
   private readonly settingsService = inject(SettingsService);
+  private readonly offlineService = inject(OfflineService);
   private readonly apiUrl = environment.apiUrl;
 
   readonly loading = signal(false);
@@ -39,6 +41,7 @@ export class EmailService {
         this.http.get<ImapFolder[]>(`${this.apiUrl}/folders`, { headers: this.getHeaders(), withCredentials: true })
       );
       this.folders.set(folders);
+      this.offlineService.cacheFolders(folders);
 
       // Find trash folder
       const trash = folders.find(
@@ -50,6 +53,9 @@ export class EmailService {
       this.fetchFolderStatuses(folders);
     } catch (err) {
       console.error('Failed to fetch folders', err);
+      // Fallback to cached folders
+      const cached = await this.offlineService.getCachedFolders();
+      if (cached.length) this.folders.set(cached);
     }
   }
 
@@ -104,8 +110,16 @@ export class EmailService {
       }
       this.currentTotal.set(res.total);
       this.currentPage.set(page);
+      this.offlineService.cacheEmails(folder, res.emails);
     } catch (err) {
       console.error('Failed to fetch emails', err);
+      if (page === 1) {
+        const cached = await this.offlineService.getCachedEmails(folder);
+        if (cached.length) {
+          this.currentEmails.set(cached);
+          this.currentTotal.set(cached.length);
+        }
+      }
     } finally {
       this.loading.set(false);
     }
@@ -114,15 +128,17 @@ export class EmailService {
   async fetchEmail(folder: string, uid: number): Promise<Email | null> {
     if (!this.settingsService.activeAccountId()) return null;
     try {
-      return await firstValueFrom(
+      const email = await firstValueFrom(
         this.http.get<Email>(
           `${this.apiUrl}/email/${encodeURIComponent(folder)}/${uid}`,
           { headers: this.getHeaders(), withCredentials: true }
         )
       );
+      if (email) this.offlineService.cacheEmail(email);
+      return email;
     } catch (err) {
       console.error('Failed to fetch email', err);
-      return null;
+      return this.offlineService.getCachedEmail(folder, uid);
     }
   }
 
@@ -191,12 +207,14 @@ export class EmailService {
   async sendEmail(
     to: string,
     subject: string,
-    text: string,
+    html: string,
     cc = '',
     bcc = '',
     inReplyTo = '',
     references = '',
-    delayMs = 0
+    delayMs = 0,
+    attachments: File[] = [],
+    requestReadReceipt = false
   ): Promise<void> {
     if (delayMs > 0) {
       return new Promise((resolve, reject) => {
@@ -204,7 +222,7 @@ export class EmailService {
         const timeoutId = setTimeout(async () => {
           this.pendingSends.update(sends => sends.filter(s => s.id !== id));
           try {
-            await this.executeSend(to, subject, text, cc, bcc, inReplyTo, references);
+            await this.executeSend(to, subject, html, cc, bcc, inReplyTo, references, attachments, requestReadReceipt);
             resolve();
           } catch (e) {
             reject(e);
@@ -214,32 +232,57 @@ export class EmailService {
         const cancel = () => {
           clearTimeout(timeoutId);
           this.pendingSends.update(sends => sends.filter(s => s.id !== id));
-          resolve(); // Resolve instead of reject to treat cancellation as a handled case
+          resolve();
         };
 
         this.pendingSends.update(sends => [...sends, { id, to, subject, timeoutId, cancel }]);
       });
     } else {
-      await this.executeSend(to, subject, text, cc, bcc, inReplyTo, references);
+      await this.executeSend(to, subject, html, cc, bcc, inReplyTo, references, attachments, requestReadReceipt);
     }
   }
 
   private async executeSend(
     to: string,
     subject: string,
-    text: string,
+    html: string,
     cc = '',
     bcc = '',
     inReplyTo = '',
-    references = ''
+    references = '',
+    attachments: File[] = [],
+    requestReadReceipt = false
   ): Promise<void> {
-    await firstValueFrom(
-      this.http.post(
-        `${this.apiUrl}/send`,
-        { to, subject, text, cc: cc || undefined, bcc: bcc || undefined, inReplyTo: inReplyTo || undefined, references: references || undefined },
-        { headers: this.getHeaders(), withCredentials: true }
-      )
-    );
+    if (attachments.length > 0) {
+      // Use FormData for multipart upload with attachments
+      const formData = new FormData();
+      formData.append('to', to);
+      formData.append('subject', subject);
+      formData.append('html', html);
+      if (cc) formData.append('cc', cc);
+      if (bcc) formData.append('bcc', bcc);
+      if (inReplyTo) formData.append('inReplyTo', inReplyTo);
+      if (references) formData.append('references', references);
+      if (requestReadReceipt) formData.append('requestReadReceipt', 'true');
+      for (const file of attachments) {
+        formData.append('files', file, file.name);
+      }
+      // Don't set Content-Type header — browser sets multipart boundary automatically
+      const accountId = this.settingsService.activeAccountId();
+      let headers = new HttpHeaders();
+      if (accountId) headers = headers.set('x-account-id', accountId);
+      await firstValueFrom(
+        this.http.post(`${this.apiUrl}/send`, formData, { headers, withCredentials: true })
+      );
+    } else {
+      await firstValueFrom(
+        this.http.post(
+          `${this.apiUrl}/send`,
+          { to, subject, html, cc: cc || undefined, bcc: bcc || undefined, inReplyTo: inReplyTo || undefined, references: references || undefined, requestReadReceipt: requestReadReceipt || undefined },
+          { headers: this.getHeaders(), withCredentials: true }
+        )
+      );
+    }
   }
 
   async createFolder(name: string): Promise<void> {
@@ -258,6 +301,33 @@ export class EmailService {
 
   hasMoreEmails(): boolean {
     return this.currentEmails().length < this.currentTotal();
+  }
+
+  getAttachmentUrl(folder: string, uid: number, attachmentId: string): string {
+    return `${this.apiUrl}/email/${encodeURIComponent(folder)}/${uid}/attachment/${attachmentId}`;
+  }
+
+  async fetchAttachmentBlob(folder: string, uid: number, attachmentId: string): Promise<string> {
+    const blob = await firstValueFrom(
+      this.http.get(
+        `${this.apiUrl}/email/${encodeURIComponent(folder)}/${uid}/attachment/${attachmentId}`,
+        { headers: this.getHeaders(), withCredentials: true, responseType: 'blob' }
+      )
+    );
+    return URL.createObjectURL(blob);
+  }
+
+  async fetchThread(folder: string, uid: number): Promise<Email[]> {
+    try {
+      return await firstValueFrom(
+        this.http.get<Email[]>(
+          `${this.apiUrl}/email/${encodeURIComponent(folder)}/${uid}/thread`,
+          { headers: this.getHeaders(), withCredentials: true }
+        )
+      );
+    } catch {
+      return [];
+    }
   }
 
   private async setFlag(email: Email, flag: string, value: boolean): Promise<void> {

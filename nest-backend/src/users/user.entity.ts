@@ -30,6 +30,15 @@ export class User {
   @Column({ default: false })
   blockTrackingPixels: boolean;
 
+  @Column({ default: 'ask' })
+  imagePolicy: 'ask' | 'always' | 'never';
+
+  @Column({ type: 'text', default: '[]' })
+  imageAllowedDomains: string;
+
+  @Column({ type: 'text', default: '[]' })
+  imageBlockedDomains: string;
+
   @OneToMany(() => Account, account => account.user)
   accounts: Account[];
 }

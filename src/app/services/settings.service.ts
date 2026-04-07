@@ -5,6 +5,7 @@ import { firstValueFrom } from 'rxjs';
 export interface EmailAccount {
   id: string;
   email: string;
+  displayName?: string;
   password?: string;
   imapHost: string;
   imapPort: number;
@@ -19,19 +20,38 @@ export interface EmailSignature {
   isDefault: boolean;
 }
 
+export interface EmailTemplate {
+  id: string;
+  name: string;
+  subject: string;
+  htmlBody: string;
+}
+
+export interface DraftState {
+  to: string;
+  cc: string;
+  bcc: string;
+  subject: string;
+  htmlBody: string;
+  savedAt: string;
+}
+
 export interface AppSettings {
   pageSize: number;
   accounts: EmailAccount[];
   signatures: EmailSignature[];
+  templates: EmailTemplate[];
   showFolders: boolean;
 }
 
 const STORAGE_KEY = 'mailflow_settings';
+const DRAFT_STORAGE_KEY = 'mailflow_draft';
 
 const DEFAULT_SETTINGS: AppSettings = {
   pageSize: 50,
   accounts: [],
   signatures: [],
+  templates: [],
   showFolders: true,
 };
 
@@ -109,6 +129,18 @@ export class SettingsService {
     }
   }
 
+  async updateAccount(id: string, data: Partial<EmailAccount>): Promise<void> {
+    try {
+      const updated = await firstValueFrom(this.http.put<EmailAccount>(`/api/accounts/${id}`, data));
+      this.settings.update((s) => ({
+        ...s,
+        accounts: s.accounts.map((a) => (a.id === id ? { ...a, ...updated } : a)),
+      }));
+    } catch (err) {
+      console.error('Failed to update account', err);
+    }
+  }
+
   async removeAccount(id: string): Promise<void> {
     try {
       await firstValueFrom(this.http.delete(`/api/accounts/${id}`));
@@ -157,6 +189,59 @@ export class SettingsService {
 
   getDefaultSignature(): EmailSignature | undefined {
     return this.settings().signatures.find((s) => s.isDefault);
+  }
+
+  // --- Templates ---
+
+  get templates(): EmailTemplate[] {
+    return this.settings().templates;
+  }
+
+  addTemplate(template: Omit<EmailTemplate, 'id'>): void {
+    const id = crypto.randomUUID();
+    this.settings.update((s) => {
+      const updated = { ...s, templates: [...s.templates, { ...template, id }] };
+      this.save(updated);
+      return updated;
+    });
+  }
+
+  updateTemplate(id: string, partial: Partial<EmailTemplate>): void {
+    this.settings.update((s) => {
+      const templates = s.templates.map((t) => (t.id === id ? { ...t, ...partial } : t));
+      const updated = { ...s, templates };
+      this.save(updated);
+      return updated;
+    });
+  }
+
+  removeTemplate(id: string): void {
+    this.settings.update((s) => {
+      const updated = { ...s, templates: s.templates.filter((t) => t.id !== id) };
+      this.save(updated);
+      return updated;
+    });
+  }
+
+  // --- Drafts ---
+
+  saveDraft(draft: DraftState): void {
+    try {
+      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify({ ...draft, savedAt: new Date().toISOString() }));
+    } catch { /* ignore */ }
+  }
+
+  loadDraft(): DraftState | null {
+    try {
+      const stored = localStorage.getItem(DRAFT_STORAGE_KEY);
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  clearDraft(): void {
+    localStorage.removeItem(DRAFT_STORAGE_KEY);
   }
 
   private async load(): Promise<void> {

@@ -71,6 +71,15 @@ export class AccountsService {
     return accountWithoutPassword as Account;
   }
 
+  async update(id: string, userId: string, data: Partial<Account>): Promise<Account | null> {
+    const acc = await this.accountsRepository.findOne({ where: { id, user: { id: userId } } });
+    if (!acc) return null;
+    if (data.displayName !== undefined) acc.displayName = data.displayName;
+    const saved = await this.accountsRepository.save(acc);
+    const { password, ...withoutPassword } = saved;
+    return withoutPassword as Account;
+  }
+
   async remove(id: string, userId: string): Promise<void> {
     await this.accountsRepository.delete({ id, user: { id: userId } });
   }
