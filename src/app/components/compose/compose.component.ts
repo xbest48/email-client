@@ -206,10 +206,12 @@ export class ComposeComponent implements OnInit, OnDestroy {
       }
 
       const delay = this.authService.user()?.undoSendDelay || 0;
+      const files = this.attachments();
+      const readReceipt = this.requestReadReceipt();
       if (delay > 0) {
-        this.emailService.sendEmail(this.to(), this.subject(), html, this.cc(), this.bcc(), '', '', delay * 1000);
+        this.emailService.sendEmail(this.to(), this.subject(), html, this.cc(), this.bcc(), '', '', delay * 1000, files, readReceipt);
       } else {
-        await this.emailService.sendEmail(this.to(), this.subject(), html, this.cc(), this.bcc());
+        await this.emailService.sendEmail(this.to(), this.subject(), html, this.cc(), this.bcc(), '', '', 0, files, readReceipt);
       }
       this.settingsService.clearDraft();
       this.close.emit();

@@ -20,6 +20,8 @@ import { ScheduledModule } from './scheduled/scheduled.module';
 import { ScheduledEmail } from './scheduled/scheduled-email.entity';
 import { ContactsModule } from './contacts/contacts.module';
 import { Contact } from './contacts/contact.entity';
+import { PgpModule } from './pgp/pgp.module';
+import { PgpKey, PgpContactKey } from './pgp/pgp-key.entity';
 
 @Module({
   imports: [
@@ -36,6 +38,8 @@ import { Contact } from './contacts/contact.entity';
         SnoozedEmail,
         ScheduledEmail,
         Contact,
+        PgpKey,
+        PgpContactKey,
       ],
       synchronize: true,
     }),
@@ -48,6 +52,7 @@ import { Contact } from './contacts/contact.entity';
     SnoozeModule,
     ScheduledModule,
     ContactsModule,
+    PgpModule,
   ],
   controllers: [AppController],
   providers: [AppService],

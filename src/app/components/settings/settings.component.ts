@@ -417,17 +417,17 @@ export class SettingsComponent {
     }
   }
 
-  importPgpContact(): void {
+  async importPgpContact(): Promise<void> {
     const email = this.pgpContactEmail();
     const key = this.pgpContactKey();
     if (!email || !key) return;
-    this.pgpService.importPublicKey(email, key);
+    await this.pgpService.importPublicKey(email, key);
     this.pgpContactEmail.set('');
     this.pgpContactKey.set('');
   }
 
-  removePgpContact(email: string): void {
-    this.pgpService.removeContactKey(email);
+  async removePgpContact(email: string): Promise<void> {
+    await this.pgpService.removeContactKey(email);
   }
 
   // Privacy

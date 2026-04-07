@@ -12,6 +12,7 @@ import { LabelService } from '../../services/label.service';
 import { SnoozeService } from '../../services/snooze.service';
 import { OfflineService } from '../../services/offline.service';
 import { KeyboardShortcutService } from '../../services/keyboard-shortcut.service';
+import { PgpService } from '../../services/pgp.service';
 
 @Component({
   selector: 'app-layout',
@@ -27,6 +28,7 @@ export class LayoutComponent implements OnInit, OnDestroy {
   protected readonly snoozeService = inject(SnoozeService);
   protected readonly offlineService = inject(OfflineService);
   protected readonly shortcutService = inject(KeyboardShortcutService);
+  private readonly pgpService = inject(PgpService);
   private readonly router = inject(Router);
 
   readonly sidebarOpen = signal(true);
@@ -40,6 +42,7 @@ export class LayoutComponent implements OnInit, OnDestroy {
     this.emailService.fetchFolders();
     this.labelService.fetchLabels();
     this.snoozeService.fetchCount();
+    this.pgpService.loadFromServer();
     this.checkMobile();
 
     this.shortcutSub = this.shortcutService.actions.subscribe((action) => {

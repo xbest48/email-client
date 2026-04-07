@@ -1,9 +1,11 @@
-import { Controller, Get, Post, Delete, Param, Query, Body, Headers, BadRequestException, UseGuards, Request, Inject, forwardRef, Res } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Query, Body, Headers, BadRequestException, UseGuards, Request, Inject, forwardRef, Res, UseInterceptors, UploadedFiles } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { ImapService, EmailCredentials } from './imap/imap.service';
 import type { SendEmailDto } from './smtp/smtp.service';
 import { SmtpService } from './smtp/smtp.service';
 import { AccountsService } from '../accounts/accounts.service';
+import { ContactsService } from '../contacts/contacts.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @UseGuards(JwtAuthGuard)
@@ -14,6 +16,7 @@ export class EmailController {
     private readonly smtpService: SmtpService,
     @Inject(forwardRef(() => AccountsService))
     private readonly accountsService: AccountsService,
+    private readonly contactsService: ContactsService,
   ) {}
 
   private async getCredentials(req: any, headers: any): Promise<EmailCredentials> {
@@ -175,8 +178,24 @@ export class EmailController {
   }
 
   @Post('send')
-  async sendEmail(@Request() req: any, @Headers() headers: any, @Body() dto: SendEmailDto) {
+  @UseInterceptors(FilesInterceptor('files', 20))
+  async sendEmail(@Request() req: any, @Headers() headers: any, @Body() dto: SendEmailDto, @UploadedFiles() files?: Express.Multer.File[]) {
     const creds = await this.getCredentials(req, headers);
+
+    // Map uploaded files to attachment DTO format
+    if (files?.length) {
+      dto.attachments = files.map((f) => ({
+        filename: f.originalname,
+        content: f.buffer,
+        contentType: f.mimetype,
+      }));
+    }
+
+    // Handle multipart string 'true' for requestReadReceipt
+    if ((dto.requestReadReceipt as any) === 'true') {
+      dto.requestReadReceipt = true;
+    }
+
     const result = await this.smtpService.sendEmail(creds, dto);
 
     // Append sent message to IMAP Sent folder
@@ -186,6 +205,17 @@ export class EmailController {
       } catch (err) {
         console.warn('Failed to append message to Sent folder', err);
       }
+    }
+
+    // Save contacts from recipients for autocomplete
+    try {
+      const toAddrs = Array.isArray(dto.to) ? dto.to : [dto.to];
+      const ccAddrs = dto.cc ? (Array.isArray(dto.cc) ? dto.cc : [dto.cc]) : [];
+      const bccAddrs = dto.bcc ? (Array.isArray(dto.bcc) ? dto.bcc : [dto.bcc]) : [];
+      const allAddrs = [...toAddrs, ...ccAddrs, ...bccAddrs].map((email) => ({ name: email, email }));
+      await this.contactsService.upsertFromSend(req.user.id, allAddrs);
+    } catch {
+      // Non-critical: don't fail the send if contact save fails
     }
 
     return {

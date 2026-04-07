@@ -1,4 +1,7 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
+import { environment } from '../environments/environment';
 
 export interface PgpKeyPair {
   publicKey: string;
@@ -11,13 +14,13 @@ export interface PgpContact {
   publicKey: string;
 }
 
-const PGP_KEYS_STORAGE = 'mailflow_pgp_keys';
-const PGP_CONTACTS_STORAGE = 'mailflow_pgp_contacts';
-
 @Injectable({ providedIn: 'root' })
 export class PgpService {
-  readonly keyPair = signal<PgpKeyPair | null>(this.loadKeyPair());
-  readonly contacts = signal<PgpContact[]>(this.loadContacts());
+  private readonly http = inject(HttpClient);
+  private readonly apiUrl = environment.apiUrl;
+
+  readonly keyPair = signal<PgpKeyPair | null>(null);
+  readonly contacts = signal<PgpContact[]>([]);
   readonly available = signal(false);
 
   private openpgp: any = null;
@@ -32,6 +35,25 @@ export class PgpService {
       this.available.set(true);
     } catch {
       this.available.set(false);
+    }
+  }
+
+  async loadFromServer(): Promise<void> {
+    try {
+      const kp = await firstValueFrom(
+        this.http.get<PgpKeyPair | null>(`${this.apiUrl}/pgp/keys`, { withCredentials: true })
+      );
+      this.keyPair.set(kp);
+    } catch {
+      this.keyPair.set(null);
+    }
+    try {
+      const contacts = await firstValueFrom(
+        this.http.get<PgpContact[]>(`${this.apiUrl}/pgp/contacts`, { withCredentials: true })
+      );
+      this.contacts.set(contacts);
+    } catch {
+      this.contacts.set([]);
     }
   }
 
@@ -50,11 +72,20 @@ export class PgpService {
 
     const kp: PgpKeyPair = { publicKey, privateKey, fingerprint };
     this.keyPair.set(kp);
-    this.saveKeyPair(kp);
+
+    // Persist to server
+    try {
+      await firstValueFrom(
+        this.http.post(`${this.apiUrl}/pgp/keys`, kp, { withCredentials: true })
+      );
+    } catch {
+      // Fallback: still usable in memory for this session
+    }
+
     return kp;
   }
 
-  importPublicKey(email: string, publicKey: string): void {
+  async importPublicKey(email: string, publicKey: string): Promise<void> {
     const contacts = [...this.contacts()];
     const existing = contacts.findIndex((c) => c.email === email);
     if (existing >= 0) {
@@ -63,13 +94,27 @@ export class PgpService {
       contacts.push({ email, publicKey });
     }
     this.contacts.set(contacts);
-    this.saveContacts(contacts);
+
+    try {
+      await firstValueFrom(
+        this.http.post(`${this.apiUrl}/pgp/contacts`, { email, publicKey }, { withCredentials: true })
+      );
+    } catch {
+      // Non-critical
+    }
   }
 
-  removeContactKey(email: string): void {
+  async removeContactKey(email: string): Promise<void> {
     const contacts = this.contacts().filter((c) => c.email !== email);
     this.contacts.set(contacts);
-    this.saveContacts(contacts);
+
+    try {
+      await firstValueFrom(
+        this.http.delete(`${this.apiUrl}/pgp/contacts/${encodeURIComponent(email)}`, { withCredentials: true })
+      );
+    } catch {
+      // Non-critical
+    }
   }
 
   async encrypt(text: string, recipientEmail: string): Promise<string | null> {
@@ -109,31 +154,5 @@ export class PgpService {
 
   isPgpMessage(text: string): boolean {
     return text?.includes('-----BEGIN PGP MESSAGE-----') || false;
-  }
-
-  private loadKeyPair(): PgpKeyPair | null {
-    try {
-      const stored = localStorage.getItem(PGP_KEYS_STORAGE);
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
-  }
-
-  private saveKeyPair(kp: PgpKeyPair): void {
-    localStorage.setItem(PGP_KEYS_STORAGE, JSON.stringify(kp));
-  }
-
-  private loadContacts(): PgpContact[] {
-    try {
-      const stored = localStorage.getItem(PGP_CONTACTS_STORAGE);
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  }
-
-  private saveContacts(contacts: PgpContact[]): void {
-    localStorage.setItem(PGP_CONTACTS_STORAGE, JSON.stringify(contacts));
   }
 }

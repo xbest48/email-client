@@ -1,5 +1,6 @@
 import { Component, inject, signal, computed, ChangeDetectionStrategy, OnInit, OnDestroy } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { Subscription } from 'rxjs';
 import { EmailService } from '../../services/email.service';
 import { RelativeTimePipe } from '../../pipes/relative-time.pipe';
@@ -27,6 +28,7 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
   protected readonly labelService = inject(LabelService);
   protected readonly pgpService = inject(PgpService);
   private readonly shortcutService = inject(KeyboardShortcutService);
+  private readonly sanitizer = inject(DomSanitizer);
 
   readonly email = signal<Email | null>(null);
   readonly showReply = signal(false);
@@ -43,6 +45,11 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
   readonly readReceiptDismissed = signal(false);
   readonly customSnoozeDate = signal('');
   readonly previewAttachment = signal<{ url: string; mimeType: string; filename: string } | null>(null);
+  readonly trustedPreviewUrl = computed<SafeResourceUrl | null>(() => {
+    const preview = this.previewAttachment();
+    if (!preview) return null;
+    return this.sanitizer.bypassSecurityTrustResourceUrl(preview.url);
+  });
 
   readonly shouldBlockImages = computed(() => {
     const user = this.authService.user();
@@ -280,14 +287,26 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     return mimeType === 'application/pdf';
   }
 
-  openPreview(attachmentId: string, mimeType: string, filename: string): void {
-    this.previewAttachment.set({
-      url: this.getAttachmentUrl(attachmentId),
-      mimeType, filename,
-    });
+  async openPreview(attachmentId: string, mimeType: string, filename: string): Promise<void> {
+    const mail = this.email();
+    if (!mail) return;
+    try {
+      const blobUrl = await this.emailService.fetchAttachmentBlob(mail.folder, mail.uid, attachmentId);
+      this.previewAttachment.set({ url: blobUrl, mimeType, filename });
+    } catch {
+      // Fallback to direct URL
+      this.previewAttachment.set({
+        url: this.getAttachmentUrl(attachmentId),
+        mimeType, filename,
+      });
+    }
   }
 
   closePreview(): void {
+    const preview = this.previewAttachment();
+    if (preview?.url?.startsWith('blob:')) {
+      URL.revokeObjectURL(preview.url);
+    }
     this.previewAttachment.set(null);
   }
 

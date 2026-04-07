@@ -212,7 +212,9 @@ export class EmailService {
     bcc = '',
     inReplyTo = '',
     references = '',
-    delayMs = 0
+    delayMs = 0,
+    attachments: File[] = [],
+    requestReadReceipt = false
   ): Promise<void> {
     if (delayMs > 0) {
       return new Promise((resolve, reject) => {
@@ -220,7 +222,7 @@ export class EmailService {
         const timeoutId = setTimeout(async () => {
           this.pendingSends.update(sends => sends.filter(s => s.id !== id));
           try {
-            await this.executeSend(to, subject, html, cc, bcc, inReplyTo, references);
+            await this.executeSend(to, subject, html, cc, bcc, inReplyTo, references, attachments, requestReadReceipt);
             resolve();
           } catch (e) {
             reject(e);
@@ -230,13 +232,13 @@ export class EmailService {
         const cancel = () => {
           clearTimeout(timeoutId);
           this.pendingSends.update(sends => sends.filter(s => s.id !== id));
-          resolve(); // Resolve instead of reject to treat cancellation as a handled case
+          resolve();
         };
 
         this.pendingSends.update(sends => [...sends, { id, to, subject, timeoutId, cancel }]);
       });
     } else {
-      await this.executeSend(to, subject, html, cc, bcc, inReplyTo, references);
+      await this.executeSend(to, subject, html, cc, bcc, inReplyTo, references, attachments, requestReadReceipt);
     }
   }
 
@@ -247,15 +249,40 @@ export class EmailService {
     cc = '',
     bcc = '',
     inReplyTo = '',
-    references = ''
+    references = '',
+    attachments: File[] = [],
+    requestReadReceipt = false
   ): Promise<void> {
-    await firstValueFrom(
-      this.http.post(
-        `${this.apiUrl}/send`,
-        { to, subject, html, cc: cc || undefined, bcc: bcc || undefined, inReplyTo: inReplyTo || undefined, references: references || undefined },
-        { headers: this.getHeaders(), withCredentials: true }
-      )
-    );
+    if (attachments.length > 0) {
+      // Use FormData for multipart upload with attachments
+      const formData = new FormData();
+      formData.append('to', to);
+      formData.append('subject', subject);
+      formData.append('html', html);
+      if (cc) formData.append('cc', cc);
+      if (bcc) formData.append('bcc', bcc);
+      if (inReplyTo) formData.append('inReplyTo', inReplyTo);
+      if (references) formData.append('references', references);
+      if (requestReadReceipt) formData.append('requestReadReceipt', 'true');
+      for (const file of attachments) {
+        formData.append('files', file, file.name);
+      }
+      // Don't set Content-Type header — browser sets multipart boundary automatically
+      const accountId = this.settingsService.activeAccountId();
+      let headers = new HttpHeaders();
+      if (accountId) headers = headers.set('x-account-id', accountId);
+      await firstValueFrom(
+        this.http.post(`${this.apiUrl}/send`, formData, { headers, withCredentials: true })
+      );
+    } else {
+      await firstValueFrom(
+        this.http.post(
+          `${this.apiUrl}/send`,
+          { to, subject, html, cc: cc || undefined, bcc: bcc || undefined, inReplyTo: inReplyTo || undefined, references: references || undefined, requestReadReceipt: requestReadReceipt || undefined },
+          { headers: this.getHeaders(), withCredentials: true }
+        )
+      );
+    }
   }
 
   async createFolder(name: string): Promise<void> {
@@ -278,6 +305,16 @@ export class EmailService {
 
   getAttachmentUrl(folder: string, uid: number, attachmentId: string): string {
     return `${this.apiUrl}/email/${encodeURIComponent(folder)}/${uid}/attachment/${attachmentId}`;
+  }
+
+  async fetchAttachmentBlob(folder: string, uid: number, attachmentId: string): Promise<string> {
+    const blob = await firstValueFrom(
+      this.http.get(
+        `${this.apiUrl}/email/${encodeURIComponent(folder)}/${uid}/attachment/${attachmentId}`,
+        { headers: this.getHeaders(), withCredentials: true, responseType: 'blob' }
+      )
+    );
+    return URL.createObjectURL(blob);
   }
 
   async fetchThread(folder: string, uid: number): Promise<Email[]> {

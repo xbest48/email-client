@@ -400,7 +400,7 @@
           @if (isImageAttachment(preview.mimeType)) {
             <img [src]="preview.url" [alt]="preview.filename" class="max-w-full max-h-[70vh] object-contain rounded">
           } @else if (isPdfAttachment(preview.mimeType)) {
-            <iframe [src]="preview.url" class="w-full h-[70vh] rounded border border-gray-200 dark:border-gray-700" [title]="preview.filename"></iframe>
+            <iframe [src]="trustedPreviewUrl()" class="w-full h-[70vh] rounded border border-gray-200 dark:border-gray-700" [title]="preview.filename"></iframe>
           } @else {
             <div class="text-center py-12">
               <svg class="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
