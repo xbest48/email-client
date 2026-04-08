@@ -1,5 +1,4 @@
 import { Component, inject, signal, computed, output, ChangeDetectionStrategy, viewChild, ElementRef, afterNextRender } from '@angular/core';
-import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { FormsModule } from '@angular/forms';
 import { SettingsService, EmailSignature, EmailTemplate } from '../../services/settings.service';
 import { RichEditorComponent } from '../rich-editor/rich-editor.component';
@@ -7,6 +6,7 @@ import { AuthService } from '../../services/auth.service';
 import { LabelService, Label } from '../../services/label.service';
 import { FilterService, FilterRule } from '../../services/filter.service';
 import { PgpService } from '../../services/pgp.service';
+import { SandboxedHtmlDirective } from '../../directives/sandboxed-html.directive';
 import * as QRCode from 'qrcode';
 import { startRegistration } from '@simplewebauthn/browser';
 
@@ -15,7 +15,7 @@ type SettingsTab = 'accounts' | 'signatures' | 'security' | 'general' | 'labels'
 @Component({
   selector: 'app-settings',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RichEditorComponent],
+  imports: [FormsModule, RichEditorComponent, SandboxedHtmlDirective],
   templateUrl: './settings.component.html',
   styleUrl: './settings.component.css',
 })
@@ -27,7 +27,6 @@ export class SettingsComponent {
   protected readonly labelService = inject(LabelService);
   protected readonly filterService = inject(FilterService);
   protected readonly pgpService = inject(PgpService);
-  private readonly sanitizer = inject(DomSanitizer);
   readonly activeTab = signal<SettingsTab>('general');
 
   // Security
@@ -209,11 +208,6 @@ export class SettingsComponent {
 
   removeAccount(id: string): void {
     this.settingsService.removeAccount(id);
-  }
-
-
-  trustedSignatureHtml(html: string): SafeHtml {
-    return this.sanitizer.bypassSecurityTrustHtml(html);
   }
 
   toggleSignatureSourceMode(): void {

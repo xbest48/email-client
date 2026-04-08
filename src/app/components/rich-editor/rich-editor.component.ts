@@ -7,6 +7,7 @@ import {
   ElementRef,
   viewChild,
   AfterViewInit,
+  OnDestroy,
 } from '@angular/core';
 
 export type EditorToolbarPosition = 'top' | 'bottom';
@@ -27,6 +28,10 @@ export class RichEditorComponent implements AfterViewInit {
   readonly editorRef = viewChild<ElementRef<HTMLDivElement>>('editor');
   readonly showLinkInput = signal(false);
   readonly linkUrl = signal('');
+
+  private objectUrlMap = new Map<string, string>();
+  private lastSourceHtml = '';
+  private suppressInput = false;
 
   private readonly tools = [
     { cmd: 'bold', icon: 'B', title: 'Gras', style: 'font-weight: bold' },
@@ -52,14 +57,19 @@ export class RichEditorComponent implements AfterViewInit {
   ngAfterViewInit(): void {
     const editor = this.editorRef()?.nativeElement;
     if (editor && this.initialContent()) {
-      editor.innerHTML = this.initialContent();
+      this.setHtml(this.initialContent());
     }
   }
 
+  ngOnDestroy(): void {
+    this.revokeObjectUrls();
+  }
+
   onInput(): void {
+    if (this.suppressInput) return;
     const editor = this.editorRef()?.nativeElement;
     if (editor) {
-      this.contentChange.emit(editor.innerHTML);
+      this.contentChange.emit(this.restoreEmbeddedDataImageUrls(editor.innerHTML));
     }
   }
 
@@ -110,13 +120,19 @@ export class RichEditorComponent implements AfterViewInit {
   }
 
   getHtml(): string {
-    return this.editorRef()?.nativeElement.innerHTML ?? '';
+    const html = this.editorRef()?.nativeElement.innerHTML;
+    if (!html) return this.lastSourceHtml;
+    return this.restoreEmbeddedDataImageUrls(html);
   }
 
   setHtml(html: string): void {
     const editor = this.editorRef()?.nativeElement;
     if (editor) {
-      editor.innerHTML = html;
+      this.lastSourceHtml = html;
+      this.revokeObjectUrls();
+      this.suppressInput = true;
+      editor.innerHTML = this.prepareHtmlForRendering(html);
+      this.suppressInput = false;
       this.onInput();
     }
   }
@@ -124,7 +140,11 @@ export class RichEditorComponent implements AfterViewInit {
   clear(): void {
     const editor = this.editorRef()?.nativeElement;
     if (editor) {
+      this.lastSourceHtml = '';
+      this.revokeObjectUrls();
+      this.suppressInput = true;
       editor.innerHTML = '';
+      this.suppressInput = false;
       this.onInput();
     }
   }
@@ -134,5 +154,50 @@ export class RichEditorComponent implements AfterViewInit {
     if (!editor) return true;
     const text = editor.innerText.trim();
     return text === '' || text === '\n';
+  }
+
+  private prepareHtmlForRendering(html: string): string {
+    return html.replace(
+      /(<img\b[^>]*\bsrc\s*=\s*["'])(data:image\/[^;"']+;base64,[^"']+)(["'][^>]*>)/gi,
+      (_match, prefix: string, dataUrl: string, suffix: string) => {
+        const objectUrl = this.createObjectUrlFromDataImage(dataUrl);
+        return `${prefix}${objectUrl}${suffix}`;
+      },
+    );
+  }
+
+  private restoreEmbeddedDataImageUrls(html: string): string {
+    let restored = html;
+    for (const [objectUrl, dataUrl] of this.objectUrlMap.entries()) {
+      restored = restored.split(objectUrl).join(dataUrl);
+    }
+    return restored;
+  }
+
+  private createObjectUrlFromDataImage(dataUrl: string): string {
+    const cached = Array.from(this.objectUrlMap.entries()).find(([, original]) => original === dataUrl)?.[0];
+    if (cached) return cached;
+
+    const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/i);
+    if (!match) return dataUrl;
+
+    const mimeType = match[1];
+    const base64 = match[2];
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+
+    const objectUrl = URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+    this.objectUrlMap.set(objectUrl, dataUrl);
+    return objectUrl;
+  }
+
+  private revokeObjectUrls(): void {
+    for (const objectUrl of this.objectUrlMap.keys()) {
+      URL.revokeObjectURL(objectUrl);
+    }
+    this.objectUrlMap.clear();
   }
 }
