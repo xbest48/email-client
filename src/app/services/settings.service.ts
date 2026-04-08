@@ -42,6 +42,7 @@ export interface AppSettings {
   signatures: EmailSignature[];
   templates: EmailTemplate[];
   showFolders: boolean;
+  accentColor: string;
 }
 
 const STORAGE_KEY = 'mailflow_settings';
@@ -53,6 +54,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   signatures: [],
   templates: [],
   showFolders: true,
+  accentColor: '#403d84',
 };
 
 @Injectable({ providedIn: 'root' })
@@ -63,6 +65,7 @@ export class SettingsService {
   readonly loadPromise: Promise<void>;
 
   constructor() {
+    this.applyAccentTheme(DEFAULT_SETTINGS.accentColor);
     this.loadPromise = this.load();
   }
 
@@ -82,6 +85,10 @@ export class SettingsService {
     return this.settings().showFolders;
   }
 
+  get accentColor(): string {
+    return this.settings().accentColor;
+  }
+
   update(partial: Partial<AppSettings>): void {
     this.settings.update((s) => {
       const updated = { ...s, ...partial };
@@ -96,6 +103,12 @@ export class SettingsService {
 
   toggleShowFolders(): void {
     this.update({ showFolders: !this.settings().showFolders });
+  }
+
+  setAccentColor(color: string): void {
+    const next = this.normalizeHexColor(color) ?? DEFAULT_SETTINGS.accentColor;
+    this.update({ accentColor: next });
+    this.applyAccentTheme(next);
   }
 
   // --- Accounts ---
@@ -264,6 +277,7 @@ export class SettingsService {
     }
 
     this.settings.set(settings);
+    this.applyAccentTheme(settings.accentColor);
   }
 
   private save(settings: AppSettings): void {
@@ -274,5 +288,50 @@ export class SettingsService {
     } catch {
       // ignore
     }
+  }
+
+  private applyAccentTheme(baseHex: string): void {
+    const root = document.documentElement;
+    const color = this.normalizeHexColor(baseHex) ?? DEFAULT_SETTINGS.accentColor;
+    const shades = {
+      50: this.mixColor(color, '#ffffff', 0.90),
+      100: this.mixColor(color, '#ffffff', 0.78),
+      200: this.mixColor(color, '#ffffff', 0.62),
+      300: this.mixColor(color, '#ffffff', 0.46),
+      400: this.mixColor(color, '#ffffff', 0.28),
+      500: color,
+      600: this.mixColor(color, '#000000', 0.10),
+      700: this.mixColor(color, '#000000', 0.22),
+      800: this.mixColor(color, '#000000', 0.34),
+      900: this.mixColor(color, '#000000', 0.48),
+    };
+
+    for (const [step, value] of Object.entries(shades)) {
+      root.style.setProperty(`--color-amber-${step}`, value);
+    }
+  }
+
+  private normalizeHexColor(color: string): string | null {
+    const match = color.trim().match(/^#([0-9a-fA-F]{6})$/);
+    return match ? `#${match[1].toLowerCase()}` : null;
+  }
+
+  private mixColor(colorA: string, colorB: string, weightB: number): string {
+    const [ar, ag, ab] = this.hexToRgb(colorA);
+    const [br, bg, bb] = this.hexToRgb(colorB);
+    const weightA = 1 - weightB;
+    const r = Math.round(ar * weightA + br * weightB);
+    const g = Math.round(ag * weightA + bg * weightB);
+    const b = Math.round(ab * weightA + bb * weightB);
+    return this.rgbToHex(r, g, b);
+  }
+
+  private hexToRgb(hex: string): [number, number, number] {
+    const value = parseInt(hex.slice(1), 16);
+    return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+  }
+
+  private rgbToHex(r: number, g: number, b: number): string {
+    return `#${[r, g, b].map((n) => n.toString(16).padStart(2, '0')).join('')}`;
   }
 }

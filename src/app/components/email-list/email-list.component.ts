@@ -73,7 +73,19 @@ export class EmailListComponent implements OnInit, OnDestroy {
       this.selectedIds.set(new Set());
       this.focusedIndex.set(-1);
       this.emailService.selectedEmail.set(null);
-      await this.emailService.fetchEmails(this.currentFolder, this.currentQuery);
+      const savedList = this.emailService.savedListState();
+      const canRestoreList = !!savedList
+        && savedList.folder === this.currentFolder
+        && savedList.query === this.currentQuery
+        && this.emailService.currentEmails().length > 0;
+
+      if (canRestoreList) {
+        this.emailService.currentPage.set(savedList.page);
+        this.emailService.savedListState.set(null);
+      } else {
+        await this.emailService.fetchEmails(this.currentFolder, this.currentQuery);
+      }
+
       const saved = this.emailService.savedScrollState();
       if (saved && saved.folder === this.currentFolder) {
         this.emailService.savedScrollState.set(null);
@@ -137,6 +149,11 @@ export class EmailListComponent implements OnInit, OnDestroy {
     if (scrollEl) {
       this.emailService.savedScrollState.set({ folder: this.currentFolder, scrollTop: scrollEl.scrollTop });
     }
+    this.emailService.savedListState.set({
+      folder: this.currentFolder,
+      query: this.currentQuery,
+      page: this.emailService.currentPage(),
+    });
     this.emailService.selectedEmail.set(email);
     this.emailService.markAsRead(email);
     this.router.navigate(['/email', email.folder, email.uid]);

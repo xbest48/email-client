@@ -21,6 +21,7 @@ export class EmailService {
   readonly currentTotal = signal(0);
   readonly currentPage = signal(1);
   readonly savedScrollState = signal<{ folder: string; scrollTop: number } | null>(null);
+  readonly savedListState = signal<{ folder: string; query: string; page: number } | null>(null);
 
   private trashFolder = '';
 
