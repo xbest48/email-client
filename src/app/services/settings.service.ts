@@ -170,19 +170,24 @@ export class SettingsService {
 
   addSignature(signature: Omit<EmailSignature, 'id'>): void {
     const id = crypto.randomUUID();
+    const normalizedSignature = { ...signature, html: this.normalizeEmbeddedDataImageUrls(signature.html) };
     this.settings.update((s) => {
-      const sigs = signature.isDefault
+      const sigs = normalizedSignature.isDefault
         ? s.signatures.map((sig) => ({ ...sig, isDefault: false }))
         : [...s.signatures];
-      const updated = { ...s, signatures: [...sigs, { ...signature, id }] };
+      const updated = { ...s, signatures: [...sigs, { ...normalizedSignature, id }] };
       this.save(updated);
       return updated;
     });
   }
 
   updateSignature(id: string, partial: Partial<EmailSignature>): void {
+    const normalizedPartial = partial.html !== undefined
+      ? { ...partial, html: this.normalizeEmbeddedDataImageUrls(partial.html) }
+      : partial;
+
     this.settings.update((s) => {
-      let sigs = s.signatures.map((sig) => (sig.id === id ? { ...sig, ...partial } : sig));
+      let sigs = s.signatures.map((sig) => (sig.id === id ? { ...sig, ...normalizedPartial } : sig));
       if (partial.isDefault) {
         sigs = sigs.map((sig) => ({ ...sig, isDefault: sig.id === id }));
       }
@@ -263,6 +268,10 @@ export class SettingsService {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         settings = { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
+        settings.signatures = (settings.signatures ?? []).map((sig) => ({
+          ...sig,
+          html: this.normalizeEmbeddedDataImageUrls(sig.html),
+        }));
       }
     } catch {
       // ignore
@@ -288,6 +297,13 @@ export class SettingsService {
     } catch {
       // ignore
     }
+  }
+
+  private normalizeEmbeddedDataImageUrls(html: string): string {
+    return html.replace(
+      /(<img\b[^>]*\bsrc\s*=\s*["']data:image\/[^;"']+;base64,)([\s\S]*?)(["'][^>]*>)/gi,
+      (_match, prefix: string, data: string, suffix: string) => `${prefix}${data.replace(/\s+/g, '')}${suffix}`,
+    );
   }
 
   private applyAccentTheme(baseHex: string): void {

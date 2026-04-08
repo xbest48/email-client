@@ -409,7 +409,7 @@
                       <span class="text-xs px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full font-medium">Par defaut</span>
                     }
                   </div>
-                  <div class="text-xs text-gray-400 mt-1 truncate" [innerHTML]="sig.html"></div>
+                  <div class="text-xs text-gray-400 mt-1 truncate" [innerHTML]="trustedSignatureHtml(sig.html)"></div>
                 </div>
                 <div class="flex items-center gap-1 shrink-0 ml-3">
                   <button
