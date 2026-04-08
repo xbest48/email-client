@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed, output, ChangeDetectionStrategy, viewChild } from '@angular/core';
+import { Component, inject, signal, computed, output, ChangeDetectionStrategy, viewChild, ElementRef, afterNextRender } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { SettingsService, EmailSignature, EmailTemplate } from '../../services/settings.service';
 import { RichEditorComponent } from '../rich-editor/rich-editor.component';
@@ -49,6 +49,9 @@ export class SettingsComponent {
 
   // General
   readonly pageSize = signal(this.settingsService.pageSize);
+  readonly accentPresetColors = ['#403d84', '#ffd200', '#b6d0f2', '#ffcbba', '#c6ebc5', '#ffbacd'];
+  readonly selectedAccentColor = signal(this.settingsService.accentColor);
+  readonly customAccentColor = signal(this.settingsService.accentColor);
   readonly darkMode = computed(() => this.authService.user()?.darkMode ?? false);
   readonly blockTrackingPixels = computed(() => this.authService.user()?.blockTrackingPixels ?? false);
   readonly undoSendDelay = computed(() => this.authService.user()?.undoSendDelay ?? 0);
@@ -78,6 +81,9 @@ export class SettingsComponent {
   readonly templateSubject = signal('');
   readonly editingTemplateId = signal<string | null>(null);
   readonly templateEditorRef = viewChild<RichEditorComponent>('templateEditor');
+  readonly tabsContainer = viewChild<ElementRef<HTMLDivElement>>('tabsContainer');
+  readonly tabsCanScrollLeft = signal(false);
+  readonly tabsCanScrollRight = signal(false);
 
   // PGP
   readonly pgpName = signal('');
@@ -93,6 +99,60 @@ export class SettingsComponent {
   readonly imageBlockedDomains = computed(() => this.authService.user()?.imageBlockedDomains ?? []);
   readonly newAllowedDomain = signal('');
   readonly newBlockedDomain = signal('');
+
+  constructor() {
+    afterNextRender(() => {
+      this.updateTabsScrollState();
+    });
+  }
+
+  onTabsWheel(event: WheelEvent): void {
+    const containerRef = this.tabsContainer();
+    if (!containerRef) return;
+
+    const container = containerRef.nativeElement;
+    const maxScrollLeft = container.scrollWidth - container.clientWidth;
+    if (maxScrollLeft <= 0) return;
+
+    const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY)
+      ? event.deltaX
+      : event.deltaY;
+    if (delta === 0) return;
+
+    const nextScrollLeft = Math.min(maxScrollLeft, Math.max(0, container.scrollLeft + delta));
+    if (nextScrollLeft !== container.scrollLeft) {
+      container.scrollLeft = nextScrollLeft;
+      event.preventDefault();
+      this.updateTabsScrollState();
+    }
+  }
+
+  updateTabsScrollState(): void {
+    const containerRef = this.tabsContainer();
+    if (!containerRef) return;
+
+    const container = containerRef.nativeElement;
+    const maxScrollLeft = container.scrollWidth - container.clientWidth;
+    if (maxScrollLeft <= 0) {
+      this.tabsCanScrollLeft.set(false);
+      this.tabsCanScrollRight.set(false);
+      return;
+    }
+
+    const epsilon = 1;
+    this.tabsCanScrollLeft.set(container.scrollLeft > epsilon);
+    this.tabsCanScrollRight.set(container.scrollLeft < maxScrollLeft - epsilon);
+  }
+
+  scrollTabs(direction: 'left' | 'right'): void {
+    const containerRef = this.tabsContainer();
+    if (!containerRef) return;
+
+    const container = containerRef.nativeElement;
+    const amount = direction === 'left' ? -220 : 220;
+    container.scrollBy({ left: amount, behavior: 'smooth' });
+    requestAnimationFrame(() => this.updateTabsScrollState());
+  }
 
   onAccountEmailChange(): void {
     const email = this.accountEmail();
@@ -267,6 +327,17 @@ export class SettingsComponent {
 
   savePageSize(): void {
     this.settingsService.setPageSize(this.pageSize());
+  }
+
+  selectAccentColor(color: string): void {
+    this.selectedAccentColor.set(color);
+    this.customAccentColor.set(color);
+    this.settingsService.setAccentColor(color);
+  }
+
+  applyCustomAccentColor(): void {
+    this.selectedAccentColor.set(this.customAccentColor());
+    this.settingsService.setAccentColor(this.customAccentColor());
   }
 
   async updateSetting(key: string, value: unknown): Promise<void> {

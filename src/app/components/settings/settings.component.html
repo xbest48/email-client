@@ -30,8 +30,39 @@
   </div>
 
   <!-- Tabs -->
-  <div class="flex overflow-x-auto whitespace-nowrap border-b border-gray-200 dark:border-gray-700 px-6 scrollbar-hide" role="tablist" style="-ms-overflow-style: none; scrollbar-width: none;">
-    <button
+  <div class="relative border-b border-gray-200 dark:border-gray-700">
+    @if (tabsCanScrollLeft()) {
+      <button
+        type="button"
+        class="absolute left-2 top-1/2 z-10 -translate-y-1/2 p-1.5 rounded-full bg-white/90 dark:bg-gray-800/90 text-gray-600 dark:text-gray-300 shadow
+               hover:bg-white dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
+        (click)="scrollTabs('left')"
+        aria-label="Defiler les onglets vers la gauche"
+        title="Defiler vers la gauche">
+        ←
+      </button>
+    }
+
+    @if (tabsCanScrollRight()) {
+      <button
+        type="button"
+        class="absolute right-2 top-1/2 z-10 -translate-y-1/2 p-1.5 rounded-full bg-white/90 dark:bg-gray-800/90 text-gray-600 dark:text-gray-300 shadow
+               hover:bg-white dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
+        (click)="scrollTabs('right')"
+        aria-label="Defiler les onglets vers la droite"
+        title="Defiler vers la droite">
+        →
+      </button>
+    }
+
+    <div
+      #tabsContainer
+      class="flex overflow-x-auto whitespace-nowrap px-6 scrollbar-hide"
+      role="tablist"
+      style="-ms-overflow-style: none; scrollbar-width: none;"
+      (wheel)="onTabsWheel($event)"
+      (scroll)="updateTabsScrollState()">
+      <button
       type="button"
       (click)="activeTab.set('accounts')"
       class="px-4 py-3 text-sm font-medium border-b-2 transition-colors
@@ -150,7 +181,7 @@
       [attr.aria-selected]="activeTab() === 'templates'">
       Modeles
     </button>
-    <button
+      <button
       type="button"
       (click)="activeTab.set('privacy')"
       class="px-4 py-3 text-sm font-medium border-b-2 transition-colors
@@ -165,8 +196,9 @@
       [class.dark:hover:text-gray-300]="activeTab() !== 'privacy'"
       role="tab"
       [attr.aria-selected]="activeTab() === 'privacy'">
-      Confidentialite
-    </button>
+        Confidentialite
+      </button>
+    </div>
   </div>
 
   <!-- Tab content -->
@@ -582,6 +614,38 @@
                 <p class="text-xs text-gray-500 dark:text-gray-400">Empecher le chargement des images externes pour bloquer le suivi de lecture (Tracking pixels).</p>
               </div>
             </label>
+          </div>
+        </div>
+
+        <div class="pt-4 border-t border-gray-100 dark:border-gray-700">
+          <h3 class="text-sm font-semibold text-gray-800 dark:text-white mb-3">Couleur d'accentuation</h3>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Choisissez la couleur principale des boutons, liens et indicateurs.</p>
+
+          <div class="flex flex-wrap items-center gap-2 mb-4">
+            @for (color of accentPresetColors; track color) {
+              <button
+                type="button"
+                (click)="selectAccentColor(color)"
+                class="w-8 h-8 rounded-full border-2 transition-all focus:outline-none focus:ring-2 focus:ring-amber-400"
+                [class.border-gray-800]="selectedAccentColor() === color"
+                [class.dark:border-white]="selectedAccentColor() === color"
+                [class.border-transparent]="selectedAccentColor() !== color"
+                [style.background-color]="color"
+                [attr.aria-label]="'Utiliser la couleur ' + color"
+                [title]="color">
+              </button>
+            }
+          </div>
+
+          <div class="flex items-center gap-3">
+            <label for="custom-accent" class="text-sm text-gray-700 dark:text-gray-300 w-48">Couleur personnalisee :</label>
+            <input
+              id="custom-accent"
+              type="color"
+              [(ngModel)]="customAccentColor"
+              (input)="applyCustomAccentColor()"
+              name="customAccentColor"
+              class="w-12 h-10 rounded-lg border border-gray-300 dark:border-gray-600 cursor-pointer">
           </div>
         </div>
 

@@ -73,7 +73,19 @@ export class EmailListComponent implements OnInit, OnDestroy {
       this.selectedIds.set(new Set());
       this.focusedIndex.set(-1);
       this.emailService.selectedEmail.set(null);
-      await this.emailService.fetchEmails(this.currentFolder, this.currentQuery);
+      const savedList = this.emailService.savedListState();
+      const canRestoreList = !!savedList
+        && savedList.folder === this.currentFolder
+        && savedList.query === this.currentQuery
+        && this.emailService.currentEmails().length > 0;
+
+      if (canRestoreList) {
+        this.emailService.currentPage.set(savedList.page);
+        this.emailService.savedListState.set(null);
+      } else {
+        await this.emailService.fetchEmails(this.currentFolder, this.currentQuery);
+      }
+
       const saved = this.emailService.savedScrollState();
       if (saved && saved.folder === this.currentFolder) {
         this.emailService.savedScrollState.set(null);
@@ -92,7 +104,7 @@ export class EmailListComponent implements OnInit, OnDestroy {
       }
     });
 
-    this.shortcutSub = this.shortcutService.actions.subscribe((action) => {
+    this.shortcutSub = this.shortcutService.actions.subscribe(async (action) => {
       const emails = this.emails();
       const idx = this.focusedIndex();
 
@@ -110,8 +122,8 @@ export class EmailListComponent implements OnInit, OnDestroy {
           if (idx >= 0 && idx < emails.length) this.toggleStar(emails[idx]);
           break;
         case 'trash':
-          if (this.selectedIds().size > 0) this.bulkTrash();
-          else if (idx >= 0 && idx < emails.length) this.emailService.trashEmail(emails[idx]);
+          if (this.selectedIds().size > 0) await this.bulkTrash();
+          else if (idx >= 0 && idx < emails.length) await this.trashEmailAndRefill(emails[idx]);
           break;
         case 'toggleReadUnread':
           if (idx >= 0 && idx < emails.length) {
@@ -137,6 +149,11 @@ export class EmailListComponent implements OnInit, OnDestroy {
     if (scrollEl) {
       this.emailService.savedScrollState.set({ folder: this.currentFolder, scrollTop: scrollEl.scrollTop });
     }
+    this.emailService.savedListState.set({
+      folder: this.currentFolder,
+      query: this.currentQuery,
+      page: this.emailService.currentPage(),
+    });
     this.emailService.selectedEmail.set(email);
     this.emailService.markAsRead(email);
     this.router.navigate(['/email', email.folder, email.uid]);
@@ -179,11 +196,12 @@ export class EmailListComponent implements OnInit, OnDestroy {
     return this.emailService.hasMoreEmails();
   }
 
-  bulkTrash(): void {
+  async bulkTrash(): Promise<void> {
     const ids = this.selectedIds();
     const emailsToTrash = this.emails().filter((e) => ids.has(this.emailKey(e)));
     this.emailService.bulkTrashInBackground(emailsToTrash);
     this.selectedIds.set(new Set());
+    await this.refillVisibleEmails();
   }
 
   async bulkMarkRead(): Promise<void> {
@@ -194,8 +212,8 @@ export class EmailListComponent implements OnInit, OnDestroy {
     this.selectedIds.set(new Set());
   }
 
-  onSwipeLeft(email: Email): void {
-    this.emailService.trashEmail(email);
+  async onSwipeLeft(email: Email): Promise<void> {
+    await this.trashEmailAndRefill(email);
   }
 
   onSwipeRight(email: Email): void {
@@ -275,11 +293,24 @@ export class EmailListComponent implements OnInit, OnDestroy {
     const menu = this.contextMenu();
     if (!menu) return;
     if (this.isSelected(menu.email)) {
-      this.bulkTrash();
+      void this.bulkTrash();
     } else {
-      this.emailService.trashEmail(menu.email);
+      void this.trashEmailAndRefill(menu.email);
     }
     this.closeContextMenu();
+  }
+
+  private async trashEmailAndRefill(email: Email): Promise<void> {
+    await this.emailService.trashEmail(email);
+    await this.refillVisibleEmails();
+  }
+
+  private async refillVisibleEmails(): Promise<void> {
+    const targetCount = this.emailService.currentPage() * this.emailService.currentPageSize;
+    while (this.emails().length < targetCount && this.emailService.hasMoreEmails()) {
+      const nextPage = this.emailService.currentPage() + 1;
+      await this.emailService.fetchEmails(this.currentFolder, this.currentQuery, nextPage);
+    }
   }
 
   emailKey(email: Email): string {

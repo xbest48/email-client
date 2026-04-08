@@ -3,16 +3,16 @@
 
 /* Custom theme */
 @theme {
-  --color-amber-50: #fffbeb;
-  --color-amber-100: #fef3c7;
-  --color-amber-200: #fde68a;
-  --color-amber-300: #fcd34d;
-  --color-amber-400: #fbbf24;
-  --color-amber-500: #D4A520;
-  --color-amber-600: #b8860b;
-  --color-amber-700: #92400e;
-  --color-amber-800: #78350f;
-  --color-amber-900: #451a03;
+  --color-amber-50: #f3f3fb;
+  --color-amber-100: #e4e2f5;
+  --color-amber-200: #c9c7ea;
+  --color-amber-300: #aaa6dd;
+  --color-amber-400: #8983ce;
+  --color-amber-500: #403d84;
+  --color-amber-600: #373473;
+  --color-amber-700: #2d2b61;
+  --color-amber-800: #23224f;
+  --color-amber-900: #171636;
 }
 
 /* Base styles */
@@ -22,6 +22,13 @@ html, body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background: #f8fafc;
+  color: #111827;
+}
+
+.dark body {
+  background: #171717;
+  color: #e5e5e5;
 }
 
 /* Scrollbar styling */
@@ -43,11 +50,69 @@ html, body {
   background: #9ca3af;
 }
 
+.dark ::-webkit-scrollbar-thumb {
+  background: #525252;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #737373;
+}
+
 /* Focus visible styles */
 *:focus-visible {
-  outline: 2px solid #D4A520;
+  outline: 2px solid #403d84;
   outline-offset: 2px;
   border-radius: 4px;
+}
+
+/* Dark mode readability hardening */
+.dark input,
+.dark textarea,
+.dark select {
+  background-color: #262626;
+  color: #f5f5f5;
+  border-color: #525252;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #a3a3a3;
+}
+
+.dark .bg-white {
+  background-color: #1f1f1f !important;
+}
+
+.dark .bg-gray-50 {
+  background-color: #262626 !important;
+}
+
+.dark .text-gray-900 {
+  color: #fafafa !important;
+}
+
+.dark .text-gray-800 {
+  color: #e5e5e5 !important;
+}
+
+.dark .text-gray-700 {
+  color: #d4d4d4 !important;
+}
+
+.dark .text-gray-600 {
+  color: #a3a3a3 !important;
+}
+
+.dark .text-gray-500 {
+  color: #a3a3a3 !important;
+}
+
+.dark .border-gray-200 {
+  border-color: #404040 !important;
+}
+
+.dark .border-gray-300 {
+  border-color: #525252 !important;
 }
 
 /* Email HTML content sanitization */
