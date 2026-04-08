@@ -26,7 +26,7 @@ export class SettingsComponent {
   protected readonly labelService = inject(LabelService);
   protected readonly filterService = inject(FilterService);
   protected readonly pgpService = inject(PgpService);
-  readonly activeTab = signal<SettingsTab>('accounts');
+  readonly activeTab = signal<SettingsTab>('general');
 
   // Security
   readonly qrCodeUrl = signal<string | null>(null);
