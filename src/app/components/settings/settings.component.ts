@@ -1,4 +1,5 @@
 import { Component, inject, signal, computed, output, ChangeDetectionStrategy, viewChild, ElementRef, afterNextRender } from '@angular/core';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { FormsModule } from '@angular/forms';
 import { SettingsService, EmailSignature, EmailTemplate } from '../../services/settings.service';
 import { RichEditorComponent } from '../rich-editor/rich-editor.component';
@@ -26,6 +27,7 @@ export class SettingsComponent {
   protected readonly labelService = inject(LabelService);
   protected readonly filterService = inject(FilterService);
   protected readonly pgpService = inject(PgpService);
+  private readonly sanitizer = inject(DomSanitizer);
   readonly activeTab = signal<SettingsTab>('general');
 
   // Security
@@ -207,6 +209,11 @@ export class SettingsComponent {
 
   removeAccount(id: string): void {
     this.settingsService.removeAccount(id);
+  }
+
+
+  trustedSignatureHtml(html: string): SafeHtml {
+    return this.sanitizer.bypassSecurityTrustHtml(html);
   }
 
   toggleSignatureSourceMode(): void {
