@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed, output, ChangeDetectionStrategy, viewChild, ElementRef } from '@angular/core';
+import { Component, inject, signal, computed, output, ChangeDetectionStrategy, viewChild, ElementRef, afterNextRender } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { SettingsService, EmailSignature, EmailTemplate } from '../../services/settings.service';
 import { RichEditorComponent } from '../rich-editor/rich-editor.component';
@@ -79,6 +79,8 @@ export class SettingsComponent {
   readonly editingTemplateId = signal<string | null>(null);
   readonly templateEditorRef = viewChild<RichEditorComponent>('templateEditor');
   readonly tabsContainer = viewChild<ElementRef<HTMLDivElement>>('tabsContainer');
+  readonly tabsCanScrollLeft = signal(false);
+  readonly tabsCanScrollRight = signal(false);
 
   // PGP
   readonly pgpName = signal('');
@@ -94,6 +96,12 @@ export class SettingsComponent {
   readonly imageBlockedDomains = computed(() => this.authService.user()?.imageBlockedDomains ?? []);
   readonly newAllowedDomain = signal('');
   readonly newBlockedDomain = signal('');
+
+  constructor() {
+    afterNextRender(() => {
+      this.updateTabsScrollState();
+    });
+  }
 
   onTabsWheel(event: WheelEvent): void {
     const containerRef = this.tabsContainer();
@@ -112,7 +120,35 @@ export class SettingsComponent {
     if (nextScrollLeft !== container.scrollLeft) {
       container.scrollLeft = nextScrollLeft;
       event.preventDefault();
+      this.updateTabsScrollState();
     }
+  }
+
+  updateTabsScrollState(): void {
+    const containerRef = this.tabsContainer();
+    if (!containerRef) return;
+
+    const container = containerRef.nativeElement;
+    const maxScrollLeft = container.scrollWidth - container.clientWidth;
+    if (maxScrollLeft <= 0) {
+      this.tabsCanScrollLeft.set(false);
+      this.tabsCanScrollRight.set(false);
+      return;
+    }
+
+    const epsilon = 1;
+    this.tabsCanScrollLeft.set(container.scrollLeft > epsilon);
+    this.tabsCanScrollRight.set(container.scrollLeft < maxScrollLeft - epsilon);
+  }
+
+  scrollTabs(direction: 'left' | 'right'): void {
+    const containerRef = this.tabsContainer();
+    if (!containerRef) return;
+
+    const container = containerRef.nativeElement;
+    const amount = direction === 'left' ? -220 : 220;
+    container.scrollBy({ left: amount, behavior: 'smooth' });
+    requestAnimationFrame(() => this.updateTabsScrollState());
   }
 
   onAccountEmailChange(): void {

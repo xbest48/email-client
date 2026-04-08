@@ -30,13 +30,39 @@
   </div>
 
   <!-- Tabs -->
-  <div
-    #tabsContainer
-    class="flex overflow-x-auto whitespace-nowrap border-b border-gray-200 dark:border-gray-700 px-6 scrollbar-hide"
-    role="tablist"
-    style="-ms-overflow-style: none; scrollbar-width: none;"
-    (wheel)="onTabsWheel($event)">
-    <button
+  <div class="relative border-b border-gray-200 dark:border-gray-700">
+    @if (tabsCanScrollLeft()) {
+      <button
+        type="button"
+        class="absolute left-2 top-1/2 z-10 -translate-y-1/2 p-1.5 rounded-full bg-white/90 dark:bg-gray-800/90 text-gray-600 dark:text-gray-300 shadow
+               hover:bg-white dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
+        (click)="scrollTabs('left')"
+        aria-label="Defiler les onglets vers la gauche"
+        title="Defiler vers la gauche">
+        ←
+      </button>
+    }
+
+    @if (tabsCanScrollRight()) {
+      <button
+        type="button"
+        class="absolute right-2 top-1/2 z-10 -translate-y-1/2 p-1.5 rounded-full bg-white/90 dark:bg-gray-800/90 text-gray-600 dark:text-gray-300 shadow
+               hover:bg-white dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
+        (click)="scrollTabs('right')"
+        aria-label="Defiler les onglets vers la droite"
+        title="Defiler vers la droite">
+        →
+      </button>
+    }
+
+    <div
+      #tabsContainer
+      class="flex overflow-x-auto whitespace-nowrap px-6 scrollbar-hide"
+      role="tablist"
+      style="-ms-overflow-style: none; scrollbar-width: none;"
+      (wheel)="onTabsWheel($event)"
+      (scroll)="updateTabsScrollState()">
+      <button
       type="button"
       (click)="activeTab.set('accounts')"
       class="px-4 py-3 text-sm font-medium border-b-2 transition-colors
@@ -155,7 +181,7 @@
       [attr.aria-selected]="activeTab() === 'templates'">
       Modeles
     </button>
-    <button
+      <button
       type="button"
       (click)="activeTab.set('privacy')"
       class="px-4 py-3 text-sm font-medium border-b-2 transition-colors
@@ -170,8 +196,9 @@
       [class.dark:hover:text-gray-300]="activeTab() !== 'privacy'"
       role="tab"
       [attr.aria-selected]="activeTab() === 'privacy'">
-      Confidentialite
-    </button>
+        Confidentialite
+      </button>
+    </div>
   </div>
 
   <!-- Tab content -->
