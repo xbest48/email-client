@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed, output, ChangeDetectionStrategy, viewChild } from '@angular/core';
+import { Component, inject, signal, computed, output, ChangeDetectionStrategy, viewChild, ElementRef } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { SettingsService, EmailSignature, EmailTemplate } from '../../services/settings.service';
 import { RichEditorComponent } from '../rich-editor/rich-editor.component';
@@ -78,6 +78,7 @@ export class SettingsComponent {
   readonly templateSubject = signal('');
   readonly editingTemplateId = signal<string | null>(null);
   readonly templateEditorRef = viewChild<RichEditorComponent>('templateEditor');
+  readonly tabsContainer = viewChild<ElementRef<HTMLDivElement>>('tabsContainer');
 
   // PGP
   readonly pgpName = signal('');
@@ -93,6 +94,26 @@ export class SettingsComponent {
   readonly imageBlockedDomains = computed(() => this.authService.user()?.imageBlockedDomains ?? []);
   readonly newAllowedDomain = signal('');
   readonly newBlockedDomain = signal('');
+
+  onTabsWheel(event: WheelEvent): void {
+    const containerRef = this.tabsContainer();
+    if (!containerRef) return;
+
+    const container = containerRef.nativeElement;
+    const maxScrollLeft = container.scrollWidth - container.clientWidth;
+    if (maxScrollLeft <= 0) return;
+
+    const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY)
+      ? event.deltaX
+      : event.deltaY;
+    if (delta === 0) return;
+
+    const nextScrollLeft = Math.min(maxScrollLeft, Math.max(0, container.scrollLeft + delta));
+    if (nextScrollLeft !== container.scrollLeft) {
+      container.scrollLeft = nextScrollLeft;
+      event.preventDefault();
+    }
+  }
 
   onAccountEmailChange(): void {
     const email = this.accountEmail();

@@ -30,7 +30,12 @@
   </div>
 
   <!-- Tabs -->
-  <div class="flex overflow-x-auto whitespace-nowrap border-b border-gray-200 dark:border-gray-700 px-6 scrollbar-hide" role="tablist" style="-ms-overflow-style: none; scrollbar-width: none;">
+  <div
+    #tabsContainer
+    class="flex overflow-x-auto whitespace-nowrap border-b border-gray-200 dark:border-gray-700 px-6 scrollbar-hide"
+    role="tablist"
+    style="-ms-overflow-style: none; scrollbar-width: none;"
+    (wheel)="onTabsWheel($event)">
     <button
       type="button"
       (click)="activeTab.set('accounts')"
