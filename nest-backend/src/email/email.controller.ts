@@ -180,7 +180,12 @@ export class EmailController {
   }
 
   @Post('send')
-  @UseInterceptors(FilesInterceptor('files', 20))
+  @UseInterceptors(FilesInterceptor('files', 20, {
+    limits: {
+      fieldSize: 25 * 1024 * 1024,
+      fileSize: 25 * 1024 * 1024,
+    },
+  }))
   async sendEmail(@Request() req: any, @Headers() headers: any, @Body() dto: SendEmailDto, @UploadedFiles() files?: Express.Multer.File[]) {
     const creds = await this.getCredentials(req, headers);
 

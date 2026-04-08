@@ -34,6 +34,10 @@ export class EmailService {
     return headers;
   }
 
+  get currentPageSize(): number {
+    return this.settingsService.pageSize;
+  }
+
 
   async fetchFolders(): Promise<void> {
     await this.settingsService.loadPromise;
@@ -183,6 +187,7 @@ export class EmailService {
     this.currentEmails.update((emails) =>
       emails.filter((e) => !(e.uid === email.uid && e.folder === email.folder))
     );
+    this.currentTotal.update((total) => Math.max(0, total - 1));
   }
 
   async trashEmail(email: Email): Promise<void> {
@@ -198,6 +203,7 @@ export class EmailService {
       this.currentEmails.update((emails) =>
         emails.filter((e) => !(e.uid === email.uid && e.folder === email.folder))
       );
+      this.currentTotal.update((total) => Math.max(0, total - 1));
     }
     if (this.selectedEmail()?.uid === email.uid) {
       this.selectedEmail.set(null);
@@ -207,6 +213,7 @@ export class EmailService {
   bulkTrashInBackground(emails: Email[]): void {
     const keys = new Set(emails.map(e => `${e.folder}:${e.uid}`));
     this.currentEmails.update(list => list.filter(e => !keys.has(`${e.folder}:${e.uid}`)));
+    this.currentTotal.update((total) => Math.max(0, total - keys.size));
     if (this.selectedEmail() && keys.has(`${this.selectedEmail()!.folder}:${this.selectedEmail()!.uid}`)) {
       this.selectedEmail.set(null);
     }
