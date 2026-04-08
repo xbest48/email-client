@@ -221,9 +221,11 @@ export class EmailListComponent implements OnInit, OnDestroy {
   onContextMenu(event: MouseEvent, email: Email): void {
     event.preventDefault();
     event.stopPropagation();
-    const x = Math.min(event.clientX, window.innerWidth - 220);
-    const y = Math.min(event.clientY, window.innerHeight - 350);
-    this.contextMenu.set({ x, y, email });
+    const menuWidth = 220;
+    const menuHeight = 420;
+    const x = Math.min(event.clientX, window.innerWidth - menuWidth);
+    const y = Math.min(event.clientY, window.innerHeight - menuHeight);
+    this.contextMenu.set({ x, y: Math.max(8, y), email });
   }
 
   closeContextMenu(): void {
