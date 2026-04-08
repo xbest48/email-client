@@ -35,8 +35,8 @@
         <li>
           <a
             [routerLink]="[item.route]"
-            routerLinkActive="bg-amber-100/70 text-amber-900 font-semibold"
-            class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-700 hover:bg-gray-100
+            routerLinkActive="bg-amber-100/70 dark:bg-amber-500/20 text-amber-900 dark:text-amber-200 font-semibold"
+            class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-amber-500/10
                    transition-colors duration-150 text-sm group"
             [class.ring-2]="dragOverFolder() === item.folderPath"
             [class.ring-amber-400]="dragOverFolder() === item.folderPath"
@@ -62,8 +62,8 @@
     @if (snoozeService.count(); as snoozedCount) {
       <div class="px-2 mt-1">
         <a routerLink="/snoozed"
-           routerLinkActive="bg-amber-100/70 text-amber-900 font-semibold"
-           class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-700 hover:bg-gray-100
+           routerLinkActive="bg-amber-100/70 dark:bg-amber-500/20 text-amber-900 dark:text-amber-200 font-semibold"
+           class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-amber-500/10
                   transition-colors duration-150 text-sm">
           <span class="text-lg" aria-hidden="true">&#9200;</span>
           <span class="flex-1">Reporter</span>
@@ -179,8 +179,8 @@
             <li>
               <a
                 [routerLink]="['/folder', folder.path]"
-                routerLinkActive="bg-amber-100/70 text-amber-900 font-semibold"
-                class="flex items-center gap-3 px-4 py-2 rounded-xl text-gray-700 hover:bg-gray-100
+                routerLinkActive="bg-amber-100/70 dark:bg-amber-500/20 text-amber-900 dark:text-amber-200 font-semibold"
+                class="flex items-center gap-3 px-4 py-2 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-amber-500/10
                        transition-colors duration-150 text-sm"
                 [class.ring-2]="dragOverFolder() === folder.path"
                 [class.ring-amber-400]="dragOverFolder() === folder.path"
