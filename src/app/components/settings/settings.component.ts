@@ -49,6 +49,9 @@ export class SettingsComponent {
 
   // General
   readonly pageSize = signal(this.settingsService.pageSize);
+  readonly accentPresetColors = ['#403d84', '#ffd200', '#b6d0f2', '#ffcbba', '#c6ebc5', '#ffbacd'];
+  readonly selectedAccentColor = signal(this.settingsService.accentColor);
+  readonly customAccentColor = signal(this.settingsService.accentColor);
   readonly darkMode = computed(() => this.authService.user()?.darkMode ?? false);
   readonly blockTrackingPixels = computed(() => this.authService.user()?.blockTrackingPixels ?? false);
   readonly undoSendDelay = computed(() => this.authService.user()?.undoSendDelay ?? 0);
@@ -324,6 +327,17 @@ export class SettingsComponent {
 
   savePageSize(): void {
     this.settingsService.setPageSize(this.pageSize());
+  }
+
+  selectAccentColor(color: string): void {
+    this.selectedAccentColor.set(color);
+    this.customAccentColor.set(color);
+    this.settingsService.setAccentColor(color);
+  }
+
+  applyCustomAccentColor(): void {
+    this.selectedAccentColor.set(this.customAccentColor());
+    this.settingsService.setAccentColor(this.customAccentColor());
   }
 
   async updateSetting(key: string, value: unknown): Promise<void> {

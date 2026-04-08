@@ -27,8 +27,8 @@ html, body {
 }
 
 .dark body {
-  background: #0b1020;
-  color: #e5e7eb;
+  background: #171717;
+  color: #e5e5e5;
 }
 
 /* Scrollbar styling */
@@ -51,11 +51,11 @@ html, body {
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  background: #475569;
+  background: #525252;
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
+  background: #737373;
 }
 
 /* Focus visible styles */
@@ -69,50 +69,50 @@ html, body {
 .dark input,
 .dark textarea,
 .dark select {
-  background-color: #111827;
-  color: #f3f4f6;
-  border-color: #475569;
+  background-color: #262626;
+  color: #f5f5f5;
+  border-color: #525252;
 }
 
 .dark input::placeholder,
 .dark textarea::placeholder {
-  color: #94a3b8;
+  color: #a3a3a3;
 }
 
 .dark .bg-white {
-  background-color: #0f172a !important;
+  background-color: #1f1f1f !important;
 }
 
 .dark .bg-gray-50 {
-  background-color: #111827 !important;
+  background-color: #262626 !important;
 }
 
 .dark .text-gray-900 {
-  color: #f8fafc !important;
+  color: #fafafa !important;
 }
 
 .dark .text-gray-800 {
-  color: #e5e7eb !important;
+  color: #e5e5e5 !important;
 }
 
 .dark .text-gray-700 {
-  color: #d1d5db !important;
+  color: #d4d4d4 !important;
 }
 
 .dark .text-gray-600 {
-  color: #cbd5e1 !important;
+  color: #a3a3a3 !important;
 }
 
 .dark .text-gray-500 {
-  color: #94a3b8 !important;
+  color: #a3a3a3 !important;
 }
 
 .dark .border-gray-200 {
-  border-color: #334155 !important;
+  border-color: #404040 !important;
 }
 
 .dark .border-gray-300 {
-  border-color: #475569 !important;
+  border-color: #525252 !important;
 }
 
 /* Email HTML content sanitization */
