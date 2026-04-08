@@ -26,7 +26,7 @@ export class SettingsComponent {
   protected readonly labelService = inject(LabelService);
   protected readonly filterService = inject(FilterService);
   protected readonly pgpService = inject(PgpService);
-  readonly activeTab = signal<SettingsTab>('accounts');
+  readonly activeTab = signal<SettingsTab>('general');
 
   // Security
   readonly qrCodeUrl = signal<string | null>(null);
@@ -49,7 +49,7 @@ export class SettingsComponent {
 
   // General
   readonly pageSize = signal(this.settingsService.pageSize);
-  readonly accentPresetColors = ['#403d84', '#ffd200', '#b6d0f2', '#ffcbba', '#c6ebc5', '#ffbacd'];
+  readonly accentPresetColors = ['#403d84', '#ffd200', '#b6d0f2', '#ffcbba', '#c6ebc5', '#ffbacd', '#a4cfff', '#ffb347', '#d5a6bd', '#92a9d1'];
   readonly selectedAccentColor = signal(this.settingsService.accentColor);
   readonly customAccentColor = signal(this.settingsService.accentColor);
   readonly darkMode = computed(() => this.authService.user()?.darkMode ?? false);
