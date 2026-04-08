@@ -185,16 +185,16 @@
         <div class="flex items-start gap-3 mb-6">
           <div class="w-10 h-10 rounded-full bg-amber-200 dark:bg-amber-900/50 flex items-center justify-center text-amber-800 dark:text-amber-400
                       font-semibold text-sm shrink-0" aria-hidden="true">
-            {{ mail.from?.name?.charAt(0)?.toUpperCase() || '?' }}
+            {{ mail.from.name.charAt(0).toUpperCase() || '?' }}
           </div>
           <div class="flex-1 min-w-0">
             <div class="flex items-center flex-wrap gap-x-2">
-              <span class="font-semibold text-gray-900 dark:text-white text-sm">{{ mail.from?.name || mail.from?.email }}</span>
-              <span class="text-xs text-gray-500 dark:text-gray-400">&lt;{{ mail.from?.email }}&gt;</span>
+              <span class="font-semibold text-gray-900 dark:text-white text-sm">{{ mail.from.name || mail.from.email }}</span>
+              <span class="text-xs text-gray-500 dark:text-gray-400">&lt;{{ mail.from.email }}&gt;</span>
             </div>
             <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
               <span>a {{ formatRecipients(mail.to) }}</span>
-              @if (mail.cc?.length) {
+              @if (mail.cc.length) {
                 <span>, Cc: {{ formatRecipients(mail.cc) }}</span>
               }
             </div>
@@ -265,7 +265,7 @@
         }
 
         <!-- Attachments -->
-        @if (mail.hasAttachments && mail.attachments?.length) {
+        @if (mail.hasAttachments && mail.attachments.length) {
           <div class="mb-4 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-700">
             <p class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
               {{ mail.attachments.length }} piece(s) jointe(s)
@@ -315,10 +315,10 @@
                                  focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-inset"
                           [attr.aria-expanded]="isThreadExpanded(threadMsg.uid)">
                     <div class="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-400 font-semibold text-xs shrink-0" aria-hidden="true">
-                      {{ threadMsg.from?.name?.charAt(0)?.toUpperCase() || '?' }}
+                      {{ threadMsg.from.name.charAt(0).toUpperCase() || '?' }}
                     </div>
                     <div class="flex-1 min-w-0">
-                      <span class="text-sm font-medium text-gray-800 dark:text-gray-200">{{ threadMsg.from?.name || threadMsg.from?.email }}</span>
+                      <span class="text-sm font-medium text-gray-800 dark:text-gray-200">{{ threadMsg.from.name || threadMsg.from.email }}</span>
                       <span class="text-xs text-gray-400 ml-2">{{ threadMsg.date | relativeTime }}</span>
                     </div>
                     <svg class="w-4 h-4 text-gray-400 transition-transform" [class.rotate-180]="isThreadExpanded(threadMsg.uid)"

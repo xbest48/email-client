@@ -82,7 +82,7 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
 
       // Blocked domains always block
       if (blockedDomains.some(d => domain === d || domain.endsWith('.' + d))) {
-        return imgTag.replace(srcMatch[0], `src="${placeholder}"`);
+        return '';
       }
       // Allowed domains always allow
       if (allowedDomains.some(d => domain === d || domain.endsWith('.' + d))) {
@@ -90,7 +90,7 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
       }
       // Apply general policy
       if (blockImages) {
-        return imgTag.replace(srcMatch[0], `src="${placeholder}"`);
+        return '';
       }
       return imgTag;
     });
