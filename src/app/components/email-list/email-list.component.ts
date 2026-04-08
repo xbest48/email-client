@@ -1,9 +1,9 @@
-import { Component, inject, signal, computed, ChangeDetectionStrategy, OnInit, OnDestroy } from '@angular/core';
+import { Component, inject, signal, computed, ChangeDetectionStrategy, OnInit, OnDestroy, viewChild, ElementRef } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { EmailService } from '../../services/email.service';
 import { RelativeTimePipe } from '../../pipes/relative-time.pipe';
-import { Email } from '../../models/email.model';
+import { Email, ImapFolder } from '../../models/email.model';
 import { KeyboardShortcutService } from '../../services/keyboard-shortcut.service';
 import { SwipeDirective } from '../../directives/swipe.directive';
 
@@ -40,6 +40,8 @@ export class EmailListComponent implements OnInit, OnDestroy {
   readonly emails = computed(() => this.emailService.currentEmails());
   readonly title = signal('Boite de reception');
   readonly isSentFolder = signal(false);
+  readonly contextMenu = signal<{ x: number; y: number; email: Email } | null>(null);
+  private readonly scrollContainer = viewChild<ElementRef<HTMLDivElement>>('scrollContainer');
 
   readonly allSelected = computed(() => {
     const emails = this.emails();
@@ -71,7 +73,15 @@ export class EmailListComponent implements OnInit, OnDestroy {
       this.selectedIds.set(new Set());
       this.focusedIndex.set(-1);
       this.emailService.selectedEmail.set(null);
-      this.emailService.fetchEmails(this.currentFolder, this.currentQuery);
+      await this.emailService.fetchEmails(this.currentFolder, this.currentQuery);
+      const saved = this.emailService.savedScrollState();
+      if (saved && saved.folder === this.currentFolder) {
+        this.emailService.savedScrollState.set(null);
+        setTimeout(() => {
+          const el = this.scrollContainer()?.nativeElement;
+          if (el) el.scrollTop = saved.scrollTop;
+        });
+      }
     });
 
     this.route.queryParams.subscribe((qp) => {
@@ -123,6 +133,10 @@ export class EmailListComponent implements OnInit, OnDestroy {
   }
 
   openEmail(email: Email): void {
+    const scrollEl = this.scrollContainer()?.nativeElement;
+    if (scrollEl) {
+      this.emailService.savedScrollState.set({ folder: this.currentFolder, scrollTop: scrollEl.scrollTop });
+    }
     this.emailService.selectedEmail.set(email);
     this.emailService.markAsRead(email);
     this.router.navigate(['/email', email.folder, email.uid]);
@@ -165,11 +179,10 @@ export class EmailListComponent implements OnInit, OnDestroy {
     return this.emailService.hasMoreEmails();
   }
 
-  async bulkTrash(): Promise<void> {
+  bulkTrash(): void {
     const ids = this.selectedIds();
-    for (const email of this.emails().filter((e) => ids.has(this.emailKey(e)))) {
-      await this.emailService.trashEmail(email);
-    }
+    const emailsToTrash = this.emails().filter((e) => ids.has(this.emailKey(e)));
+    this.emailService.bulkTrashInBackground(emailsToTrash);
     this.selectedIds.set(new Set());
   }
 
@@ -187,6 +200,84 @@ export class EmailListComponent implements OnInit, OnDestroy {
 
   onSwipeRight(email: Email): void {
     this.emailService.toggleStar(email);
+  }
+
+  // Drag & Drop
+  onDragStart(event: DragEvent, email: Email): void {
+    const selected = this.selectedIds();
+    let draggedEmails: { folder: string; uid: number }[];
+    if (selected.has(this.emailKey(email))) {
+      draggedEmails = this.emails()
+        .filter(e => selected.has(this.emailKey(e)))
+        .map(e => ({ folder: e.folder, uid: e.uid }));
+    } else {
+      draggedEmails = [{ folder: email.folder, uid: email.uid }];
+    }
+    event.dataTransfer!.setData('application/json', JSON.stringify(draggedEmails));
+    event.dataTransfer!.effectAllowed = 'move';
+  }
+
+  // Context menu
+  onContextMenu(event: MouseEvent, email: Email): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const x = Math.min(event.clientX, window.innerWidth - 220);
+    const y = Math.min(event.clientY, window.innerHeight - 350);
+    this.contextMenu.set({ x, y, email });
+  }
+
+  closeContextMenu(): void {
+    this.contextMenu.set(null);
+  }
+
+  contextReply(email: Email): void {
+    this.closeContextMenu();
+    this.openEmail(email);
+  }
+
+  contextToggleStar(email: Email): void {
+    if (this.isSelected(email)) {
+      for (const e of this.emails().filter(e => this.selectedIds().has(this.emailKey(e)))) {
+        this.emailService.toggleStar(e);
+      }
+    } else {
+      this.emailService.toggleStar(email);
+    }
+    this.closeContextMenu();
+  }
+
+  contextToggleRead(email: Email): void {
+    if (this.isSelected(email)) {
+      this.bulkMarkRead();
+    } else {
+      if (email.isRead) this.emailService.markAsUnread(email);
+      else this.emailService.markAsRead(email);
+    }
+    this.closeContextMenu();
+  }
+
+  contextMoveToFolder(folderPath: string): void {
+    const menu = this.contextMenu();
+    if (!menu) return;
+    const emailsToMove = this.isSelected(menu.email)
+      ? this.emails().filter(e => this.selectedIds().has(this.emailKey(e)))
+      : [menu.email];
+    for (const email of emailsToMove) {
+      this.emailService.moveToFolder(email, folderPath);
+    }
+    this.selectedIds.set(new Set());
+    this.closeContextMenu();
+  }
+
+  contextTrash(): void {
+    const menu = this.contextMenu();
+    if (!menu) return;
+    if (this.isSelected(menu.email)) {
+      this.bulkTrash();
+    } else {
+      this.emailService.trashEmail(menu.email);
+    }
+    this.closeContextMenu();
   }
 
   emailKey(email: Email): string {

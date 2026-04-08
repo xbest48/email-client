@@ -6,7 +6,7 @@ import { AuthService } from '../../services/auth.service';
 import { SettingsService } from '../../services/settings.service';
 import { LabelService } from '../../services/label.service';
 import { SnoozeService } from '../../services/snooze.service';
-import { ImapFolder } from '../../models/email.model';
+import { Email, ImapFolder } from '../../models/email.model';
 
 interface NavItem {
   label: string;
@@ -38,6 +38,7 @@ export class SidebarComponent {
   readonly showAddFolder = signal(false);
   readonly newFolderName = signal('');
   readonly contextMenu = signal<{ x: number; y: number; folder: ImapFolder } | null>(null);
+  readonly dragOverFolder = signal<string | null>(null);
 
   readonly defaultNavItems: NavItem[] = [
     { label: 'Boite de reception', icon: '&#128229;', route: '/inbox', folderPath: 'INBOX', specialUse: '\\Inbox' },
@@ -96,6 +97,31 @@ export class SidebarComponent {
       } catch (err) {
         console.error('Failed to delete folder', err);
       }
+    }
+  }
+
+  onDragOver(event: DragEvent, folderPath: string): void {
+    event.preventDefault();
+    event.dataTransfer!.dropEffect = 'move';
+    this.dragOverFolder.set(folderPath);
+  }
+
+  onDragLeave(): void {
+    this.dragOverFolder.set(null);
+  }
+
+  async onDrop(event: DragEvent, folderPath: string): Promise<void> {
+    event.preventDefault();
+    this.dragOverFolder.set(null);
+    const data = event.dataTransfer?.getData('application/json');
+    if (!data) return;
+    try {
+      const emails: { folder: string; uid: number }[] = JSON.parse(data);
+      for (const e of emails) {
+        await this.emailService.moveToFolder({ folder: e.folder, uid: e.uid } as Email, folderPath);
+      }
+    } catch (err) {
+      console.error('Drop failed', err);
     }
   }
 

@@ -20,6 +20,7 @@ export class EmailService {
   readonly selectedEmail = signal<Email | null>(null);
   readonly currentTotal = signal(0);
   readonly currentPage = signal(1);
+  readonly savedScrollState = signal<{ folder: string; scrollTop: number } | null>(null);
 
   private trashFolder = '';
 
@@ -199,6 +200,31 @@ export class EmailService {
     }
     if (this.selectedEmail()?.uid === email.uid) {
       this.selectedEmail.set(null);
+    }
+  }
+
+  bulkTrashInBackground(emails: Email[]): void {
+    const keys = new Set(emails.map(e => `${e.folder}:${e.uid}`));
+    this.currentEmails.update(list => list.filter(e => !keys.has(`${e.folder}:${e.uid}`)));
+    if (this.selectedEmail() && keys.has(`${this.selectedEmail()!.folder}:${this.selectedEmail()!.uid}`)) {
+      this.selectedEmail.set(null);
+    }
+    for (const email of emails) {
+      const promise = this.trashFolder
+        ? firstValueFrom(
+            this.http.post(
+              `${this.apiUrl}/email/${encodeURIComponent(email.folder)}/${email.uid}/move`,
+              { destination: this.trashFolder },
+              { headers: this.getHeaders(), withCredentials: true }
+            )
+          )
+        : firstValueFrom(
+            this.http.delete(
+              `${this.apiUrl}/email/${encodeURIComponent(email.folder)}/${email.uid}`,
+              { headers: this.getHeaders(), withCredentials: true }
+            )
+          );
+      promise.catch(err => console.error('Background trash failed', err));
     }
   }
 
