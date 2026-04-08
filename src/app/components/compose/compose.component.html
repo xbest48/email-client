@@ -222,7 +222,8 @@
           #bodyEditor
           placeholder="Ecrivez votre message..."
           [initialContent]="htmlBody()"
-          toolbarPosition="bottom"
+          [footerHtml]="settingsService.getDefaultSignature()?.html ?? ''"
+          toolbarPosition="top"
           [minHeight]="maximized() ? '300px' : '180px'"
           (contentChange)="onBodyChange($event)"
           class="flex-1 flex flex-col"/>

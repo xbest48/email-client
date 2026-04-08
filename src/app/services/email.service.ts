@@ -238,6 +238,40 @@ export class EmailService {
 
   readonly pendingSends = signal<{ id: string; to: string; subject: string; timeoutId: any; cancel: () => void }[]>([]);
 
+  async saveDraftMessage(
+    to: string,
+    subject: string,
+    html: string,
+    cc = '',
+    bcc = '',
+    previous?: { folder: string; uid: number | null } | null,
+  ): Promise<{ folder: string; uid: number | null }> {
+    return await firstValueFrom(
+      this.http.post<{ folder: string; uid: number | null }>(
+        `${this.apiUrl}/draft`,
+        {
+          to: to || undefined,
+          subject,
+          html,
+          cc: cc || undefined,
+          bcc: bcc || undefined,
+          previousFolder: previous?.folder,
+          previousUid: previous?.uid ?? undefined,
+        },
+        { headers: this.getHeaders(), withCredentials: true },
+      )
+    );
+  }
+
+  async deleteDraftMessage(folder: string, uid: number): Promise<void> {
+    await firstValueFrom(
+      this.http.delete(
+        `${this.apiUrl}/draft/${encodeURIComponent(folder)}/${uid}`,
+        { headers: this.getHeaders(), withCredentials: true },
+      )
+    );
+  }
+
   async sendEmail(
     to: string,
     subject: string,

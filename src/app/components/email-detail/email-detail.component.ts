@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed, ChangeDetectionStrategy, OnInit, OnDestroy } from '@angular/core';
+import { Component, inject, signal, computed, ChangeDetectionStrategy, OnInit, OnDestroy, viewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { Subscription } from 'rxjs';
@@ -11,11 +11,13 @@ import { LabelService, Label } from '../../services/label.service';
 import { PgpService } from '../../services/pgp.service';
 import { KeyboardShortcutService } from '../../services/keyboard-shortcut.service';
 import { SandboxedHtmlDirective } from '../../directives/sandboxed-html.directive';
+import { SettingsService } from '../../services/settings.service';
+import { RichEditorComponent } from '../rich-editor/rich-editor.component';
 
 @Component({
   selector: 'app-email-detail',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RelativeTimePipe, SandboxedHtmlDirective],
+  imports: [RelativeTimePipe, SandboxedHtmlDirective, RichEditorComponent],
   templateUrl: './email-detail.component.html',
   styleUrl: './email-detail.component.css',
 })
@@ -27,12 +29,14 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
   protected readonly snoozeService = inject(SnoozeService);
   protected readonly labelService = inject(LabelService);
   protected readonly pgpService = inject(PgpService);
+  protected readonly settingsService = inject(SettingsService);
   private readonly shortcutService = inject(KeyboardShortcutService);
   private readonly sanitizer = inject(DomSanitizer);
 
   readonly email = signal<Email | null>(null);
   readonly showReply = signal(false);
   readonly replyBody = signal('');
+  readonly replyEditor = viewChild<RichEditorComponent>('replyEditor');
   readonly allowExternalImages = signal(false);
   readonly showSnoozeMenu = signal(false);
   readonly showLabelMenu = signal(false);
@@ -183,7 +187,8 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
 
   async sendReply(): Promise<void> {
     const mail = this.email();
-    const body = this.replyBody();
+    const editor = this.replyEditor();
+    const body = editor ? editor.getFullHtml() : this.replyBody();
     if (!mail || !body) return;
 
     const subject = mail.subject.startsWith('Re:') ? mail.subject : `Re: ${mail.subject}`;
@@ -194,9 +199,8 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     this.showReply.set(false);
     this.replyBody.set('');
   }
-
-  onReplyInput(event: Event): void {
-    this.replyBody.set((event.target as HTMLTextAreaElement).value);
+  onReplyChange(html: string): void {
+    this.replyBody.set(html);
   }
 
   // Snooze
@@ -320,4 +324,5 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     if (bytes < 1048576) return `${Math.round(bytes / 1024)} Ko`;
     return `${(bytes / 1048576).toFixed(1)} Mo`;
   }
+
 }

@@ -479,6 +479,37 @@ export class ImapService implements OnModuleDestroy {
     await client.append(sentFolder.path, rawMessage, ['\\Seen']);
   }
 
+  async appendToDraftsFolder(
+    credentials: EmailCredentials,
+    rawMessage: string | Buffer,
+    previousFolder?: string,
+    previousUid?: number,
+  ): Promise<{ folder: string; uid: number | null }> {
+    const client = await this.getConnection(credentials);
+    const folders = await client.list();
+    const draftsFolder = folders.find(
+      (f: any) => f.specialUse === '\\Drafts',
+    );
+
+    if (!draftsFolder) {
+      throw new Error('No Drafts folder found');
+    }
+
+    if (previousFolder && previousUid) {
+      try {
+        await this.deleteEmail(credentials, previousFolder, previousUid);
+      } catch (err) {
+        console.warn('Failed to delete previous draft before append', err);
+      }
+    }
+
+    const result: any = await client.append(draftsFolder.path, rawMessage, ['\\Draft']);
+    return {
+      folder: draftsFolder.path,
+      uid: typeof result?.uid === 'number' ? result.uid : null,
+    };
+  }
+
   async deleteFolder(credentials: EmailCredentials, folderPath: string) {
     const client = await this.getConnection(credentials);
     await client.mailboxDelete(folderPath);

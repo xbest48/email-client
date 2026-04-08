@@ -18,6 +18,48 @@ export interface SendEmailDto {
 
 @Injectable()
 export class SmtpService {
+  async buildRawMessage(credentials: EmailCredentials, dto: SendEmailDto): Promise<Buffer | null> {
+    const mailOptions: nodemailer.SendMailOptions = {
+      from: dto.senderName ? `"${dto.senderName}" <${credentials.email}>` : credentials.email,
+      to: dto.to || undefined,
+      subject: dto.subject || '',
+      text: dto.text,
+    };
+
+    if (dto.cc) mailOptions.cc = dto.cc;
+    if (dto.bcc) mailOptions.bcc = dto.bcc;
+    if (dto.html) mailOptions.html = dto.html;
+    if (dto.inReplyTo) mailOptions.inReplyTo = dto.inReplyTo;
+    if (dto.references) mailOptions.references = dto.references;
+    if (dto.requestReadReceipt) {
+      mailOptions.headers = {
+        ...((mailOptions.headers as any) || {}),
+        'Disposition-Notification-To': credentials.email,
+        'Return-Receipt-To': credentials.email,
+      };
+    }
+    if (dto.attachments?.length) {
+      mailOptions.attachments = dto.attachments.map((a) => ({
+        filename: a.filename,
+        content: a.content,
+        contentType: a.contentType,
+      }));
+    }
+
+    try {
+      const MailComposer = require('nodemailer/lib/mail-composer');
+      const composer = new MailComposer(mailOptions);
+      return await new Promise<Buffer>((resolve, reject) => {
+        composer.compile().build((err: any, message: Buffer) => {
+          if (err) return reject(err);
+          resolve(message);
+        });
+      });
+    } catch {
+      return null;
+    }
+  }
+
   async sendEmail(credentials: EmailCredentials, dto: SendEmailDto) {
     const transporter = nodemailer.createTransport({
       host: credentials.smtpHost,
@@ -63,19 +105,7 @@ export class SmtpService {
     transporter.close();
 
     // Build raw RFC822 message for IMAP Sent folder append
-    let rawMessage: Buffer | null = null;
-    try {
-      const MailComposer = require('nodemailer/lib/mail-composer');
-      const composer = new MailComposer(mailOptions);
-      rawMessage = await new Promise<Buffer>((resolve, reject) => {
-        composer.compile().build((err: any, message: Buffer) => {
-          if (err) return reject(err);
-          resolve(message);
-        });
-      });
-    } catch {
-      // Fallback: ignore if we can't build raw message
-    }
+    const rawMessage = await this.buildRawMessage(credentials, dto);
 
     return {
       messageId: info.messageId,

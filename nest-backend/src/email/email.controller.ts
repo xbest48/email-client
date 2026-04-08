@@ -242,4 +242,43 @@ export class EmailController {
       rejected: result.rejected,
     };
   }
+
+  @Post('draft')
+  async saveDraft(@Request() req: any, @Headers() headers: any, @Body() dto: SendEmailDto & { previousFolder?: string; previousUid?: number }) {
+    const creds = await this.getCredentials(req, headers);
+
+    if (!dto.senderName) {
+      const accountId = headers['x-account-id'];
+      if (accountId) {
+        const account = await this.accountsService.findOne(accountId, req.user.id);
+        if (account?.displayName) {
+          dto.senderName = account.displayName;
+        }
+      }
+    }
+
+    const rawMessage = await this.smtpService.buildRawMessage(creds, dto);
+    if (!rawMessage) {
+      throw new BadRequestException('Failed to build draft message');
+    }
+
+    return this.imapService.appendToDraftsFolder(
+      creds,
+      rawMessage,
+      dto.previousFolder,
+      dto.previousUid ? Number(dto.previousUid) : undefined,
+    );
+  }
+
+  @Delete('draft/:folder/:uid')
+  async deleteDraft(
+    @Request() req: any,
+    @Headers() headers: any,
+    @Param('folder') folder: string,
+    @Param('uid') uid: string,
+  ) {
+    const creds = await this.getCredentials(req, headers);
+    await this.imapService.deleteEmail(creds, decodeURIComponent(folder), parseInt(uid, 10));
+    return { success: true };
+  }
 }
