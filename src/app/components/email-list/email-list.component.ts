@@ -40,6 +40,7 @@ export class EmailListComponent implements OnInit, OnDestroy {
   readonly emails = computed(() => this.emailService.currentEmails());
   readonly title = signal('Boite de reception');
   readonly isSentFolder = signal(false);
+  readonly isTrashFolder = signal(false);
   readonly contextMenu = signal<{ x: number; y: number; email: Email } | null>(null);
   private readonly scrollContainer = viewChild<ElementRef<HTMLDivElement>>('scrollContainer');
 
@@ -64,10 +65,12 @@ export class EmailListComponent implements OnInit, OnDestroy {
         this.currentFolder = folderParam;
         this.title.set(folderParam);
         this.isSentFolder.set(false);
+        this.isTrashFolder.set(this.emailService.folders().some((f) => f.path === folderParam && f.specialUse === '\\Trash'));
       } else {
         this.currentFolder = this.resolveFolder(label);
         this.title.set(FOLDER_TITLES[label] ?? label);
         this.isSentFolder.set(label === 'sent');
+        this.isTrashFolder.set(label === 'trash');
       }
 
       this.selectedIds.set(new Set());
@@ -142,6 +145,13 @@ export class EmailListComponent implements OnInit, OnDestroy {
 
   refresh(): void {
     this.emailService.fetchEmails(this.currentFolder, this.currentQuery);
+  }
+
+  async emptyTrash(): Promise<void> {
+    await this.emailService.emptyTrash();
+    this.selectedIds.set(new Set());
+    this.focusedIndex.set(-1);
+    await this.emailService.fetchEmails(this.currentFolder, this.currentQuery);
   }
 
   openEmail(email: Email): void {

@@ -510,6 +510,40 @@ export class ImapService implements OnModuleDestroy {
     };
   }
 
+  async emptyTrashFolder(credentials: EmailCredentials): Promise<void> {
+    const client = await this.getConnection(credentials);
+    const folders = await client.list();
+    const trashFolder = folders.find(
+      (f: any) => f.specialUse === '\\Trash',
+    );
+
+    if (!trashFolder) {
+      throw new Error('No Trash folder found');
+    }
+
+    const lock = await client.getMailboxLock(trashFolder.path);
+    try {
+      await client.mailboxOpen(trashFolder.path);
+      const mailbox = client.mailbox as any;
+      const total = mailbox?.exists || 0;
+      if (total === 0) return;
+
+      const uids: number[] = [];
+      for await (const msg of client.fetch('1:*', { uid: true })) {
+        if ((msg as any).uid) {
+          uids.push((msg as any).uid);
+        }
+      }
+
+      if (uids.length === 0) return;
+
+      await client.messageFlagsAdd(uids, ['\\Deleted'], { uid: true });
+      await client.messageDelete(uids, { uid: true });
+    } finally {
+      lock.release();
+    }
+  }
+
   async deleteFolder(credentials: EmailCredentials, folderPath: string) {
     const client = await this.getConnection(credentials);
     await client.mailboxDelete(folderPath);

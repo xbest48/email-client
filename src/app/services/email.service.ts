@@ -367,6 +367,16 @@ export class EmailService {
     await this.fetchFolders();
   }
 
+  async emptyTrash(): Promise<void> {
+    await firstValueFrom(
+      this.http.delete(`${this.apiUrl}/trash`, { headers: this.getHeaders(), withCredentials: true })
+    );
+    const current = this.selectedEmail();
+    if (current?.folder && this.folders().some((f) => f.path === current.folder && f.specialUse === '\\Trash')) {
+      this.selectedEmail.set(null);
+    }
+  }
+
   hasMoreEmails(): boolean {
     return this.currentEmails().length < this.currentTotal();
   }

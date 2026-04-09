@@ -146,6 +146,13 @@ export class EmailController {
     return { success: true };
   }
 
+  @Delete('trash')
+  async emptyTrash(@Request() req: any, @Headers() headers: any) {
+    const creds = await this.getCredentials(req, headers);
+    await this.imapService.emptyTrashFolder(creds);
+    return { success: true };
+  }
+
   @Get('email/:folder/:uid/attachment/:attachmentId')
   async getAttachment(
     @Request() req: any,
