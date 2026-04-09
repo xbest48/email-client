@@ -1,6 +1,6 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { HttpClient, HttpParams, HttpHeaders } from '@angular/common/http';
-import { firstValueFrom } from 'rxjs';
+import { HttpClient, HttpParams, HttpHeaders, HttpEventType, HttpResponse } from '@angular/common/http';
+import { firstValueFrom, timeout } from 'rxjs';
 import { environment } from '../environments/environment';
 import { Email, ImapFolder, FolderStatus, EmailListResponse } from '../models/email.model';
 import { SettingsService } from './settings.service';
@@ -24,6 +24,7 @@ export class EmailService {
   readonly savedListState = signal<{ folder: string; query: string; page: number } | null>(null);
 
   private trashFolder = '';
+  private fetchRequestId = 0;
 
   private getHeaders() {
     const accountId = this.settingsService.activeAccountId();
@@ -88,8 +89,10 @@ export class EmailService {
     if (!this.settingsService.activeAccountId()) {
       this.currentEmails.set([]);
       this.currentTotal.set(0);
+      this.loading.set(false);
       return;
     }
+    const requestId = ++this.fetchRequestId;
     this.loading.set(true);
     try {
       const pageSize = this.settingsService.pageSize;
@@ -102,8 +105,10 @@ export class EmailService {
         this.http.get<EmailListResponse>(
           `${this.apiUrl}/emails/${encodeURIComponent(folder)}`,
           { params, headers: this.getHeaders(), withCredentials: true }
-        )
+        ).pipe(timeout(15000))
       );
+
+      if (requestId !== this.fetchRequestId) return;
 
       if (page > 1) {
         this.currentEmails.update((prev) => {
@@ -119,15 +124,21 @@ export class EmailService {
       this.offlineService.cacheEmails(folder, res.emails);
     } catch (err) {
       console.error('Failed to fetch emails', err);
+      if (requestId !== this.fetchRequestId) return;
       if (page === 1) {
         const cached = await this.offlineService.getCachedEmails(folder);
         if (cached.length) {
           this.currentEmails.set(cached);
           this.currentTotal.set(cached.length);
+        } else {
+          this.currentEmails.set([]);
+          this.currentTotal.set(0);
         }
       }
     } finally {
-      this.loading.set(false);
+      if (requestId === this.fetchRequestId) {
+        this.loading.set(false);
+      }
     }
   }
 
@@ -375,6 +386,56 @@ export class EmailService {
     if (current?.folder && this.folders().some((f) => f.path === current.folder && f.specialUse === '\\Trash')) {
       this.selectedEmail.set(null);
     }
+  }
+
+  async downloadFolderArchive(
+    folder: string,
+    fileName?: string,
+    onProgress?: (progress: number | null) => void,
+  ): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      this.http.get(
+        `${this.apiUrl}/folders/${encodeURIComponent(folder)}/archive`,
+        {
+          headers: this.getHeaders(),
+          withCredentials: true,
+          responseType: 'blob',
+          observe: 'events',
+          reportProgress: true,
+        }
+      ).subscribe({
+        next: (event) => {
+          if (event.type === HttpEventType.DownloadProgress) {
+            if (typeof event.total === 'number' && event.total > 0) {
+              onProgress?.(Math.max(0, Math.min(100, Math.round((event.loaded / event.total) * 100))));
+            } else {
+              onProgress?.(null);
+            }
+            return;
+          }
+
+          if (event instanceof HttpResponse) {
+            const blob = event.body;
+            if (!blob) {
+              reject(new Error('Archive vide'));
+              return;
+            }
+
+            onProgress?.(100);
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.download = fileName || `${folder.replace(/[\\/]/g, '_') || 'dossier'}.mbox`;
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            resolve();
+          }
+        },
+        error: (err) => reject(err),
+      });
+    });
   }
 
   hasMoreEmails(): boolean {

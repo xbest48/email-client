@@ -13,9 +13,11 @@
         id="search-input"
         type="search"
         [(ngModel)]="query"
+        (input)="onQueryInput()"
+        (search)="onQueryInput()"
         name="query"
         placeholder="Rechercher des emails..."
-        class="w-full pl-10 pr-20 py-2.5 bg-gray-100 hover:bg-gray-200/70 focus:bg-white
+        class="w-full pl-10 pr-12 py-2.5 bg-gray-100 hover:bg-gray-200/70 focus:bg-white
                border border-transparent focus:border-gray-300
                rounded-xl text-sm text-gray-800 placeholder-gray-500
                transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:shadow-sm"
@@ -38,20 +40,6 @@
         </svg>
       </button>
 
-      @if (query()) {
-        <button
-          type="button"
-          (click)="clearSearch()"
-          class="absolute right-10 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600
-                 rounded-full hover:bg-gray-200 transition-colors
-                 focus:outline-none focus:ring-2 focus:ring-amber-400"
-          aria-label="Effacer la recherche"
-          title="Effacer la recherche">
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-          </svg>
-        </button>
-      }
     </div>
   </form>
 

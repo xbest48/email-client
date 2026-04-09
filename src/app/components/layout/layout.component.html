@@ -49,7 +49,7 @@
       </button>
 
       <!-- Search bar -->
-      <app-search-bar (search)="onSearch($event)" class="flex-1"/>
+      <app-search-bar [activeQuery]="activeSearchQuery()" (search)="onSearch($event)" class="flex-1"/>
 
       <!-- Settings button -->
       <button

@@ -1,10 +1,9 @@
 <div class="flex flex-col h-full bg-white dark:bg-gray-900">
   <!-- Header -->
   <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
-    <h2 class="text-lg font-semibold text-gray-800 dark:text-white">{{ title() }}</h2>
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-3 min-w-0">
       <!-- Select all -->
-      <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+      <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer shrink-0">
         <input
           type="checkbox"
           [checked]="allSelected()"
@@ -12,6 +11,9 @@
           class="rounded border-gray-300 text-amber-500 focus:ring-amber-400"
           aria-label="Tout selectionner">
       </label>
+      <h2 class="text-lg font-semibold text-gray-800 dark:text-white truncate">{{ title() }}</h2>
+    </div>
+    <div class="flex items-center gap-2">
       <!-- Refresh -->
       <button
         (click)="refresh()"

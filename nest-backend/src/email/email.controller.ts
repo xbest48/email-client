@@ -65,6 +65,24 @@ export class EmailController {
     return { success: true };
   }
 
+  @Get('folders/:folder/archive')
+  async downloadFolderArchive(
+    @Request() req: any,
+    @Headers() headers: any,
+    @Param('folder') folder: string,
+    @Res() res: Response,
+  ) {
+    const creds = await this.getCredentials(req, headers);
+    const decodedFolder = decodeURIComponent(folder);
+    const mbox = await this.imapService.exportFolderAsMbox(creds, decodedFolder);
+    const safeName = (decodedFolder || 'dossier').replace(/[\\/:*?"<>|]+/g, '_');
+
+    res.setHeader('Content-Type', 'application/mbox');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}.mbox"`);
+    res.setHeader('Content-Length', String(mbox.length));
+    res.end(mbox);
+  }
+
   @Get('emails/:folder')
   async getEmails(
     @Request() req: any,
