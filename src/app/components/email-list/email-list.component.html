@@ -363,7 +363,7 @@
   <!-- Context menu -->
   @if (contextMenu(); as menu) {
     <div class="fixed inset-0 z-40" (click)="closeContextMenu()" (contextmenu)="$event.preventDefault(); closeContextMenu()"></div>
-    <div class="fixed z-50 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 py-1 min-w-52"
+    <div #contextMenuEl class="fixed z-50 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 py-1 min-w-52"
          [style.left.px]="menu.x" [style.top.px]="menu.y"
          role="menu" aria-label="Actions sur le message">
       <!-- Context target info -->
