@@ -6,7 +6,7 @@ import { RelativeTimePipe } from '../../pipes/relative-time.pipe';
 import { Email, ImapFolder } from '../../models/email.model';
 import { KeyboardShortcutService } from '../../services/keyboard-shortcut.service';
 import { SwipeDirective } from '../../directives/swipe.directive';
-import { LabelService } from '../../services/label.service';
+import { LabelService, Label } from '../../services/label.service';
 
 const FOLDER_MAP: Record<string, string> = {
   inbox: 'INBOX',
@@ -47,6 +47,7 @@ export class EmailListComponent implements OnInit, OnDestroy {
   readonly isTrashFolder = signal(false);
   readonly contextMenu = signal<{ x: number; y: number; email: Email } | null>(null);
   readonly contextSubmenu = signal<'labels' | null>(null);
+  readonly contextEmailLabelIds = signal<Set<string>>(new Set());
   readonly mobileActionMenu = signal<Email | null>(null);
   readonly mobileSelectionMode = signal(false);
   private readonly scrollContainer = viewChild<ElementRef<HTMLDivElement>>('scrollContainer');
@@ -289,11 +290,14 @@ export class EmailListComponent implements OnInit, OnDestroy {
     const y = Math.min(event.clientY, window.innerHeight - menuHeight);
     this.contextMenu.set({ x, y: Math.max(8, y), email });
     this.contextSubmenu.set(null);
+    const cachedIds = this.labelService.emailLabelMap().get(`${email.folder}:${email.uid}`);
+    this.contextEmailLabelIds.set(new Set(cachedIds ?? []));
   }
 
   closeContextMenu(): void {
     this.contextMenu.set(null);
     this.contextSubmenu.set(null);
+    this.contextEmailLabelIds.set(new Set());
     this.mobileActionMenu.set(null);
   }
 
@@ -370,11 +374,22 @@ export class EmailListComponent implements OnInit, OnDestroy {
       ? this.emails().filter((e) => this.selectedIds().has(this.emailKey(e)))
       : [menu.email];
 
+    const alreadyAssigned = this.contextEmailLabelIds().has(labelId);
+
     for (const email of emailsToLabel) {
-      await this.labelService.addEmailToLabel(labelId, email.folder, email.uid);
+      if (alreadyAssigned) {
+        await this.labelService.removeEmailFromLabel(labelId, email.folder, email.uid);
+      } else {
+        await this.labelService.addEmailToLabel(labelId, email.folder, email.uid);
+      }
     }
 
-    this.closeContextMenu();
+    this.contextEmailLabelIds.update((set) => {
+      const next = new Set(set);
+      if (alreadyAssigned) next.delete(labelId);
+      else next.add(labelId);
+      return next;
+    });
   }
 
   contextSpam(): void {
@@ -437,6 +452,15 @@ export class EmailListComponent implements OnInit, OnDestroy {
 
   emailKey(email: Email): string {
     return `${email.folder}:${email.uid}`;
+  }
+
+  labelsFor(email: Email): Label[] {
+    return this.labelService.getLabelsForCachedEmail(email.folder, email.uid);
+  }
+
+  recipientLabel(email: Email): string {
+    const first = email.to.length > 0 ? email.to[0] : null;
+    return first?.name || first?.email || '(sans destinataire)';
   }
 
   private resolveFolder(label: string): string {
