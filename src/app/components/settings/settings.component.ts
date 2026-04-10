@@ -6,6 +6,7 @@ import { AuthService } from '../../services/auth.service';
 import { LabelService, Label } from '../../services/label.service';
 import { FilterService, FilterRule } from '../../services/filter.service';
 import { PgpService } from '../../services/pgp.service';
+import { ConfirmDialogService } from '../../services/confirm-dialog.service';
 import { SandboxedHtmlDirective } from '../../directives/sandboxed-html.directive';
 import * as QRCode from 'qrcode';
 import { startRegistration } from '@simplewebauthn/browser';
@@ -27,6 +28,7 @@ export class SettingsComponent {
   protected readonly labelService = inject(LabelService);
   protected readonly filterService = inject(FilterService);
   protected readonly pgpService = inject(PgpService);
+  private readonly confirmDialog = inject(ConfirmDialogService);
   readonly activeTab = signal<SettingsTab>('general');
 
   // Security
@@ -50,7 +52,7 @@ export class SettingsComponent {
 
   // General
   readonly pageSize = signal(this.settingsService.pageSize);
-  readonly accentPresetColors = ['#403d84', '#ffd200', '#b6d0f2', '#ffcbba', '#c6ebc5', '#ffbacd'];
+  readonly accentPresetColors = ['#403d84', '#1d4ed8', '#ffd200', '#b6d0f2', '#ffcbba', '#c6ebc5', '#ffbacd'];
   readonly selectedAccentColor = signal(this.settingsService.accentColor);
   readonly customAccentColor = signal(this.settingsService.accentColor);
   readonly darkMode = computed(() => this.authService.user()?.darkMode ?? false);
@@ -166,7 +168,11 @@ export class SettingsComponent {
 
   async testConnection(): Promise<void> {
     if (!this.accountEmail() || !this.accountPassword() || !this.accountImapHost() || !this.accountSmtpHost()) {
-        alert('Veuillez remplir tous les champs de connexion.');
+        await this.confirmDialog.alert({
+          title: 'Champs manquants',
+          message: 'Veuillez remplir tous les champs de connexion.',
+          tone: 'warning',
+        });
         return;
     }
 
@@ -182,9 +188,17 @@ export class SettingsComponent {
     this.testConnectionLoading.set(false);
 
     if (result.success) {
-      alert('Connexion reussie !');
+      await this.confirmDialog.alert({
+        title: 'Connexion reussie',
+        message: 'La connexion au compte a fonctionne.',
+        tone: 'success',
+      });
     } else {
-      alert('Echec de la connexion : ' + result.message);
+      await this.confirmDialog.alert({
+        title: 'Echec de la connexion',
+        message: 'La connexion au compte a echoue : ' + result.message,
+        tone: 'error',
+      });
     }
   }
 
@@ -307,7 +321,11 @@ export class SettingsComponent {
       this.qrCodeUrl.set(null);
       this.twoFactorCode.set('');
     } else {
-      alert('Code invalide');
+      await this.confirmDialog.alert({
+        title: 'Code invalide',
+        message: 'Le code 2FA saisi est invalide.',
+        tone: 'error',
+      });
     }
   }
 
@@ -317,9 +335,17 @@ export class SettingsComponent {
       const attResp = await startRegistration({ optionsJSON: options });
       const verified = await this.authService.verifyWebAuthnRegister(attResp);
       if (verified) {
-        alert('Passkey enregistre avec succes !');
+        await this.confirmDialog.alert({
+          title: 'Passkey enregistre',
+          message: 'Le passkey a ete enregistre avec succes.',
+          tone: 'success',
+        });
       } else {
-        alert('Echec de l\'enregistrement du passkey');
+        await this.confirmDialog.alert({
+          title: "Echec de l'enregistrement",
+          message: "Le passkey n'a pas pu etre enregistre.",
+          tone: 'error',
+        });
       }
     } catch (e) {
       console.error('Passkey registration failed', e);
@@ -428,7 +454,11 @@ export class SettingsComponent {
 
   async applyFilter(id: string): Promise<void> {
     const result = await this.filterService.apply(id, 'INBOX');
-    alert(`Filtre applique a ${result.applied} message(s).`);
+    await this.confirmDialog.alert({
+      title: 'Filtre applique',
+      message: `Filtre applique a ${result.applied} message(s).`,
+      tone: 'success',
+    });
   }
 
   private resetFilterForm(): void {

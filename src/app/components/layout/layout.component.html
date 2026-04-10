@@ -26,7 +26,7 @@
     [class.lg:translate-x-0]="true">
     <app-sidebar
       [isOpen]="true"
-      (compose)="showCompose.set(true)"
+      (compose)="openCompose()"
       (signOut)="onSignOut()"/>
   </div>
 
@@ -49,7 +49,7 @@
       </button>
 
       <!-- Search bar -->
-      <app-search-bar [activeQuery]="activeSearchQuery()" (search)="onSearch($event)" class="flex-1"/>
+      <app-search-bar #searchBar [activeQuery]="activeSearchQuery()" (searchChange)="onSearch($event)" class="flex-1"/>
 
       <!-- Settings button -->
       <button
@@ -75,8 +75,8 @@
         aria-label="Raccourcis clavier"
         title="Raccourcis clavier">
         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 3C7.03 3 3 7.03 3 12s4.03 9 9 9 9-4.03 9-9-4.03-9-9-9zm0 16.5c-4.14 0-7.5-3.36-7.5-7.5S7.86 4.5 12 4.5s7.5 3.36 7.5 7.5-3.36 7.5-7.5 7.5z"/>
-          <text x="12" y="16" text-anchor="middle" font-size="12" fill="currentColor" font-weight="bold">?</text>
+          <rect x="3" y="6" width="18" height="12" rx="2.5" stroke-linejoin="round"/>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M7 10h.01M10 10h.01M13 10h.01M16 10h.01M8 14h8"/>
         </svg>
       </button>
     </header>
@@ -90,6 +90,20 @@
   <!-- Compose overlay -->
   @if (showCompose()) {
     <app-compose (close)="showCompose.set(false)"/>
+  }
+
+  <!-- Mobile floating compose button -->
+  @if (isMobile() && !sidebarOpen() && !showCompose()) {
+    <button
+      (click)="openCompose()"
+      class="fixed bottom-6 right-6 z-30 lg:hidden inline-flex h-14 w-14 items-center justify-center rounded-full bg-amber-500 text-white shadow-lg transition-all duration-200 hover:bg-amber-600 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+      type="button"
+      aria-label="Nouveau message"
+      title="Nouveau message">
+      <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+      </svg>
+    </button>
   }
 
   <!-- Settings overlay -->

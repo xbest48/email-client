@@ -8,17 +8,16 @@
 
 <!-- Compose dialog -->
 <div
-  class="fixed z-50 flex flex-col bg-white dark:bg-gray-800 shadow-2xl border border-gray-200 dark:border-gray-700"
-  [class.bottom-0]="!maximized()"
-  [class.right-4]="!maximized()"
+  class="fixed inset-x-0 bottom-0 top-0 z-50 flex flex-col overflow-hidden bg-white shadow-2xl dark:bg-gray-800 md:border md:border-gray-200 md:dark:border-gray-700"
+  [class.md:top-auto]="!maximized()"
+  [class.md:left-auto]="!maximized()"
   [class.md:right-8]="!maximized()"
-  [class.w-full]="!maximized()"
-  [class.max-w-lg]="!maximized()"
-  [class.max-h-[85vh]]="!maximized()"
-  [class.rounded-t-2xl]="!maximized()"
-  [class.inset-4]="maximized()"
+  [class.md:w-full]="!maximized()"
+  [class.md:max-w-lg]="!maximized()"
+  [class.md:max-h-[85vh]]="!maximized()"
+  [class.md:rounded-t-2xl]="!maximized()"
   [class.md:inset-8]="maximized()"
-  [class.rounded-2xl]="maximized()"
+  [class.md:rounded-2xl]="maximized()"
   (dragover)="onDragOver($event)"
   (dragleave)="onDragLeave()"
   (drop)="onDrop($event)"
@@ -40,7 +39,7 @@
 
   <!-- Header -->
   <div class="flex items-center justify-between px-4 py-3 bg-gray-800 dark:bg-gray-900"
-       [class.rounded-t-2xl]="true">
+       [class.md:rounded-t-2xl]="!maximized()">
     <h2 class="text-sm font-semibold text-white">Nouveau message</h2>
     <div class="flex items-center gap-1">
       <!-- Templates -->
@@ -75,7 +74,8 @@
       <!-- Minimize -->
       <button
         (click)="minimized.set(!minimized())"
-        class="p-1 text-gray-300 hover:text-white rounded transition-colors
+        class="hidden p-1 text-gray-300 hover:text-white rounded transition-colors
+               md:inline-flex
                focus:outline-none focus:ring-2 focus:ring-amber-400"
         type="button"
         [attr.aria-label]="minimized() ? 'Agrandir' : 'Minimiser'"
@@ -87,7 +87,8 @@
       <!-- Maximize / Restore -->
       <button
         (click)="toggleMaximize()"
-        class="p-1 text-gray-300 hover:text-white rounded transition-colors
+        class="hidden p-1 text-gray-300 hover:text-white rounded transition-colors
+               md:inline-flex
                focus:outline-none focus:ring-2 focus:ring-amber-400"
         type="button"
         [attr.aria-label]="maximized() ? 'Restaurer' : 'Agrandir en plein ecran'"
@@ -118,11 +119,12 @@
   </div>
 
   @if (!minimized()) {
-    <form (submit)="onSend($event)" class="flex flex-col flex-1 overflow-hidden">
+    <form (submit)="$event.preventDefault(); onSend()" novalidate class="flex min-h-0 flex-col flex-1 overflow-hidden">
       <!-- To with autocomplete -->
       <div class="relative flex items-center border-b border-gray-100 dark:border-gray-700 px-4">
         <label for="compose-to" class="text-sm text-gray-500 w-8 shrink-0">A</label>
         <input
+          #toInput
           id="compose-to"
           type="email"
           [(ngModel)]="to"
@@ -188,6 +190,7 @@
           id="compose-subject"
           type="text"
           [(ngModel)]="subject"
+          (ngModelChange)="sendError.set(null)"
           name="subject"
           class="flex-1 py-2.5 text-sm text-gray-800 dark:text-gray-200 bg-transparent focus:outline-none"
           placeholder="Objet du message">
@@ -217,7 +220,7 @@
       }
 
       <!-- Rich text body with toolbar at bottom -->
-      <div class="flex-1 overflow-hidden flex flex-col">
+      <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
         <app-rich-editor
           #bodyEditor
           placeholder="Ecrivez votre message..."
@@ -230,7 +233,7 @@
       </div>
 
       <!-- Footer -->
-      <div class="flex items-center justify-between px-4 py-2 border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
+      <div class="flex items-center justify-between border-t border-gray-100 bg-gray-50/50 px-4 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] dark:border-gray-700 dark:bg-gray-800/50">
         <div class="flex items-center gap-2">
           <!-- Send button -->
           <button
@@ -246,6 +249,10 @@
               Envoyer
             }
           </button>
+
+          @if (sendError(); as error) {
+            <p class="max-w-60 text-xs text-red-600 dark:text-red-400">{{ error }}</p>
+          }
 
           <!-- Schedule send -->
           <div class="relative">

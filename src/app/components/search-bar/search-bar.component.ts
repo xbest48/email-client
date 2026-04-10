@@ -9,7 +9,7 @@ import { FormsModule } from '@angular/forms';
   styleUrl: './search-bar.component.css',
 })
 export class SearchBarComponent implements OnDestroy {
-  readonly search = output<string>();
+  readonly searchChange = output<string>();
   readonly activeQuery = input('');
 
   readonly searchInput = viewChild<ElementRef<HTMLInputElement>>('searchInput');
@@ -42,31 +42,30 @@ export class SearchBarComponent implements OnDestroy {
     if (this.searchTimeout) clearTimeout(this.searchTimeout);
   }
 
-  onSearch(event: Event): void {
+  preventSubmit(event: Event): void {
     event.preventDefault();
-    if (this.searchTimeout) {
-      clearTimeout(this.searchTimeout);
-      this.searchTimeout = null;
-    }
-    this.search.emit(this.buildQuery());
+  }
+
+  suppressEnter(event: Event): void {
+    event.preventDefault();
   }
 
   onQueryInput(): void {
     if (this.searchTimeout) clearTimeout(this.searchTimeout);
     this.searchTimeout = setTimeout(() => {
-      this.search.emit(this.buildQuery());
+      this.searchChange.emit(this.buildQuery());
       this.searchTimeout = null;
     }, 250);
   }
 
   applyFilters(): void {
     this.showFilters.set(false);
-    this.search.emit(this.buildQuery());
+    this.searchChange.emit(this.buildQuery());
   }
 
   resetFilters(): void {
     this.clearFiltersState();
-    this.search.emit(this.buildQuery());
+    this.searchChange.emit(this.buildQuery());
   }
 
   focusInput(): void {

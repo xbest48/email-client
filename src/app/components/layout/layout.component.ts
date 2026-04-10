@@ -1,4 +1,4 @@
-import { Component, inject, signal, ChangeDetectionStrategy, OnInit, OnDestroy } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy, OnInit, OnDestroy, viewChild } from '@angular/core';
 import { Router, RouterOutlet, NavigationEnd } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { SidebarComponent } from '../sidebar/sidebar.component';
@@ -36,6 +36,7 @@ export class LayoutComponent implements OnInit, OnDestroy {
   readonly showSettings = signal(false);
   readonly showShortcuts = signal(false);
   readonly activeSearchQuery = signal('');
+  readonly searchBar = viewChild(SearchBarComponent);
 
   private shortcutSub?: Subscription;
   private routerSub?: Subscription;
@@ -50,7 +51,7 @@ export class LayoutComponent implements OnInit, OnDestroy {
     this.shortcutSub = this.shortcutService.actions.subscribe((action) => {
       switch (action) {
         case 'compose':
-          this.showCompose.set(true);
+          this.openCompose();
           break;
         case 'closeModal':
           if (this.showShortcuts()) this.showShortcuts.set(false);
@@ -61,7 +62,7 @@ export class LayoutComponent implements OnInit, OnDestroy {
           this.showShortcuts.set(!this.showShortcuts());
           break;
         case 'focusSearch':
-          // The search bar will handle this via its own subscription
+          this.focusSearch();
           break;
       }
     });
@@ -89,6 +90,20 @@ export class LayoutComponent implements OnInit, OnDestroy {
     } else {
       this.router.navigate(target);
     }
+  }
+
+  openCompose(): void {
+    this.showCompose.set(true);
+    if (this.isMobile()) {
+      this.sidebarOpen.set(false);
+    }
+  }
+
+  focusSearch(): void {
+    if (this.isMobile()) {
+      this.sidebarOpen.set(false);
+    }
+    this.searchBar()?.focusInput();
   }
 
   onSignOut(): void {
