@@ -408,11 +408,12 @@
         </svg>
         Marquer comme spam
       </button>
-      <div class="relative">
-        <button type="button" (click)="toggleContextSubmenu('labels')"
+      <div class="relative" (mouseenter)="onLabelsHoverEnter()" (mouseleave)="onLabelsHoverLeave()">
+        <button type="button"
                 class="w-full flex items-center justify-between gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 role="menuitem"
-                [attr.aria-expanded]="contextSubmenu() === 'labels'">
+                [attr.aria-expanded]="contextSubmenu() === 'labels'"
+                [attr.aria-haspopup]="'menu'">
           <span class="flex items-center gap-3 min-w-0">
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" d="M7 7h5l5 5-5 5H7a2 2 0 01-2-2V9a2 2 0 012-2z"/>
