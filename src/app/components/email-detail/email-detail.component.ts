@@ -165,6 +165,14 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     }
   }
 
+  async spam(): Promise<void> {
+    const mail = this.email();
+    if (mail) {
+      await this.emailService.spamEmail(mail);
+      this.goBack();
+    }
+  }
+
   async toggleStar(): Promise<void> {
     const mail = this.email();
     if (mail) {

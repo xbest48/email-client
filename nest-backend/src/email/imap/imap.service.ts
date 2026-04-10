@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, ServiceUnavailableException } from '@nestjs/common';
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 
@@ -11,6 +11,11 @@ export interface EmailCredentials {
   smtpPort: number;
 }
 
+interface EmailReference {
+  folder: string;
+  uid: number;
+}
+
 @Injectable()
 export class ImapService implements OnModuleDestroy {
   private connections = new Map<string, ImapFlow>();
@@ -20,6 +25,16 @@ export class ImapService implements OnModuleDestroy {
 
   private getConnectionKey(credentials: EmailCredentials): string {
     return `${credentials.email}:${credentials.imapHost}:${credentials.imapPort}`;
+  }
+
+  private toConnectionException(err: unknown, credentials: EmailCredentials): ServiceUnavailableException {
+    const code = typeof err === 'object' && err && 'code' in err ? String((err as { code?: unknown }).code ?? '') : '';
+
+    if (code === 'ENOTFOUND') {
+      return new ServiceUnavailableException(`Serveur IMAP introuvable: ${credentials.imapHost}`);
+    }
+
+    return new ServiceUnavailableException('Connexion au serveur email impossible');
   }
 
   private safeLogout(client: ImapFlow | undefined): void {
@@ -121,9 +136,18 @@ export class ImapService implements OnModuleDestroy {
     try {
       return await this.createConnection(credentials, key);
     } catch (err) {
+      const code = typeof err === 'object' && err && 'code' in err ? String((err as { code?: unknown }).code ?? '') : '';
       this.removeConnection(key);
+      if (code === 'ENOTFOUND') {
+        throw this.toConnectionException(err, credentials);
+      }
       // Single retry
-      return await this.createConnection(credentials, key);
+      try {
+        return await this.createConnection(credentials, key);
+      } catch (retryErr) {
+        this.removeConnection(key);
+        throw this.toConnectionException(retryErr, credentials);
+      }
     }
   }
 
@@ -290,6 +314,139 @@ export class ImapService implements OnModuleDestroy {
     } finally {
       this.safeReleaseLock(lock);
     }
+  }
+
+  async fetchFlaggedEmails(credentials: EmailCredentials, page = 1, pageSize = 25, query = '') {
+    const client = await this.getConnection(credentials);
+    const folders = (await client.list()).filter((folder: any) => {
+      if (!folder?.listed || !folder?.path) return false;
+      return !['\\Trash', '\\Drafts'].includes(folder.specialUse || '');
+    });
+
+    const emails: any[] = [];
+
+    for (const folder of folders) {
+      let lock;
+      try {
+        lock = await client.getMailboxLock(folder.path);
+      } catch {
+        continue;
+      }
+
+      try {
+        const flaggedUids: any = await client.search({ flagged: true }, { uid: true });
+        if (!flaggedUids?.length) continue;
+
+        for await (const msg of client.fetch(flaggedUids, {
+          envelope: true,
+          flags: true,
+          bodyStructure: true,
+          uid: true,
+          size: true,
+        }, { uid: true })) {
+          emails.push(this.formatEmailSummary(msg as any, folder.path));
+        }
+      } finally {
+        this.safeReleaseLock(lock);
+      }
+    }
+
+    let filtered = emails;
+    const normalizedQuery = query.trim().toLowerCase();
+    if (normalizedQuery) {
+      filtered = emails.filter((email) => {
+        const haystack = [
+          email.subject || '',
+          email.from?.name || '',
+          email.from?.email || '',
+          ...(email.to || []).flatMap((recipient: any) => [recipient.name || '', recipient.email || '']),
+        ].join(' ').toLowerCase();
+        return haystack.includes(normalizedQuery);
+      });
+    }
+
+    filtered.sort((a, b) => {
+      const da = a.date ? new Date(a.date).getTime() : 0;
+      const db = b.date ? new Date(b.date).getTime() : 0;
+      return db - da;
+    });
+
+    const total = filtered.length;
+    const start = Math.max((page - 1) * pageSize, 0);
+    const end = start + pageSize;
+
+    return {
+      emails: filtered.slice(start, end),
+      total,
+      page,
+      pageSize,
+    };
+  }
+
+  async fetchEmailsByReferences(credentials: EmailCredentials, references: EmailReference[], page = 1, pageSize = 25, query = '') {
+    const client = await this.getConnection(credentials);
+    const emails: any[] = [];
+    const grouped = new Map<string, number[]>();
+
+    for (const ref of references) {
+      const uids = grouped.get(ref.folder) || [];
+      uids.push(ref.uid);
+      grouped.set(ref.folder, uids);
+    }
+
+    for (const [folder, uids] of grouped.entries()) {
+      let lock;
+      try {
+        lock = await client.getMailboxLock(folder);
+      } catch {
+        continue;
+      }
+
+      try {
+        for await (const msg of client.fetch(uids, {
+          envelope: true,
+          flags: true,
+          bodyStructure: true,
+          uid: true,
+          size: true,
+        }, { uid: true })) {
+          emails.push(this.formatEmailSummary(msg as any, folder));
+        }
+      } finally {
+        this.safeReleaseLock(lock);
+      }
+    }
+
+    let filtered = emails;
+    const normalizedQuery = query.trim().toLowerCase();
+    if (normalizedQuery) {
+      filtered = emails.filter((email) => {
+        const haystack = [
+          email.subject || '',
+          email.from?.name || '',
+          email.from?.email || '',
+          ...(email.to || []).flatMap((recipient: any) => [recipient.name || '', recipient.email || '']),
+        ].join(' ').toLowerCase();
+        return haystack.includes(normalizedQuery);
+      });
+    }
+
+    filtered.sort((a, b) => {
+      const da = a.date ? new Date(a.date).getTime() : 0;
+      const db = b.date ? new Date(b.date).getTime() : 0;
+      return db - da;
+    });
+
+    const total = filtered.length;
+    const start = Math.max((page - 1) * pageSize, 0);
+    const end = start + pageSize;
+
+    return {
+      emails: filtered.slice(start, end),
+      total,
+      page,
+      pageSize,
+    };
   }
 
   async fetchEmail(credentials: EmailCredentials, folder: string, uid: number) {

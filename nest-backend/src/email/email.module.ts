@@ -6,9 +6,10 @@ import { AccountsModule } from '../accounts/accounts.module';
 import { ContactsModule } from '../contacts/contacts.module';
 import { UsersModule } from '../users/users.module';
 import { forwardRef } from '@nestjs/common';
+import { LabelsModule } from '../labels/labels.module';
 
 @Module({
-  imports: [forwardRef(() => AccountsModule), ContactsModule, UsersModule],
+  imports: [forwardRef(() => AccountsModule), ContactsModule, UsersModule, LabelsModule],
   providers: [ImapService, SmtpService],
   controllers: [EmailController],
   exports: [ImapService, SmtpService],
