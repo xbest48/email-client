@@ -158,6 +158,7 @@ export class EmailListComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.shortcutSub?.unsubscribe();
+    this.clearLabelsSubmenuTimers();
   }
 
   refresh(): void {
@@ -319,6 +320,7 @@ export class EmailListComponent implements OnInit, OnDestroy {
   }
 
   closeContextMenu(): void {
+    this.clearLabelsSubmenuTimers();
     this.contextMenu.set(null);
     this.contextSubmenu.set(null);
     this.contextEmailLabelIds.set(new Set());
@@ -327,6 +329,46 @@ export class EmailListComponent implements OnInit, OnDestroy {
 
   toggleContextSubmenu(menu: 'labels'): void {
     this.contextSubmenu.update((current) => current === menu ? null : menu);
+  }
+
+  private labelsSubmenuOpenTimer: ReturnType<typeof setTimeout> | null = null;
+  private labelsSubmenuCloseTimer: ReturnType<typeof setTimeout> | null = null;
+
+  onLabelsHoverEnter(): void {
+    if (this.labelsSubmenuCloseTimer !== null) {
+      clearTimeout(this.labelsSubmenuCloseTimer);
+      this.labelsSubmenuCloseTimer = null;
+    }
+    if (this.contextSubmenu() === 'labels') return;
+    if (this.labelsSubmenuOpenTimer !== null) clearTimeout(this.labelsSubmenuOpenTimer);
+    this.labelsSubmenuOpenTimer = setTimeout(() => {
+      this.contextSubmenu.set('labels');
+      this.labelsSubmenuOpenTimer = null;
+    }, 1000);
+  }
+
+  onLabelsHoverLeave(): void {
+    if (this.labelsSubmenuOpenTimer !== null) {
+      clearTimeout(this.labelsSubmenuOpenTimer);
+      this.labelsSubmenuOpenTimer = null;
+    }
+    if (this.contextSubmenu() !== 'labels') return;
+    if (this.labelsSubmenuCloseTimer !== null) clearTimeout(this.labelsSubmenuCloseTimer);
+    this.labelsSubmenuCloseTimer = setTimeout(() => {
+      this.contextSubmenu.set(null);
+      this.labelsSubmenuCloseTimer = null;
+    }, 200);
+  }
+
+  private clearLabelsSubmenuTimers(): void {
+    if (this.labelsSubmenuOpenTimer !== null) {
+      clearTimeout(this.labelsSubmenuOpenTimer);
+      this.labelsSubmenuOpenTimer = null;
+    }
+    if (this.labelsSubmenuCloseTimer !== null) {
+      clearTimeout(this.labelsSubmenuCloseTimer);
+      this.labelsSubmenuCloseTimer = null;
+    }
   }
 
   openMobileActionMenu(event: MouseEvent, email: Email): void {
