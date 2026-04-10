@@ -14,6 +14,9 @@ export interface UserProfile {
   imagePolicy?: ImagePolicy;
   imageAllowedDomains?: string[];
   imageBlockedDomains?: string[];
+  hasOpenAiApiKey?: boolean;
+  openAiApiKey?: string;
+  isAiEnabled?: boolean;
 }
 
 export interface LoginCredentials {

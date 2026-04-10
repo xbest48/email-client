@@ -33,27 +33,68 @@
     <ul class="space-y-0.5" role="list">
       @for (item of navItems(); track item.route) {
         <li>
-          <a
-            [routerLink]="[item.route]"
+          <div
             routerLinkActive="bg-amber-100/70 dark:bg-amber-500/20 text-amber-900 dark:text-amber-200 font-semibold"
-            class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-amber-500/10
-                   transition-colors duration-150 text-sm group"
+            class="flex items-center gap-1 rounded-xl text-sm group"
             [class.ring-2]="dragOverFolder() === item.folderPath"
             [class.ring-amber-400]="dragOverFolder() === item.folderPath"
             [class.bg-amber-50]="dragOverFolder() === item.folderPath"
             (dragover)="onDragOver($event, item.folderPath)"
             (dragleave)="onDragLeave()"
-            (drop)="onDrop($event, item.folderPath)"
-            [attr.aria-current]="null">
-            <span class="text-lg" [innerHTML]="item.icon" aria-hidden="true"></span>
-            <span class="flex-1">{{ item.label }}</span>
-            @if (getUnreadCount(item.folderPath); as count) {
-              <span class="text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full"
-                    [attr.aria-label]="count + ' non lus'">
-                {{ count }}
-              </span>
+            (drop)="onDrop($event, item.folderPath)">
+            <a
+              [routerLink]="[item.route]"
+              class="flex min-w-0 flex-1 items-center gap-3 px-4 py-2.5 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-amber-500/10
+                     transition-colors duration-150"
+              [attr.aria-current]="null">
+              <span class="text-lg" [innerHTML]="item.icon" aria-hidden="true"></span>
+              <span class="flex-1 truncate">{{ item.label }}</span>
+              @if (getUnreadCount(item.folderPath); as count) {
+                <span class="text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full"
+                      [attr.aria-label]="count + ' non lus'">
+                  {{ count }}
+                </span>
+              }
+            </a>
+            @if (item.folderPath) {
+              <button
+                type="button"
+                (click)="downloadFolderArchive(item.folderPath, item.label, $event)"
+                class="mr-2 shrink-0 rounded-lg p-1.5 text-gray-400 opacity-0 transition-all duration-150 hover:bg-gray-100 hover:text-amber-600 group-hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:opacity-100 disabled:cursor-default"
+                [disabled]="downloadingFolders().has(item.folderPath)"
+                aria-label="Telecharger l'archive du dossier"
+                title="Telecharger l'archive du dossier">
+                @if (downloadingFolders().has(item.folderPath)) {
+                  @if (downloadProgress().get(item.folderPath); as progress) {
+                    <div class="relative h-4 w-4">
+                      <svg class="h-4 w-4 -rotate-90 text-amber-600" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                        <circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="2" class="opacity-20"></circle>
+                        <circle
+                          cx="10"
+                          cy="10"
+                          r="7"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          [attr.stroke-dasharray]="43.98"
+                          [attr.stroke-dashoffset]="43.98 - (43.98 * progress / 100)">
+                        </circle>
+                      </svg>
+                    </div>
+                  } @else {
+                    <svg class="h-4 w-4 animate-spin text-amber-600" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+                      <path class="opacity-90" fill="currentColor" d="M22 12a10 10 0 00-10-10v3a7 7 0 017 7h3z"></path>
+                    </svg>
+                  }
+                } @else {
+                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v1a2 2 0 002 2h12a2 2 0 002-2v-1"/>
+                  </svg>
+                }
+              </button>
             }
-          </a>
+          </div>
         </li>
       }
     </ul>
@@ -177,11 +218,9 @@
         <ul class="space-y-0.5" role="list">
           @for (folder of customFolders(); track folder.path) {
             <li>
-              <a
-                [routerLink]="['/folder', folder.path]"
+              <div
                 routerLinkActive="bg-amber-100/70 dark:bg-amber-500/20 text-amber-900 dark:text-amber-200 font-semibold"
-                class="flex items-center gap-3 px-4 py-2 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-amber-500/10
-                       transition-colors duration-150 text-sm"
+                class="flex items-center gap-1 rounded-xl text-sm group"
                 [class.ring-2]="dragOverFolder() === folder.path"
                 [class.ring-amber-400]="dragOverFolder() === folder.path"
                 [class.bg-amber-50]="dragOverFolder() === folder.path"
@@ -189,16 +228,57 @@
                 (dragleave)="onDragLeave()"
                 (drop)="onDrop($event, folder.path)"
                 (contextmenu)="onFolderContextMenu($event, folder)">
-                <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24"
-                     stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round"
-                        d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
-                </svg>
-                <span class="flex-1 truncate">{{ folder.name }}</span>
-                @if (getUnreadCount(folder.path); as count) {
-                  <span class="text-xs text-gray-500">{{ count }}</span>
-                }
-              </a>
+                <a
+                  [routerLink]="['/folder', folder.path]"
+                  class="flex min-w-0 flex-1 items-center gap-3 px-4 py-2 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-amber-500/10
+                         transition-colors duration-150">
+                  <svg class="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24"
+                       stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+                  </svg>
+                  <span class="flex-1 truncate">{{ folder.name }}</span>
+                  @if (getUnreadCount(folder.path); as count) {
+                    <span class="text-xs text-gray-500">{{ count }}</span>
+                  }
+                </a>
+                <button
+                  type="button"
+                  (click)="downloadFolderArchive(folder.path, folder.name, $event)"
+                  class="mr-2 shrink-0 rounded-lg p-1.5 text-gray-400 opacity-0 transition-all duration-150 hover:bg-gray-100 hover:text-amber-600 group-hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:opacity-100 disabled:cursor-default"
+                  [disabled]="downloadingFolders().has(folder.path)"
+                  aria-label="Telecharger l'archive du dossier"
+                  title="Telecharger l'archive du dossier">
+                  @if (downloadingFolders().has(folder.path)) {
+                    @if (downloadProgress().get(folder.path); as progress) {
+                      <div class="relative h-4 w-4">
+                        <svg class="h-4 w-4 -rotate-90 text-amber-600" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                          <circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="2" class="opacity-20"></circle>
+                          <circle
+                            cx="10"
+                            cy="10"
+                            r="7"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            [attr.stroke-dasharray]="43.98"
+                            [attr.stroke-dashoffset]="43.98 - (43.98 * progress / 100)">
+                          </circle>
+                        </svg>
+                      </div>
+                    } @else {
+                      <svg class="h-4 w-4 animate-spin text-amber-600" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+                        <path class="opacity-90" fill="currentColor" d="M22 12a10 10 0 00-10-10v3a7 7 0 017 7h3z"></path>
+                      </svg>
+                    }
+                  } @else {
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v1a2 2 0 002 2h12a2 2 0 002-2v-1"/>
+                    </svg>
+                  }
+                </button>
+              </div>
             </li>
           }
 
@@ -248,6 +328,17 @@
     aria-label="Actions sur le dossier">
     <button
       type="button"
+      (click)="downloadFolderArchive(menu.folder.path, menu.folder.name)"
+      class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors
+             focus:outline-none focus:bg-gray-50"
+      role="menuitem">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v1a2 2 0 002 2h12a2 2 0 002-2v-1"/>
+      </svg>
+      Telecharger l'archive
+    </button>
+    <button
+      type="button"
       (click)="deleteFolder(menu.folder)"
       class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors
              focus:outline-none focus:bg-red-50"
@@ -257,5 +348,36 @@
       </svg>
       Supprimer le dossier
     </button>
+  </div>
+}
+
+@if (toasts().length > 0) {
+  <div class="fixed bottom-6 right-6 z-50 flex max-w-sm flex-col gap-2">
+    @for (toast of toasts(); track toast.id) {
+      <div
+        class="rounded-xl border px-4 py-3 text-sm shadow-lg backdrop-blur-sm"
+        [class.bg-sky-50]="toast.type === 'info'"
+        [class.border-sky-200]="toast.type === 'info'"
+        [class.text-sky-900]="toast.type === 'info'"
+        [class.bg-emerald-50]="toast.type === 'success'"
+        [class.border-emerald-200]="toast.type === 'success'"
+        [class.text-emerald-900]="toast.type === 'success'"
+        [class.bg-red-50]="toast.type === 'error'"
+        [class.border-red-200]="toast.type === 'error'"
+        [class.text-red-900]="toast.type === 'error'">
+        <div class="flex items-start gap-3">
+          <div class="flex-1">{{ toast.message }}</div>
+          <button
+            type="button"
+            (click)="dismissToast(toast.id)"
+            class="rounded p-0.5 opacity-70 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-amber-400"
+            aria-label="Fermer l'alerte">
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    }
   </div>
 }

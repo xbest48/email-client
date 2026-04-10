@@ -22,6 +22,7 @@ import { ContactsModule } from './contacts/contacts.module';
 import { Contact } from './contacts/contact.entity';
 import { PgpModule } from './pgp/pgp.module';
 import { PgpKey, PgpContactKey } from './pgp/pgp-key.entity';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { PgpKey, PgpContactKey } from './pgp/pgp-key.entity';
     ScheduledModule,
     ContactsModule,
     PgpModule,
+    AiModule,
   ],
   controllers: [AppController],
   providers: [AppService],

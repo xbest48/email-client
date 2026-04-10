@@ -22,6 +22,25 @@ export class ImapService implements OnModuleDestroy {
     return `${credentials.email}:${credentials.imapHost}:${credentials.imapPort}`;
   }
 
+  private safeLogout(client: ImapFlow | undefined): void {
+    if (!client) return;
+    try {
+      if (!client.usable) return;
+      void client.logout().catch(() => {});
+    } catch {
+      // Ignore "Connection not available" and similar shutdown races
+    }
+  }
+
+  private safeReleaseLock(lock: { release: () => void } | undefined): void {
+    if (!lock) return;
+    try {
+      lock.release();
+    } catch {
+      // Ignore release failures when the IMAP connection has already been closed
+    }
+  }
+
   private resetIdleTimer(key: string): void {
     const existing = this.idleTimers.get(key);
     if (existing) clearTimeout(existing);
@@ -29,7 +48,7 @@ export class ImapService implements OnModuleDestroy {
     this.idleTimers.set(key, setTimeout(() => {
       const client = this.connections.get(key);
       if (client) {
-        client.logout().catch(() => {});
+        this.safeLogout(client);
         this.connections.delete(key);
       }
       this.idleTimers.delete(key);
@@ -38,9 +57,7 @@ export class ImapService implements OnModuleDestroy {
 
   private removeConnection(key: string): void {
     const client = this.connections.get(key);
-    if (client) {
-      client.logout().catch(() => {});
-    }
+    this.safeLogout(client);
     this.connections.delete(key);
     const timer = this.idleTimers.get(key);
     if (timer) {
@@ -73,6 +90,11 @@ export class ImapService implements OnModuleDestroy {
 
     client.on('close', () => {
       this.connections.delete(key);
+      const timer = this.idleTimers.get(key);
+      if (timer) {
+        clearTimeout(timer);
+        this.idleTimers.delete(key);
+      }
     });
 
     await client.connect();
@@ -191,7 +213,47 @@ export class ImapService implements OnModuleDestroy {
 
       return { emails, total, page, pageSize };
     } finally {
-      lock.release();
+      this.safeReleaseLock(lock);
+    }
+  }
+
+  async exportFolderAsMbox(credentials: EmailCredentials, folder: string): Promise<Buffer> {
+    const client = await this.getConnection(credentials);
+
+    let lock;
+    try {
+      lock = await client.getMailboxLock(folder);
+    } catch {
+      return Buffer.from('');
+    }
+
+    try {
+      const mailbox = client.mailbox as any;
+      const total = mailbox?.exists || 0;
+      if (total === 0) return Buffer.from('');
+
+      const chunks: Buffer[] = [];
+
+      for await (const msg of client.fetch('1:*', {
+        envelope: true,
+        source: true,
+        internalDate: true,
+      })) {
+        const fromAddress = msg.envelope?.from?.[0]?.address || credentials.email || 'unknown@example.com';
+        const messageDate = msg.internalDate instanceof Date
+          ? msg.internalDate.toUTCString()
+          : new Date().toUTCString();
+        const source = Buffer.isBuffer(msg.source) ? msg.source : Buffer.from(msg.source || '');
+        const normalized = source.toString('utf8').replace(/\r?\n/g, '\n').replace(/\nFrom /g, '\n>From ');
+        const header = `From ${fromAddress} ${messageDate}\n`;
+        chunks.push(Buffer.from(header, 'utf8'));
+        chunks.push(Buffer.from(normalized, 'utf8'));
+        chunks.push(Buffer.from('\n\n', 'utf8'));
+      }
+
+      return Buffer.concat(chunks);
+    } finally {
+      this.safeReleaseLock(lock);
     }
   }
 
@@ -226,7 +288,7 @@ export class ImapService implements OnModuleDestroy {
       emails.reverse();
       return { emails, total: results.length };
     } finally {
-      lock.release();
+      this.safeReleaseLock(lock);
     }
   }
 
@@ -273,7 +335,7 @@ export class ImapService implements OnModuleDestroy {
         readReceiptTo: (parsed.headers?.get('disposition-notification-to') as string) || '',
       };
     } finally {
-      lock.release();
+      this.safeReleaseLock(lock);
     }
   }
 
@@ -301,7 +363,7 @@ export class ImapService implements OnModuleDestroy {
         content: att.content,
       };
     } finally {
-      lock.release();
+      this.safeReleaseLock(lock);
     }
   }
 
@@ -414,7 +476,7 @@ export class ImapService implements OnModuleDestroy {
 
       return threadEmails;
     } finally {
-      lock.release();
+      this.safeReleaseLock(lock);
     }
   }
 
@@ -429,7 +491,7 @@ export class ImapService implements OnModuleDestroy {
         await client.messageFlagsRemove(uid, [flag], { uid: true });
       }
     } finally {
-      lock.release();
+      this.safeReleaseLock(lock);
     }
   }
 
@@ -454,7 +516,7 @@ export class ImapService implements OnModuleDestroy {
         await client.messageFlagsAdd(uid, ['\\Deleted'], { uid: true });
         await client.messageDelete(uid, { uid: true });
       } finally {
-        lock.release();
+        this.safeReleaseLock(lock);
       }
     }
   }
@@ -540,7 +602,7 @@ export class ImapService implements OnModuleDestroy {
       await client.messageFlagsAdd(uids, ['\\Deleted'], { uid: true });
       await client.messageDelete(uids, { uid: true });
     } finally {
-      lock.release();
+      this.safeReleaseLock(lock);
     }
   }
 

@@ -12,6 +12,7 @@ import { PgpService } from '../../services/pgp.service';
 import { KeyboardShortcutService } from '../../services/keyboard-shortcut.service';
 import { SandboxedHtmlDirective } from '../../directives/sandboxed-html.directive';
 import { SettingsService } from '../../services/settings.service';
+import { AiService } from '../../services/ai.service';
 import { RichEditorComponent } from '../rich-editor/rich-editor.component';
 
 @Component({
@@ -32,6 +33,7 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
   protected readonly settingsService = inject(SettingsService);
   private readonly shortcutService = inject(KeyboardShortcutService);
   private readonly sanitizer = inject(DomSanitizer);
+  private readonly aiService = inject(AiService);
 
   readonly email = signal<Email | null>(null);
   readonly showReply = signal(false);
@@ -49,6 +51,16 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
   readonly readReceiptDismissed = signal(false);
   readonly customSnoozeDate = signal('');
   readonly previewAttachment = signal<{ url: string; mimeType: string; filename: string } | null>(null);
+
+  // AI Signals
+  readonly showAiMenu = signal(false);
+  readonly aiLoading = signal(false);
+  readonly aiSummary = signal<string | null>(null);
+  readonly aiReplies = signal<string[]>([]);
+  readonly aiActionItems = signal<string[]>([]);
+  readonly aiPhishing = signal<{ level: 'low' | 'medium' | 'high'; reason: string } | null>(null);
+  readonly aiCategory = signal<string | null>(null);
+
   readonly trustedPreviewUrl = computed<SafeResourceUrl | null>(() => {
     const preview = this.previewAttachment();
     if (!preview) return null;
@@ -323,6 +335,115 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     if (bytes < 1024) return `${bytes} o`;
     if (bytes < 1048576) return `${Math.round(bytes / 1024)} Ko`;
     return `${(bytes / 1048576).toFixed(1)} Mo`;
+  }
+
+  // AI Methods
+  private getEmailText(): string {
+    const mail = this.email();
+    if (!mail) return '';
+    if (mail.body) return mail.body;
+    // Basic HTML to text if body is missing
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = mail.htmlBody || '';
+    return tempDiv.textContent || tempDiv.innerText || '';
+  }
+
+  async summarize(): Promise<void> {
+    this.showAiMenu.set(false);
+    const content = this.getEmailText();
+    if (!content) return;
+    this.aiLoading.set(true);
+    try {
+      const summary = await this.aiService.summarize(content);
+      this.aiSummary.set(summary);
+    } catch (e) {
+      console.error('Failed to summarize', e);
+      alert('Erreur lors du résumé IA.');
+    } finally {
+      this.aiLoading.set(false);
+    }
+  }
+
+  async generateReplies(): Promise<void> {
+    this.showAiMenu.set(false);
+    const content = this.getEmailText();
+    if (!content) return;
+    this.aiLoading.set(true);
+    try {
+      const replies = await this.aiService.reply(content);
+      this.aiReplies.set(replies);
+    } catch (e) {
+      console.error('Failed to generate replies', e);
+      alert('Erreur lors de la génération des réponses.');
+    } finally {
+      this.aiLoading.set(false);
+    }
+  }
+
+  applyReply(text: string): void {
+    this.aiReplies.set([]);
+    this.replyBody.set(text);
+    this.showReply.set(true);
+    setTimeout(() => {
+      const editor = this.replyEditor();
+      if (editor) editor.setHtml(text);
+    }, 100);
+  }
+
+  async extractActions(): Promise<void> {
+    this.showAiMenu.set(false);
+    const content = this.getEmailText();
+    if (!content) return;
+    this.aiLoading.set(true);
+    try {
+      const actions = await this.aiService.extract(content);
+      this.aiActionItems.set(actions);
+    } catch (e) {
+      console.error('Failed to extract actions', e);
+      alert('Erreur lors de l\'extraction.');
+    } finally {
+      this.aiLoading.set(false);
+    }
+  }
+
+  async detectPhishing(): Promise<void> {
+    this.showAiMenu.set(false);
+    const content = this.getEmailText();
+    if (!content) return;
+    this.aiLoading.set(true);
+    try {
+      const result = await this.aiService.phishing(content);
+      this.aiPhishing.set(result);
+    } catch (e) {
+      console.error('Failed to detect phishing', e);
+      alert('Erreur lors de l\'analyse.');
+    } finally {
+      this.aiLoading.set(false);
+    }
+  }
+
+  async categorize(): Promise<void> {
+    this.showAiMenu.set(false);
+    const content = this.getEmailText();
+    if (!content) return;
+    this.aiLoading.set(true);
+    try {
+      const category = await this.aiService.categorize(content);
+      this.aiCategory.set(category);
+    } catch (e) {
+      console.error('Failed to categorize', e);
+      alert('Erreur lors de la catégorisation.');
+    } finally {
+      this.aiLoading.set(false);
+    }
+  }
+
+  dismissAiResult(type: 'summary' | 'replies' | 'actions' | 'phishing' | 'category'): void {
+    if (type === 'summary') this.aiSummary.set(null);
+    if (type === 'replies') this.aiReplies.set([]);
+    if (type === 'actions') this.aiActionItems.set([]);
+    if (type === 'phishing') this.aiPhishing.set(null);
+    if (type === 'category') this.aiCategory.set(null);
   }
 
 }

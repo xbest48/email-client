@@ -1,5 +1,5 @@
 import { Component, inject, signal, ChangeDetectionStrategy, OnInit, OnDestroy } from '@angular/core';
-import { Router, RouterOutlet } from '@angular/router';
+import { Router, RouterOutlet, NavigationEnd } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { SidebarComponent } from '../sidebar/sidebar.component';
 import { SearchBarComponent } from '../search-bar/search-bar.component';
@@ -35,8 +35,10 @@ export class LayoutComponent implements OnInit, OnDestroy {
   readonly showCompose = signal(false);
   readonly showSettings = signal(false);
   readonly showShortcuts = signal(false);
+  readonly activeSearchQuery = signal('');
 
   private shortcutSub?: Subscription;
+  private routerSub?: Subscription;
 
   ngOnInit(): void {
     this.emailService.fetchFolders();
@@ -63,17 +65,26 @@ export class LayoutComponent implements OnInit, OnDestroy {
           break;
       }
     });
+
+    this.syncSearchStateFromUrl(this.router.url);
+    this.routerSub = this.router.events.subscribe((event) => {
+      if (event instanceof NavigationEnd) {
+        this.syncSearchStateFromUrl(event.urlAfterRedirects);
+      }
+    });
   }
 
   ngOnDestroy(): void {
     this.shortcutSub?.unsubscribe();
+    this.routerSub?.unsubscribe();
   }
 
   onSearch(query: string): void {
+    const target = this.resolveSearchTargetRoute();
     if (query) {
-      this.router.navigate(['/inbox'], { queryParams: { q: query } });
+      this.router.navigate(target, { queryParams: { q: query } });
     } else {
-      this.router.navigate(['/inbox']);
+      this.router.navigate(target);
     }
   }
 
@@ -90,5 +101,29 @@ export class LayoutComponent implements OnInit, OnDestroy {
     if (this.isMobile()) {
       this.sidebarOpen.set(false);
     }
+  }
+
+  private syncSearchStateFromUrl(url: string): void {
+    const parsed = this.router.parseUrl(url);
+    this.activeSearchQuery.set(parsed.queryParams['q'] ?? '');
+  }
+
+  private resolveSearchTargetRoute(): string[] {
+    const parsed = this.router.parseUrl(this.router.url);
+    const segments = parsed.root.children['primary']?.segments.map((segment) => segment.path) ?? [];
+
+    if (segments[0] === 'folder' && segments[1]) {
+      return ['/folder', segments[1]];
+    }
+
+    if (segments[0] === 'email' && segments[1]) {
+      return ['/folder', segments[1]];
+    }
+
+    if (segments[0]) {
+      return ['/', segments[0]];
+    }
+
+    return ['/inbox'];
   }
 }

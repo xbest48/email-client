@@ -1,4 +1,4 @@
-import { Component, output, signal, ChangeDetectionStrategy, ElementRef, viewChild } from '@angular/core';
+import { Component, output, signal, ChangeDetectionStrategy, ElementRef, viewChild, OnDestroy, input, effect } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 @Component({
@@ -8,8 +8,9 @@ import { FormsModule } from '@angular/forms';
   templateUrl: './search-bar.component.html',
   styleUrl: './search-bar.component.css',
 })
-export class SearchBarComponent {
+export class SearchBarComponent implements OnDestroy {
   readonly search = output<string>();
+  readonly activeQuery = input('');
 
   readonly searchInput = viewChild<ElementRef<HTMLInputElement>>('searchInput');
 
@@ -24,15 +25,38 @@ export class SearchBarComponent {
   readonly filterBefore = signal('');
   readonly filterMinSize = signal('');
   readonly filterMaxSize = signal('');
+  private searchTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  constructor() {
+    effect(() => {
+      const activeQuery = this.activeQuery();
+      this.query.set(activeQuery);
+
+      if (!activeQuery) {
+        this.clearFiltersState();
+      }
+    });
+  }
+
+  ngOnDestroy(): void {
+    if (this.searchTimeout) clearTimeout(this.searchTimeout);
+  }
 
   onSearch(event: Event): void {
     event.preventDefault();
+    if (this.searchTimeout) {
+      clearTimeout(this.searchTimeout);
+      this.searchTimeout = null;
+    }
     this.search.emit(this.buildQuery());
   }
 
-  clearSearch(): void {
-    this.query.set('');
-    this.search.emit('');
+  onQueryInput(): void {
+    if (this.searchTimeout) clearTimeout(this.searchTimeout);
+    this.searchTimeout = setTimeout(() => {
+      this.search.emit(this.buildQuery());
+      this.searchTimeout = null;
+    }, 250);
   }
 
   applyFilters(): void {
@@ -41,15 +65,8 @@ export class SearchBarComponent {
   }
 
   resetFilters(): void {
-    this.filterFrom.set('');
-    this.filterTo.set('');
-    this.filterSubject.set('');
-    this.filterHasAttachment.set(false);
-    this.filterUnread.set(false);
-    this.filterAfter.set('');
-    this.filterBefore.set('');
-    this.filterMinSize.set('');
-    this.filterMaxSize.set('');
+    this.clearFiltersState();
+    this.search.emit(this.buildQuery());
   }
 
   focusInput(): void {
@@ -77,5 +94,17 @@ export class SearchBarComponent {
     const maxSize = this.filterMaxSize();
     if (maxSize) parts.push(`smaller:${maxSize}`);
     return parts.join(' ');
+  }
+
+  private clearFiltersState(): void {
+    this.filterFrom.set('');
+    this.filterTo.set('');
+    this.filterSubject.set('');
+    this.filterHasAttachment.set(false);
+    this.filterUnread.set(false);
+    this.filterAfter.set('');
+    this.filterBefore.set('');
+    this.filterMinSize.set('');
+    this.filterMaxSize.set('');
   }
 }

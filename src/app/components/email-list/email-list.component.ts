@@ -103,7 +103,13 @@ export class EmailListComponent implements OnInit, OnDestroy {
       if (qp['q']) {
         this.currentQuery = qp['q'];
         this.title.set('Resultats : ' + qp['q']);
-        this.emailService.fetchEmails(this.currentFolder, this.currentQuery);
+        void this.emailService.fetchEmails(this.currentFolder, this.currentQuery);
+      } else if (this.currentQuery) {
+        this.currentQuery = '';
+        const routeLabel = this.route.snapshot.params['label'] ?? 'inbox';
+        const routeFolder = this.route.snapshot.params['folder'];
+        this.title.set(routeFolder ?? FOLDER_TITLES[routeLabel] ?? routeLabel);
+        void this.emailService.fetchEmails(this.currentFolder, '');
       }
     });
 

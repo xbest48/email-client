@@ -39,6 +39,9 @@ export class SidebarComponent {
   readonly newFolderName = signal('');
   readonly contextMenu = signal<{ x: number; y: number; folder: ImapFolder } | null>(null);
   readonly dragOverFolder = signal<string | null>(null);
+  readonly downloadingFolders = signal<Set<string>>(new Set());
+  readonly downloadProgress = signal<Map<string, number | null>>(new Map());
+  readonly toasts = signal<Array<{ id: string; type: 'info' | 'success' | 'error'; message: string }>>([]);
 
   readonly defaultNavItems: NavItem[] = [
     { label: 'Boite de reception', icon: '&#128229;', route: '/inbox', folderPath: 'INBOX', specialUse: '\\Inbox' },
@@ -98,6 +101,62 @@ export class SidebarComponent {
         console.error('Failed to delete folder', err);
       }
     }
+  }
+
+  async downloadFolderArchive(folderPath: string, folderName: string, event?: Event): Promise<void> {
+    event?.preventDefault();
+    event?.stopPropagation();
+    if (this.downloadingFolders().has(folderPath)) return;
+
+    this.downloadingFolders.update((folders) => new Set(folders).add(folderPath));
+    this.downloadProgress.update((progress) => {
+      const next = new Map(progress);
+      next.set(folderPath, null);
+      return next;
+    });
+    const startToastId = this.showToast('info', `Telechargement de "${folderName}" en cours...`);
+
+    try {
+      await this.emailService.downloadFolderArchive(folderPath, `${folderName}.mbox`, (progress) => {
+        this.downloadProgress.update((current) => {
+          const next = new Map(current);
+          next.set(folderPath, progress);
+          return next;
+        });
+      });
+      this.dismissToast(startToastId);
+      this.showToast('success', `Archive de "${folderName}" telechargee.`);
+    } catch (err) {
+      console.error('Failed to download folder archive', err);
+      this.dismissToast(startToastId);
+      this.showToast('error', `Echec du telechargement de "${folderName}".`);
+    } finally {
+      this.downloadingFolders.update((folders) => {
+        const next = new Set(folders);
+        next.delete(folderPath);
+        return next;
+      });
+      this.downloadProgress.update((progress) => {
+        const next = new Map(progress);
+        next.delete(folderPath);
+        return next;
+      });
+    }
+  }
+
+  dismissToast(id: string): void {
+    this.toasts.update((items) => items.filter((item) => item.id !== id));
+  }
+
+  private showToast(type: 'info' | 'success' | 'error', message: string): string {
+    const id = Math.random().toString(36).slice(2, 10);
+    this.toasts.update((items) => [...items, { id, type, message }]);
+
+    setTimeout(() => {
+      this.dismissToast(id);
+    }, type === 'info' ? 8000 : 5000);
+
+    return id;
   }
 
   onDragOver(event: DragEvent, folderPath: string): void {

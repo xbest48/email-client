@@ -40,6 +40,7 @@
     "imapflow": "^1.2.18",
     "mailparser": "^3.9.6",
     "nodemailer": "^8.0.4",
+    "openai": "^6.34.0",
     "openpgp": "^6.3.0",
     "playwright": "^1.59.1",
     "qrcode": "^1.5.4",
