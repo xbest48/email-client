@@ -1,3 +1,5 @@
+import { environment } from '../../environments/environment';
+import { HttpClient } from '@angular/common/http';
 import { Component, inject, signal, computed, output, ChangeDetectionStrategy, viewChild, ElementRef, afterNextRender } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { SettingsService, EmailSignature, EmailTemplate } from '../../services/settings.service';
@@ -10,7 +12,7 @@ import { SandboxedHtmlDirective } from '../../directives/sandboxed-html.directiv
 import * as QRCode from 'qrcode';
 import { startRegistration } from '@simplewebauthn/browser';
 
-type SettingsTab = 'accounts' | 'signatures' | 'security' | 'general' | 'labels' | 'filters' | 'templates' | 'privacy';
+type SettingsTab = 'accounts' | 'signatures' | 'security' | 'general' | 'labels' | 'filters' | 'templates' | 'privacy' | 'ai';
 
 @Component({
   selector: 'app-settings',
@@ -52,6 +54,8 @@ export class SettingsComponent {
   readonly pageSize = signal(this.settingsService.pageSize);
   readonly accentPresetColors = ['#403d84', '#ffd200', '#b6d0f2', '#ffcbba', '#c6ebc5', '#ffbacd'];
   readonly selectedAccentColor = signal(this.settingsService.accentColor);
+  readonly openAiApiKey = signal('');
+  readonly savingAiSettings = signal(false);
   readonly customAccentColor = signal(this.settingsService.accentColor);
   readonly darkMode = computed(() => this.authService.user()?.darkMode ?? false);
   readonly blockTrackingPixels = computed(() => this.authService.user()?.blockTrackingPixels ?? false);
@@ -559,4 +563,59 @@ export class SettingsComponent {
     this.signatureHtmlSource.set('');
     this.signatureEditor()?.clear();
   }
+
+  async saveAiSettings(): Promise<void> {
+    this.savingAiSettings.set(true);
+    try {
+      const apiKey = this.openAiApiKey().trim();
+      const current = this.authService.user() || { email: '' };
+      await this.authService.updateSettings({
+        ...current,
+        openAiApiKey: apiKey || undefined,
+        isAiEnabled: !!apiKey
+      });
+      this.openAiApiKey.set('');
+      alert('Paramètres IA sauvegardés');
+    } catch (e) {
+      console.error('Failed to save AI settings', e);
+      alert('Erreur lors de la sauvegarde');
+    } finally {
+      this.savingAiSettings.set(false);
+    }
+  }
+
+  async deleteOpenAiApiKey(): Promise<void> {
+    if (!confirm('Supprimer votre clé API OpenAI ? Les fonctionnalités IA seront désactivées.')) return;
+    this.savingAiSettings.set(true);
+    try {
+      const current = this.authService.user() || { email: '' };
+      await this.authService.updateSettings({
+        ...current,
+        openAiApiKey: '',
+        isAiEnabled: false
+      });
+      alert('Clé API supprimée');
+    } catch (e) {
+      console.error('Failed to delete API key', e);
+    } finally {
+      this.savingAiSettings.set(false);
+    }
+  }
+
+  async toggleAiEnabled(): Promise<void> {
+    const current = this.authService.user();
+    if (!current?.hasOpenAiApiKey) return;
+    this.savingAiSettings.set(true);
+    try {
+      await this.authService.updateSettings({
+        ...current,
+        isAiEnabled: !current.isAiEnabled
+      });
+    } catch (e) {
+      console.error('Failed to toggle AI', e);
+    } finally {
+      this.savingAiSettings.set(false);
+    }
+  }
+
 }

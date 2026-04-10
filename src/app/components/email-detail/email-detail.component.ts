@@ -60,6 +60,7 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
   readonly aiActionItems = signal<string[]>([]);
   readonly aiPhishing = signal<{ level: 'low' | 'medium' | 'high'; reason: string } | null>(null);
   readonly aiCategory = signal<string | null>(null);
+  readonly aiTranslation = signal<string | null>(null);
 
   readonly trustedPreviewUrl = computed<SafeResourceUrl | null>(() => {
     const preview = this.previewAttachment();
@@ -173,6 +174,14 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     const mail = this.email();
     if (mail) {
       await this.emailService.trashEmail(mail);
+      this.goBack();
+    }
+  }
+
+  async spam(): Promise<void> {
+    const mail = this.email();
+    if (mail) {
+      await this.emailService.spamEmail(mail);
       this.goBack();
     }
   }
@@ -337,6 +346,7 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     return `${(bytes / 1048576).toFixed(1)} Mo`;
   }
 
+
   // AI Methods
   private getEmailText(): string {
     const mail = this.email();
@@ -438,12 +448,29 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     }
   }
 
-  dismissAiResult(type: 'summary' | 'replies' | 'actions' | 'phishing' | 'category'): void {
+  async translate(targetLanguage: string = 'fr'): Promise<void> {
+    this.showAiMenu.set(false);
+    const content = this.getEmailText();
+    if (!content) return;
+    this.aiLoading.set(true);
+    try {
+      const translation = await this.aiService.translate(content, targetLanguage);
+      this.aiTranslation.set(translation);
+    } catch (e) {
+      console.error('Failed to translate', e);
+      alert('Erreur lors de la traduction.');
+    } finally {
+      this.aiLoading.set(false);
+    }
+  }
+
+  dismissAiResult(type: 'summary' | 'replies' | 'actions' | 'phishing' | 'category' | 'translation'): void {
     if (type === 'summary') this.aiSummary.set(null);
     if (type === 'replies') this.aiReplies.set([]);
     if (type === 'actions') this.aiActionItems.set([]);
     if (type === 'phishing') this.aiPhishing.set(null);
     if (type === 'category') this.aiCategory.set(null);
+    if (type === 'translation') this.aiTranslation.set(null);
   }
 
 }

@@ -6,6 +6,15 @@ import { EmailLabel } from './email-label.entity';
 
 @Injectable()
 export class LabelsService {
+  private readonly defaultLabels = [
+    { name: 'Important', color: '#ef4444' },
+    { name: 'A traiter', color: '#f59e0b' },
+    { name: 'En attente', color: '#3b82f6' },
+    { name: 'Clients', color: '#10b981' },
+    { name: 'Factures', color: '#8b5cf6' },
+    { name: 'Personnel', color: '#14b8a6' },
+  ] as const;
+
   constructor(
     @InjectRepository(Label)
     private readonly labelRepository: Repository<Label>,
@@ -14,7 +23,34 @@ export class LabelsService {
   ) {}
 
   async findAllByUser(userId: string): Promise<Label[]> {
+    await this.ensureDefaultLabelsForUser(userId);
     return this.labelRepository.find({ where: { userId } });
+  }
+
+  private async ensureDefaultLabelsForUser(userId: string): Promise<void> {
+    const existing = await this.labelRepository.find({ where: { userId } });
+
+    if (existing.length === 0) {
+      const labels = this.defaultLabels.map((label) =>
+        this.labelRepository.create({
+          userId,
+          name: label.name,
+          color: label.color,
+        }),
+      );
+
+      await this.labelRepository.save(labels);
+      return;
+    }
+
+    const personnel = existing.find(
+      (label) => label.name.toLowerCase() === 'personnel' && label.color.toLowerCase() === '#ef4444',
+    );
+
+    if (personnel) {
+      personnel.color = '#14b8a6';
+      await this.labelRepository.save(personnel);
+    }
   }
 
   async create(userId: string, data: { name: string; color: string }): Promise<Label> {

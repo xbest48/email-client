@@ -66,51 +66,6 @@
         }
       </div>
 
-      <!-- AI Tools button -->
-      @if (authService.user()?.hasOpenAiApiKey && authService.user()?.isAiEnabled) {
-        <div class="relative">
-          <button
-            (click)="showAiMenu.set(!showAiMenu())"
-            class="p-2 text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-900/20 rounded-lg transition-colors
-                   focus:outline-none focus:ring-2 focus:ring-amber-400 flex items-center gap-1 text-sm font-medium"
-            type="button"
-            aria-label="Outils IA"
-            title="Outils IA"
-            [attr.aria-expanded]="showAiMenu()">
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            <span class="hidden sm:inline">IA</span>
-          </button>
-          @if (showAiMenu()) {
-            <div class="absolute right-0 top-full mt-1 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-20"
-                 role="menu" aria-label="Outils d'Intelligence Artificielle">
-              <button type="button" (click)="summarize()"
-                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" role="menuitem">
-                Résumer ce message
-              </button>
-              <button type="button" (click)="generateReplies()"
-                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" role="menuitem">
-                Suggérer des réponses
-              </button>
-              <button type="button" (click)="extractActions()"
-                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" role="menuitem">
-                Extraire les actions
-              </button>
-              <button type="button" (click)="categorize()"
-                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" role="menuitem">
-                Catégoriser
-              </button>
-              <div class="border-t border-gray-100 dark:border-gray-700 my-1"></div>
-              <button type="button" (click)="detectPhishing()"
-                      class="w-full text-left px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" role="menuitem">
-                Analyser pour phishing
-              </button>
-            </div>
-          }
-        </div>
-      }
-
       <!-- Label button -->
       <div class="relative">
         <button
@@ -146,6 +101,18 @@
           </div>
         }
       </div>
+
+      <button
+        (click)="spam()"
+        class="p-2 text-gray-500 hover:text-orange-600 hover:bg-orange-50 dark:text-gray-400 dark:hover:bg-orange-900/20 dark:hover:text-orange-400 rounded-lg transition-colors
+               focus:outline-none focus:ring-2 focus:ring-orange-400"
+        type="button"
+        aria-label="Marquer comme spam"
+        title="Marquer comme spam">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z"/>
+        </svg>
+      </button>
 
       <button
         (click)="trash()"
@@ -334,6 +301,105 @@
             </div>
           </div>
         }
+
+
+          <!-- AI Results -->
+
+      @if (aiLoading()) {
+        <div class="mb-4 flex items-center justify-center p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800">
+          <div class="flex items-center gap-3 text-amber-700 dark:text-amber-400">
+            <div class="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+            <span class="text-sm font-medium">L'IA analyse votre message...</span>
+          </div>
+        </div>
+      }
+
+          @if (aiSummary()) {
+            <div class="mb-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl p-4 relative">
+              <button (click)="dismissAiResult('summary')" class="absolute top-2 right-2 p-1 text-purple-400 hover:text-purple-600 dark:hover:text-purple-300 rounded-full transition-colors" aria-label="Fermer">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+              <h3 class="text-sm font-semibold text-purple-800 dark:text-purple-300 mb-2 flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                Résumé de l'e-mail
+              </h3>
+              <p class="text-sm text-purple-900 dark:text-purple-200">{{ aiSummary() }}</p>
+            </div>
+          }
+
+          @if (aiReplies().length > 0) {
+            <div class="mb-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 relative">
+              <button (click)="dismissAiResult('replies')" class="absolute top-2 right-2 p-1 text-blue-400 hover:text-blue-600 dark:hover:text-blue-300 rounded-full transition-colors" aria-label="Fermer">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+              <h3 class="text-sm font-semibold text-blue-800 dark:text-blue-300 mb-3 flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg>
+                Réponses suggérées
+              </h3>
+              <div class="flex flex-wrap gap-2">
+                @for (reply of aiReplies(); track $index) {
+                  <button (click)="applyReply(reply)" class="px-3 py-1.5 text-xs font-medium bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors">
+                    {{ reply }}
+                  </button>
+                }
+              </div>
+            </div>
+          }
+
+          @if (aiActionItems().length > 0) {
+            <div class="mb-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4 relative">
+              <button (click)="dismissAiResult('actions')" class="absolute top-2 right-2 p-1 text-emerald-400 hover:text-emerald-600 dark:hover:text-emerald-300 rounded-full transition-colors" aria-label="Fermer">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+              <h3 class="text-sm font-semibold text-emerald-800 dark:text-emerald-300 mb-2 flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                Actions requises
+              </h3>
+              <ul class="list-disc list-inside text-sm text-emerald-900 dark:text-emerald-200 space-y-1">
+                @for (action of aiActionItems(); track $index) {
+                  <li>{{ action }}</li>
+                }
+              </ul>
+            </div>
+          }
+
+          @if (aiPhishing()) {
+            <div class="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 relative">
+              <button (click)="dismissAiResult('phishing')" class="absolute top-2 right-2 p-1 text-red-400 hover:text-red-600 dark:hover:text-red-300 rounded-full transition-colors" aria-label="Fermer">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+              <h3 class="text-sm font-semibold text-red-800 dark:text-red-300 mb-2 flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                Analyse de sécurité: {{ aiPhishing()?.level === 'high' ? 'Danger' : (aiPhishing()?.level === 'medium' ? 'Attention' : 'Sûr') }}
+              </h3>
+              <p class="text-sm text-red-900 dark:text-red-200">{{ aiPhishing()?.reason }}</p>
+            </div>
+          }
+
+          @if (aiCategory()) {
+            <div class="mb-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl p-4 relative">
+               <button (click)="dismissAiResult('category')" class="absolute top-2 right-2 p-1 text-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 rounded-full transition-colors" aria-label="Fermer">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+              <h3 class="text-sm font-semibold text-indigo-800 dark:text-indigo-300 mb-2 flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
+                Catégorie: <span class="font-bold">{{ aiCategory() }}</span>
+              </h3>
+            </div>
+          }
+
+          @if (aiTranslation()) {
+            <div class="mb-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 relative">
+              <button (click)="dismissAiResult('translation')" class="absolute top-2 right-2 p-1 text-blue-400 hover:text-blue-600 dark:hover:text-blue-300 rounded-full transition-colors" aria-label="Fermer la traduction">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+              <h3 class="text-sm font-semibold text-blue-800 dark:text-blue-300 mb-2 flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/></svg>
+                Traduction
+              </h3>
+              <p class="text-sm text-blue-900 dark:text-blue-200 whitespace-pre-wrap">{{ aiTranslation() }}</p>
+            </div>
+          }
 
         <!-- Email body -->
         <div class="w-full text-gray-800 dark:text-gray-200 leading-relaxed">

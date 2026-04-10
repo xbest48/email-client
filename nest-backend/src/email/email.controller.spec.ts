@@ -5,6 +5,7 @@ import { SmtpService } from './smtp/smtp.service';
 import { AccountsService } from '../accounts/accounts.service';
 import { ContactsService } from '../contacts/contacts.service';
 import { UsersService } from '../users/users.service';
+import { LabelsService } from '../labels/labels.service';
 
 describe('EmailController', () => {
   let controller: EmailController;
@@ -18,6 +19,7 @@ describe('EmailController', () => {
         { provide: AccountsService, useValue: {} },
         { provide: ContactsService, useValue: {} },
         { provide: UsersService, useValue: {} },
+        { provide: LabelsService, useValue: {} }
       ],
     }).compile();
 

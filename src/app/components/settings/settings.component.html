@@ -198,6 +198,21 @@
       [attr.aria-selected]="activeTab() === 'privacy'">
         Confidentialite
       </button>
+      <button
+      (click)="activeTab.set('ai')"
+      class="whitespace-nowrap px-4 py-3 font-medium text-sm border-b-2 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-inset"
+      [class.border-amber-500]="activeTab() === 'ai'"
+      [class.text-amber-700]="activeTab() === 'ai'"
+      [class.dark:text-amber-400]="activeTab() === 'ai'"
+      [class.border-transparent]="activeTab() !== 'ai'"
+      [class.text-gray-500]="activeTab() !== 'ai'"
+      [class.dark:text-gray-400]="activeTab() !== 'ai'"
+      [class.hover:text-gray-700]="activeTab() !== 'ai'"
+      [class.dark:hover:text-gray-300]="activeTab() !== 'ai'"
+      role="tab"
+      [attr.aria-selected]="activeTab() === 'ai'">
+        Intelligence Artificielle
+      </button>
     </div>
   </div>
 
@@ -953,6 +968,74 @@
             }
           </ul>
         }
+      </div>
+    }
+
+
+    <!-- AI Tab -->
+    @if (activeTab() === 'ai') {
+      <div class="space-y-6">
+        <div>
+          <h3 class="text-sm font-semibold text-gray-800 dark:text-white mb-2">Fonctionnalités d'Intelligence Artificielle</h3>
+
+          <div class="mb-4 text-xs text-gray-600 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-100 dark:border-blue-800">
+            <p class="mb-2"><strong class="font-semibold text-blue-800 dark:text-blue-300">Information importante :</strong> L'utilisation des fonctionnalités d'Intelligence Artificielle (résumé, aide à la rédaction, détection de phishing) nécessite une clé d'API valide. <strong>Les coûts liés à l'utilisation de cette API sont à votre charge</strong> et dépendent de votre fournisseur et de votre consommation.</p>
+            <p class="mb-1">Pour obtenir une clé API, vous pouvez créer un compte développeur chez l'un de ces fournisseurs :</p>
+            <ul class="list-disc list-inside space-y-1 ml-2 text-blue-700 dark:text-blue-300">
+              <li><a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" class="underline hover:text-amber-500">OpenAI (ChatGPT)</a></li>
+              <li><a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="underline hover:text-amber-500">Google Gemini</a></li>
+              <li><a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer" class="underline hover:text-amber-500">Anthropic (Claude)</a></li>
+              <li><a href="https://console.mistral.ai/api-keys/" target="_blank" rel="noopener noreferrer" class="underline hover:text-amber-500">Mistral AI</a></li>
+            </ul>
+            <p class="mt-2 text-blue-800/80 dark:text-blue-300/80 italic">Note : L'implémentation actuelle utilise l'API OpenAI par défaut.</p>
+            <p class="mt-2 text-blue-800/80 dark:text-blue-300/80 text-[11px] leading-tight">
+              <strong>Conformité AI Act (Législation européenne sur l'IA) :</strong>
+              Veuillez noter que le traitement des e-mails par ces modèles d'IA tiers implique le transfert potentiel de données personnelles hors de l'Espace Économique Européen. En activant ces fonctionnalités, vous consentez à ce transfert. Les systèmes d'IA proposés sont conçus pour l'assistance à la rédaction et l'analyse de texte. Les résultats générés peuvent comporter des erreurs ou des biais et doivent toujours être vérifiés par un humain avant toute utilisation critique. Ce système ne prend aucune décision automatisée vous concernant.
+            </p>
+          </div>
+
+
+          @if (authService.user()?.hasOpenAiApiKey) {
+            <div class="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl mb-4 flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <div>
+                  <h4 class="text-sm font-medium text-green-800 dark:text-green-300">Clé API OpenAI configurée</h4>
+                  <p class="text-xs text-green-700 dark:text-green-400">Vos fonctionnalités d'IA sont prêtes à être utilisées.</p>
+                </div>
+              </div>
+              <button type="button" (click)="deleteOpenAiApiKey()" [disabled]="savingAiSettings()" class="px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-lg transition-colors">
+                Supprimer
+              </button>
+            </div>
+
+            <label class="flex items-center gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+              <input type="checkbox"
+                     [checked]="authService.user()?.isAiEnabled"
+                     (change)="toggleAiEnabled()"
+                     [disabled]="savingAiSettings()"
+                     class="w-4 h-4 text-amber-500 focus:ring-amber-400 rounded border-gray-300 dark:border-gray-600">
+              <div>
+                <span class="text-sm font-medium text-gray-800 dark:text-white">Activer les fonctionnalités d'IA</span>
+                <p class="text-xs text-gray-500 dark:text-gray-400">Affiche les boutons d'IA dans l'interface de lecture et de rédaction.</p>
+              </div>
+            </label>
+          } @else {
+            <form (submit)="saveAiSettings()" class="space-y-3">
+              <div>
+                <label for="openai-key" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Clé API OpenAI</label>
+                <input type="password" id="openai-key" [(ngModel)]="openAiApiKey" name="openAiApiKey" required
+                       class="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                       placeholder="sk-...">
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Votre clé sera chiffrée avec AES-256-CBC avant d'être sauvegardée dans la base de données.</p>
+              </div>
+              <button type="submit" [disabled]="!openAiApiKey().trim() || savingAiSettings()"
+                      class="px-4 py-2 bg-amber-500 text-white text-sm font-medium rounded-lg hover:bg-amber-600 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:opacity-50">
+                {{ savingAiSettings() ? 'Sauvegarde...' : 'Sauvegarder et Activer' }}
+              </button>
+            </form>
+          }
+        </div>
       </div>
     }
 

@@ -37,6 +37,10 @@ export class SidebarComponent {
   readonly showLabelsSection = signal(true);
   readonly showAddFolder = signal(false);
   readonly newFolderName = signal('');
+  readonly showAddLabel = signal(false);
+  readonly newLabelName = signal('');
+  readonly editingLabelId = signal<string | null>(null);
+  readonly editingLabelName = signal('');
   readonly contextMenu = signal<{ x: number; y: number; folder: ImapFolder } | null>(null);
   readonly dragOverFolder = signal<string | null>(null);
   readonly downloadingFolders = signal<Set<string>>(new Set());
@@ -45,6 +49,7 @@ export class SidebarComponent {
 
   readonly defaultNavItems: NavItem[] = [
     { label: 'Boite de reception', icon: '&#128229;', route: '/inbox', folderPath: 'INBOX', specialUse: '\\Inbox' },
+    { label: 'Suivis', icon: '&#11088;', route: '/starred', folderPath: 'starred', specialUse: '' },
     { label: 'Messages envoyes', icon: '&#128228;', route: '/sent', folderPath: '', specialUse: '\\Sent' },
     { label: 'Brouillons', icon: '&#128196;', route: '/drafts', folderPath: '', specialUse: '\\Drafts' },
     { label: 'Spam', icon: '&#9940;', route: '/spam', folderPath: '', specialUse: '\\Junk' },
@@ -193,6 +198,45 @@ export class SidebarComponent {
       this.showAddFolder.set(false);
     } catch (err) {
       console.error('Failed to create folder', err);
+    }
+  }
+
+  async addLabel(): Promise<void> {
+    const name = this.newLabelName().trim();
+    if (!name) return;
+    try {
+      await this.labelService.create(name, '#14b8a6');
+      this.newLabelName.set('');
+      this.showAddLabel.set(false);
+    } catch (err) {
+      console.error('Failed to create label', err);
+    }
+  }
+
+  startEditLabel(id: string, name: string, event?: Event): void {
+    event?.preventDefault();
+    event?.stopPropagation();
+    this.editingLabelId.set(id);
+    this.editingLabelName.set(name);
+  }
+
+  cancelEditLabel(): void {
+    this.editingLabelId.set(null);
+    this.editingLabelName.set('');
+  }
+
+  async saveEditedLabel(id: string): Promise<void> {
+    const name = this.editingLabelName().trim();
+    if (!name) {
+      this.cancelEditLabel();
+      return;
+    }
+
+    try {
+      await this.labelService.update(id, { name });
+      this.cancelEditLabel();
+    } catch (err) {
+      console.error('Failed to update label', err);
     }
   }
 }

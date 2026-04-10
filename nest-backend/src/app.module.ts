@@ -7,6 +7,7 @@ import { Account } from './accounts/account.entity';
 import { EmailModule } from './email/email.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
+import { AiModule } from './ai/ai.module';
 import { User } from './users/user.entity';
 import { WebAuthnCredential } from './users/webauthn-credential.entity';
 import { LabelsModule } from './labels/labels.module';
@@ -22,7 +23,6 @@ import { ContactsModule } from './contacts/contacts.module';
 import { Contact } from './contacts/contact.entity';
 import { PgpModule } from './pgp/pgp.module';
 import { PgpKey, PgpContactKey } from './pgp/pgp-key.entity';
-import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -48,13 +48,13 @@ import { AiModule } from './ai/ai.module';
     EmailModule,
     UsersModule,
     AuthModule,
+    AiModule,
     LabelsModule,
     FiltersModule,
     SnoozeModule,
     ScheduledModule,
     ContactsModule,
     PgpModule,
-    AiModule,
   ],
   controllers: [AppController],
   providers: [AppService],

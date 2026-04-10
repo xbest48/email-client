@@ -8,6 +8,7 @@ import { AccountsService } from '../accounts/accounts.service';
 import { ContactsService } from '../contacts/contacts.service';
 import { UsersService } from '../users/users.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { LabelsService } from '../labels/labels.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('api')
@@ -19,6 +20,7 @@ export class EmailController {
     private readonly accountsService: AccountsService,
     private readonly contactsService: ContactsService,
     private readonly usersService: UsersService,
+    private readonly labelsService: LabelsService,
   ) {}
 
   private async getCredentials(req: any, headers: any): Promise<EmailCredentials> {
@@ -99,6 +101,20 @@ export class EmailController {
     const folderMap: Record<string, string> = {
       'inbox': 'INBOX',
     };
+
+    if (decodedFolder.toLowerCase() === 'starred') {
+      const pageNum = parseInt(page || '1', 10);
+      const sizeNum = parseInt(pageSize || '25', 10);
+      return this.imapService.fetchFlaggedEmails(creds, pageNum, sizeNum, q);
+    }
+
+    if (decodedFolder.toLowerCase().startsWith('label:')) {
+      const labelId = decodedFolder.slice('label:'.length);
+      const pageNum = parseInt(page || '1', 10);
+      const sizeNum = parseInt(pageSize || '25', 10);
+      const emailRefs = await this.labelsService.getEmailsByLabel(labelId, req.user.id);
+      return this.imapService.fetchEmailsByReferences(creds, emailRefs, pageNum, sizeNum, q);
+    }
 
     if (folderMap[decodedFolder.toLowerCase()]) {
        decodedFolder = folderMap[decodedFolder.toLowerCase()];

@@ -39,6 +39,12 @@ export class User {
   @Column({ type: 'text', default: '[]' })
   imageBlockedDomains: string;
 
+  @Column({ nullable: true })
+  openAiApiKey?: string;
+
+  @Column({ default: false })
+  isAiEnabled: boolean;
+
   @OneToMany(() => Account, account => account.user)
   accounts: Account[];
 }

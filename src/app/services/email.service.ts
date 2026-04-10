@@ -26,6 +26,10 @@ export class EmailService {
   private trashFolder = '';
   private fetchRequestId = 0;
 
+  private getSpecialFolderPath(specialUse: string): string | null {
+    return this.folders().find((folder) => folder.specialUse === specialUse)?.path ?? null;
+  }
+
   private getHeaders() {
     const accountId = this.settingsService.activeAccountId();
     let headers = new HttpHeaders();
@@ -176,14 +180,13 @@ export class EmailService {
 
   async toggleStar(email: Email): Promise<void> {
     const newValue = !email.isStarred;
-    await this.setFlag(email, '\\Flagged', newValue);
-    this.currentEmails.update((emails) =>
-      emails.map((e) =>
-        e.uid === email.uid && e.folder === email.folder ? { ...e, isStarred: newValue } : e
-      )
-    );
-    if (this.selectedEmail()?.uid === email.uid) {
-      this.selectedEmail.update((e) => (e ? { ...e, isStarred: newValue } : e));
+    this.updateEmailState(email, { isStarred: newValue });
+
+    try {
+      await this.setFlag(email, '\\Flagged', newValue);
+    } catch (err) {
+      this.updateEmailState(email, { isStarred: email.isStarred });
+      throw err;
     }
   }
 
@@ -199,6 +202,17 @@ export class EmailService {
       emails.filter((e) => !(e.uid === email.uid && e.folder === email.folder))
     );
     this.currentTotal.update((total) => Math.max(0, total - 1));
+  }
+
+  async spamEmail(email: Email): Promise<void> {
+    const junkFolder = this.getSpecialFolderPath('\\Junk');
+    if (!junkFolder) {
+      throw new Error('Dossier Spam introuvable');
+    }
+    await this.moveToFolder(email, junkFolder);
+    if (this.selectedEmail()?.uid === email.uid) {
+      this.selectedEmail.set(null);
+    }
   }
 
   async trashEmail(email: Email): Promise<void> {
@@ -244,6 +258,29 @@ export class EmailService {
             )
           );
       promise.catch(err => console.error('Background trash failed', err));
+    }
+  }
+
+  bulkSpamInBackground(emails: Email[]): void {
+    const junkFolder = this.getSpecialFolderPath('\\Junk');
+    if (!junkFolder) {
+      console.error('Background spam failed', new Error('Dossier Spam introuvable'));
+      return;
+    }
+    const keys = new Set(emails.map(e => `${e.folder}:${e.uid}`));
+    this.currentEmails.update(list => list.filter(e => !keys.has(`${e.folder}:${e.uid}`)));
+    this.currentTotal.update((total) => Math.max(0, total - keys.size));
+    if (this.selectedEmail() && keys.has(`${this.selectedEmail()!.folder}:${this.selectedEmail()!.uid}`)) {
+      this.selectedEmail.set(null);
+    }
+    for (const email of emails) {
+      firstValueFrom(
+        this.http.post(
+          `${this.apiUrl}/email/${encodeURIComponent(email.folder)}/${email.uid}/move`,
+          { destination: junkFolder },
+          { headers: this.getHeaders(), withCredentials: true }
+        )
+      ).catch(err => console.error('Background spam failed', err));
     }
   }
 
@@ -476,6 +513,20 @@ export class EmailService {
         { flag, value },
         { headers: this.getHeaders(), withCredentials: true }
       )
+    );
+  }
+
+  private updateEmailState(email: Email, patch: Partial<Email>): void {
+    this.currentEmails.update((emails) =>
+      emails.map((e) =>
+        e.uid === email.uid && e.folder === email.folder ? { ...e, ...patch } : e
+      )
+    );
+
+    this.selectedEmail.update((selected) =>
+      selected && selected.uid === email.uid && selected.folder === email.folder
+        ? { ...selected, ...patch }
+        : selected
     );
   }
 }
