@@ -289,7 +289,7 @@ export class EmailListComponent implements OnInit, OnDestroy {
     // Rough initial placement to avoid a visible flash outside the viewport.
     // A precise adjustment is performed once the menu is rendered and can
     // be measured (see adjustContextMenuPosition).
-    const estWidth = 220;
+    const estWidth = 288;
     const estHeight = 520;
     const margin = 8;
     const initialX = Math.max(margin, Math.min(event.clientX, window.innerWidth - estWidth - margin));
