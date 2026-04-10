@@ -70,6 +70,9 @@ export class LayoutComponent implements OnInit, OnDestroy {
     this.routerSub = this.router.events.subscribe((event) => {
       if (event instanceof NavigationEnd) {
         this.syncSearchStateFromUrl(event.urlAfterRedirects);
+        if (this.isMobile()) {
+          this.sidebarOpen.set(false);
+        }
       }
     });
   }
