@@ -72,6 +72,11 @@ export class LabelsController {
     return this.labelsService.getLabelCountsForUser(req.user.id);
   }
 
+  @Get('all-emails')
+  getAllEmailAssignments(@Request() req: any) {
+    return this.labelsService.getAllEmailLabelsForUser(req.user.id);
+  }
+
   @Get('for-email/:folder/:uid')
   getLabelsForEmail(
     @Request() req: any,

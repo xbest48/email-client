@@ -129,6 +129,16 @@ export class LabelsService {
     return map;
   }
 
+  async getAllEmailLabelsForUser(
+    userId: string,
+  ): Promise<{ folder: string; uid: number; labelId: string }[]> {
+    const rows = await this.emailLabelRepository.find({
+      where: { userId },
+      select: ['folder', 'uid', 'labelId'],
+    });
+    return rows.map((r) => ({ folder: r.folder, uid: r.uid, labelId: r.labelId }));
+  }
+
   async getLabelCountsForUser(userId: string): Promise<{ labelId: string; count: number }[]> {
     const results = await this.emailLabelRepository
       .createQueryBuilder('el')

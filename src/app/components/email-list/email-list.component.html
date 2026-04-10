@@ -233,20 +233,51 @@
           </button>
 
           <!-- Sender / Recipients (desktop) -->
-          <div class="hidden sm:block w-36 shrink-0 truncate" [class.font-semibold]="!email.isRead">
-            @if (isSentFolder()) {
-              <span class="text-sm text-gray-800 dark:text-gray-200">{{ email.to?.[0]?.name || email.to?.[0]?.email || '(sans destinataire)' }}</span>
-            } @else {
-              <span class="text-sm text-gray-800 dark:text-gray-200">{{ email.from.name || email.from.email }}</span>
+          <div class="hidden sm:flex w-36 shrink-0 min-w-0 flex-col gap-0.5" [class.font-semibold]="!email.isRead">
+            @if (labelsFor(email); as emailLabels) {
+              @if (emailLabels.length > 0) {
+                <div class="flex items-center gap-1 flex-wrap">
+                  @for (label of emailLabels; track label.id) {
+                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium max-w-full"
+                          [style.background-color]="label.color + '22'"
+                          [style.color]="label.color"
+                          [title]="label.name">
+                      <span class="w-1.5 h-1.5 rounded-full shrink-0" [style.background-color]="label.color" aria-hidden="true"></span>
+                      <span class="truncate">{{ label.name }}</span>
+                    </span>
+                  }
+                </div>
+              }
             }
+            <div class="truncate">
+              @if (isSentFolder()) {
+                <span class="text-sm text-gray-800 dark:text-gray-200">{{ recipientLabel(email) }}</span>
+              } @else {
+                <span class="text-sm text-gray-800 dark:text-gray-200">{{ email.from.name || email.from.email }}</span>
+              }
+            </div>
           </div>
 
           <!-- Subject + snippet -->
           <div class="flex-1 min-w-0">
+            @if (labelsFor(email); as emailLabels) {
+              @if (emailLabels.length > 0) {
+                <div class="sm:hidden flex items-center gap-1 flex-wrap mb-0.5">
+                  @for (label of emailLabels; track label.id) {
+                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium"
+                          [style.background-color]="label.color + '22'"
+                          [style.color]="label.color">
+                      <span class="w-1.5 h-1.5 rounded-full shrink-0" [style.background-color]="label.color" aria-hidden="true"></span>
+                      <span class="truncate">{{ label.name }}</span>
+                    </span>
+                  }
+                </div>
+              }
+            }
             <div class="sm:hidden flex items-center gap-2 min-w-0">
               <div class="min-w-0 flex-1 truncate" [class.font-semibold]="!email.isRead">
                 @if (isSentFolder()) {
-                  <span class="text-sm text-gray-800 dark:text-gray-200">{{ email.to?.[0]?.name || email.to?.[0]?.email || '(sans destinataire)' }}</span>
+                  <span class="text-sm text-gray-800 dark:text-gray-200">{{ recipientLabel(email) }}</span>
                 } @else {
                   <span class="text-sm text-gray-800 dark:text-gray-200">{{ email.from.name || email.from.email }}</span>
                 }
@@ -402,9 +433,17 @@
               @for (label of labelService.labels(); track label.id) {
                 <button type="button" (click)="contextAssignLabel(label.id)"
                         class="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                        role="menuitem">
+                        role="menuitemcheckbox"
+                        [attr.aria-checked]="contextEmailLabelIds().has(label.id)">
                   <span class="w-3 h-3 rounded-full shrink-0" [style.background-color]="label.color" aria-hidden="true"></span>
                   <span class="flex-1 truncate text-left">{{ label.name }}</span>
+                  @if (contextEmailLabelIds().has(label.id)) {
+                    <svg class="w-4 h-4 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                    </svg>
+                  } @else {
+                    <span class="w-4 h-4 shrink-0" aria-hidden="true"></span>
+                  }
                 </button>
               } @empty {
                 <div class="px-4 py-2 text-sm text-gray-400">Aucun libelle</div>
