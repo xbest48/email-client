@@ -111,28 +111,40 @@ export class SmtpService {
 
     const dataUrlCache = new Map<string, string>();
     let imageIndex = 0;
-    const updatedHtml = html.replace(
-      /(<img\b[^>]*\bsrc\s*=\s*["'])(data:image\/[^"']+)(["'][^>]*>)/gi,
-      (_match, prefix: string, dataUrl: string, suffix: string) => {
-        const cachedCid = dataUrlCache.get(dataUrl);
-        if (cachedCid) {
-          return `${prefix}cid:${cachedCid}${suffix}`;
-        }
 
-        const inlineImage = this.dataUrlToInlineAttachment(dataUrl, imageIndex);
-        if (!inlineImage) {
-          return `${prefix}${dataUrl}${suffix}`;
-        }
+    const convertDataUrl = (dataUrl: string): string | null => {
+      // Strip any stray whitespace that survived normalization
+      const trimmed = dataUrl.replace(/\s+/g, '');
+      const cached = dataUrlCache.get(trimmed);
+      if (cached) return cached;
 
-        const cid = inlineImage.cid;
-        if (!cid) {
-          return `${prefix}${dataUrl}${suffix}`;
-        }
+      const inlineImage = this.dataUrlToInlineAttachment(trimmed, imageIndex);
+      if (!inlineImage?.cid) return null;
 
-        imageIndex += 1;
-        dataUrlCache.set(dataUrl, cid);
-        preparedAttachments.push(inlineImage);
-        return `${prefix}cid:${cid}${suffix}`;
+      imageIndex += 1;
+      dataUrlCache.set(trimmed, inlineImage.cid);
+      preparedAttachments.push(inlineImage);
+      return inlineImage.cid;
+    };
+
+    // Replace <img src="data:image/..."> — capture only the src value so we
+    // don't need to re-match the rest of the tag (avoids issues with > inside
+    // other attribute values).
+    let updatedHtml = html.replace(
+      /(<img\b[^>]*?\bsrc\s*=\s*)(["'])(data:image\/[^"']+)\2/gi,
+      (_match, prefix: string, quote: string, dataUrl: string) => {
+        const cid = convertDataUrl(dataUrl);
+        return cid ? `${prefix}${quote}cid:${cid}${quote}` : _match;
+      },
+    );
+
+    // Also replace CSS url(data:image/...) — covers background-image and other
+    // CSS properties that embed inline images (e.g. table cell backgrounds).
+    updatedHtml = updatedHtml.replace(
+      /(url\s*\(\s*)(["']?)(data:image\/[^"')]+)\2(\s*\))/gi,
+      (_match, urlOpen: string, quote: string, dataUrl: string, urlClose: string) => {
+        const cid = convertDataUrl(dataUrl);
+        return cid ? `${urlOpen}${quote}cid:${cid}${quote}${urlClose}` : _match;
       },
     );
 
@@ -143,7 +155,8 @@ export class SmtpService {
     dataUrl: string,
     imageIndex: number,
   ): NonNullable<SendEmailDto['attachments']>[number] | null {
-    const match = dataUrl.match(/^data:([^;,]+)((?:;[^;,]+)*?)(?:,(.*))$/i);
+    // Use the 's' flag so '.' matches newlines in case any whitespace slipped through
+    const match = dataUrl.match(/^data:([^;,]+)((?:;[^;,]+)*?)(?:,([\s\S]*))$/i);
     if (!match) return null;
 
     const mimeType = match[1];

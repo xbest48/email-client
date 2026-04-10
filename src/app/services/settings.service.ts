@@ -309,15 +309,25 @@ export class SettingsService {
   }
 
   private normalizeEmbeddedDataImageUrls(html: string): string {
-    return html.replace(
-      /(<img\b[^>]*\bsrc\s*=\s*["'])(data:image\/[^"']+)(["'][^>]*>)/gi,
-      (_match, prefix: string, dataUrl: string, suffix: string) => {
-        if (/;base64,/i.test(dataUrl)) {
-          return `${prefix}${dataUrl.replace(/\s+/g, '')}${suffix}`;
-        }
-        return `${prefix}${dataUrl}${suffix}`;
-      },
+    const stripWhitespace = (dataUrl: string) =>
+      /;base64,/i.test(dataUrl) ? dataUrl.replace(/\s+/g, '') : dataUrl;
+
+    // Normalize <img src="data:..."> — use the same capture-only-src-value
+    // approach as the backend to avoid issues with > inside other attributes.
+    let result = html.replace(
+      /(<img\b[^>]*?\bsrc\s*=\s*)(["'])(data:image\/[^"']+)\2/gi,
+      (_match, prefix: string, quote: string, dataUrl: string) =>
+        `${prefix}${quote}${stripWhitespace(dataUrl)}${quote}`,
     );
+
+    // Also normalize CSS url(data:...) patterns (background-image etc.)
+    result = result.replace(
+      /(url\s*\(\s*)(["']?)(data:image\/[^"')]+)\2(\s*\))/gi,
+      (_match, urlOpen: string, quote: string, dataUrl: string, urlClose: string) =>
+        `${urlOpen}${quote}${stripWhitespace(dataUrl)}${quote}${urlClose}`,
+    );
+
+    return result;
   }
 
   private normalizeSignatureHtml(html: string): string {
