@@ -51,6 +51,7 @@ export class EmailListComponent implements OnInit, OnDestroy {
   readonly mobileActionMenu = signal<Email | null>(null);
   readonly mobileSelectionMode = signal(false);
   private readonly scrollContainer = viewChild<ElementRef<HTMLDivElement>>('scrollContainer');
+  private readonly contextMenuEl = viewChild<ElementRef<HTMLDivElement>>('contextMenuEl');
 
   readonly allSelected = computed(() => {
     const emails = this.emails();
@@ -284,14 +285,37 @@ export class EmailListComponent implements OnInit, OnDestroy {
   onContextMenu(event: MouseEvent, email: Email): void {
     event.preventDefault();
     event.stopPropagation();
-    const menuWidth = 220;
-    const menuHeight = 420;
-    const x = Math.min(event.clientX, window.innerWidth - menuWidth);
-    const y = Math.min(event.clientY, window.innerHeight - menuHeight);
-    this.contextMenu.set({ x, y: Math.max(8, y), email });
+    // Rough initial placement to avoid a visible flash outside the viewport.
+    // A precise adjustment is performed once the menu is rendered and can
+    // be measured (see adjustContextMenuPosition).
+    const estWidth = 220;
+    const estHeight = 520;
+    const margin = 8;
+    const initialX = Math.max(margin, Math.min(event.clientX, window.innerWidth - estWidth - margin));
+    const initialY = Math.max(margin, Math.min(event.clientY, window.innerHeight - estHeight - margin));
+    this.contextMenu.set({ x: initialX, y: initialY, email });
     this.contextSubmenu.set(null);
     const cachedIds = this.labelService.emailLabelMap().get(`${email.folder}:${email.uid}`);
     this.contextEmailLabelIds.set(new Set(cachedIds ?? []));
+    const clickX = event.clientX;
+    const clickY = event.clientY;
+    // Wait for Angular to render the menu so we can measure its actual size.
+    requestAnimationFrame(() => this.adjustContextMenuPosition(clickX, clickY));
+  }
+
+  private adjustContextMenuPosition(clickX: number, clickY: number): void {
+    const el = this.contextMenuEl()?.nativeElement;
+    const menu = this.contextMenu();
+    if (!el || !menu) return;
+    const rect = el.getBoundingClientRect();
+    const margin = 8;
+    const maxX = Math.max(margin, window.innerWidth - rect.width - margin);
+    const maxY = Math.max(margin, window.innerHeight - rect.height - margin);
+    const x = Math.max(margin, Math.min(clickX, maxX));
+    const y = Math.max(margin, Math.min(clickY, maxY));
+    if (x !== menu.x || y !== menu.y) {
+      this.contextMenu.set({ ...menu, x, y });
+    }
   }
 
   closeContextMenu(): void {
