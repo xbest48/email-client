@@ -3,7 +3,7 @@
 }
 
 .group:hover.email-row-unread {
-  background-color: color-mix(in srgb, var(--color-amber-500) 16%, white);
+  background-color: color-mix(in srgb, var(--color-amber-500) 12%, white);
 }
 
 /* Dark mode: force a clearly visible hover on read rows. */
