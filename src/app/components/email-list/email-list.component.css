@@ -6,12 +6,17 @@
   background-color: color-mix(in srgb, var(--color-amber-500) 16%, white);
 }
 
+/* Dark mode: force a clearly visible hover on read rows. */
+:host-context(.dark) .group:hover {
+  background-color: rgb(55 65 81); /* gray-700 */
+}
+
 :host-context(.dark) .email-row-unread {
   background-color: color-mix(in srgb, var(--color-amber-500) 15%, rgb(17 24 39));
 }
 
 :host-context(.dark) .group:hover.email-row-unread {
-  background-color: color-mix(in srgb, var(--color-amber-500) 28%, rgb(17 24 39));
+  background-color: color-mix(in srgb, var(--color-amber-500) 32%, rgb(17 24 39));
 }
 
 :host-context(.dark) .email-row-unread-dark-strong {
@@ -19,5 +24,5 @@
 }
 
 :host-context(.dark) .group:hover.email-row-unread-dark-strong {
-  background-color: color-mix(in srgb, var(--color-amber-500) 38%, rgb(17 24 39));
+  background-color: color-mix(in srgb, var(--color-amber-500) 42%, rgb(17 24 39));
 }
