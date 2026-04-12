@@ -3,7 +3,7 @@
 }
 
 .group:hover.email-row-unread {
-  background-color: color-mix(in srgb, var(--color-amber-500) 8%, white);
+  background-color: color-mix(in srgb, var(--color-amber-500) 16%, white);
 }
 
 :host-context(.dark) .email-row-unread {
@@ -11,7 +11,7 @@
 }
 
 :host-context(.dark) .group:hover.email-row-unread {
-  background-color: color-mix(in srgb, var(--color-amber-500) 16%, rgb(17 24 39));
+  background-color: color-mix(in srgb, var(--color-amber-500) 28%, rgb(17 24 39));
 }
 
 :host-context(.dark) .email-row-unread-dark-strong {
@@ -19,5 +19,5 @@
 }
 
 :host-context(.dark) .group:hover.email-row-unread-dark-strong {
-  background-color: color-mix(in srgb, var(--color-amber-500) 25%, rgb(17 24 39));
+  background-color: color-mix(in srgb, var(--color-amber-500) 38%, rgb(17 24 39));
 }
