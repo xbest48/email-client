@@ -7,6 +7,7 @@ import { Email, ImapFolder } from '../../models/email.model';
 import { KeyboardShortcutService } from '../../services/keyboard-shortcut.service';
 import { SwipeDirective } from '../../directives/swipe.directive';
 import { LabelService, Label } from '../../services/label.service';
+import { SettingsService } from '../../services/settings.service';
 
 const FOLDER_MAP: Record<string, string> = {
   inbox: 'INBOX',
@@ -35,6 +36,7 @@ export class EmailListComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly shortcutService = inject(KeyboardShortcutService);
   protected readonly labelService = inject(LabelService);
+  protected readonly settingsService = inject(SettingsService);
 
   readonly selectedIds = signal<Set<string>>(new Set());
   readonly focusedIndex = signal(-1);
@@ -58,6 +60,10 @@ export class EmailListComponent implements OnInit, OnDestroy {
     const selected = this.selectedIds();
     return emails.length > 0 && emails.every((e) => selected.has(this.emailKey(e)));
   });
+
+  readonly useStrongerDarkUnreadAccent = computed(() =>
+    this.getRelativeLuminance(this.settingsService.accentColor) < 0.12
+  );
 
   private shortcutSub?: Subscription;
 
@@ -257,6 +263,22 @@ export class EmailListComponent implements OnInit, OnDestroy {
       await this.emailService.markAsRead(email);
     }
     this.selectedIds.set(new Set());
+  }
+
+  private getRelativeLuminance(hex: string): number {
+    const normalized = hex.replace('#', '').trim();
+    if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return 1;
+
+    const [r, g, b] = [
+      parseInt(normalized.slice(0, 2), 16),
+      parseInt(normalized.slice(2, 4), 16),
+      parseInt(normalized.slice(4, 6), 16),
+    ].map((channel) => {
+      const srgb = channel / 255;
+      return srgb <= 0.04045 ? srgb / 12.92 : ((srgb + 0.055) / 1.055) ** 2.4;
+    });
+
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
   }
 
   async onSwipeLeft(email: Email): Promise<void> {

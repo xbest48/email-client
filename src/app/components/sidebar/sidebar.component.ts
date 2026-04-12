@@ -36,7 +36,6 @@ export class SidebarComponent {
   readonly compose = output<void>();
   readonly signOut = output<void>();
 
-  readonly showLabelsSection = signal(true);
   readonly showAddFolder = signal(false);
   readonly newFolderName = signal('');
   readonly showAddLabel = signal(false);
@@ -84,6 +83,10 @@ export class SidebarComponent {
 
   toggleFolders(): void {
     this.settingsService.toggleShowFolders();
+  }
+
+  toggleLabelsSection(): void {
+    this.settingsService.toggleShowLabelsSection();
   }
 
   onFolderContextMenu(event: MouseEvent, folder: ImapFolder): void {

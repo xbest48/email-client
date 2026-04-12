@@ -4,7 +4,7 @@ import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { Subscription } from 'rxjs';
 import { EmailService } from '../../services/email.service';
 import { RelativeTimePipe } from '../../pipes/relative-time.pipe';
-import { Email } from '../../models/email.model';
+import { Email, EmailAddress } from '../../models/email.model';
 import { AuthService } from '../../services/auth.service';
 import { SnoozeService } from '../../services/snooze.service';
 import { LabelService, Label } from '../../services/label.service';
@@ -34,7 +34,12 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
   private readonly sanitizer = inject(DomSanitizer);
 
   readonly email = signal<Email | null>(null);
-  readonly showReply = signal(false);
+  readonly replyMode = signal<'reply' | 'replyAll' | 'forward' | null>(null);
+  readonly showReply = computed(() => this.replyMode() !== null);
+  readonly replyTo = signal('');
+  readonly replyCc = signal('');
+  readonly replyBcc = signal('');
+  readonly replySubject = signal('');
   readonly replyBody = signal('');
   readonly replyEditor = viewChild<RichEditorComponent>('replyEditor');
   readonly allowExternalImages = signal(false);
@@ -127,7 +132,7 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
 
     this.shortcutSub = this.shortcutService.actions.subscribe((action) => {
       switch (action) {
-        case 'reply': this.showReply.set(true); break;
+        case 'reply': this.openReply('reply'); break;
         case 'goBack': this.goBack(); break;
         case 'toggleStar': this.toggleStar(); break;
         case 'trash': this.trash(); break;
@@ -193,22 +198,124 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     }
   }
 
+  openReply(mode: 'reply' | 'replyAll' | 'forward'): void {
+    const mail = this.email();
+    if (!mail) return;
+
+    if (mode === 'forward') {
+      this.replyTo.set('');
+      this.replyCc.set('');
+      this.replyBcc.set('');
+      this.replySubject.set(this.withSubjectPrefix(mail.subject, 'Fwd:'));
+      this.replyBody.set(this.buildForwardBody(mail));
+    } else if (mode === 'replyAll') {
+      const recipients = this.buildReplyAllRecipients(mail);
+      this.replyTo.set(recipients.to);
+      this.replyCc.set(recipients.cc);
+      this.replyBcc.set(recipients.bcc);
+      this.replySubject.set(this.withSubjectPrefix(mail.subject, 'Re:'));
+      this.replyBody.set('');
+    } else {
+      this.replyTo.set(mail.from.email);
+      this.replyCc.set('');
+      this.replyBcc.set('');
+      this.replySubject.set(this.withSubjectPrefix(mail.subject, 'Re:'));
+      this.replyBody.set('');
+    }
+
+    this.replyMode.set(mode);
+
+    const editor = this.replyEditor();
+    if (editor) {
+      editor.setHtml(this.replyBody());
+    }
+  }
+
+  closeReplyComposer(): void {
+    this.replyMode.set(null);
+    this.replyTo.set('');
+    this.replyCc.set('');
+    this.replyBcc.set('');
+    this.replySubject.set('');
+    this.replyBody.set('');
+    this.replyEditor()?.clear();
+  }
+
   async sendReply(): Promise<void> {
     const mail = this.email();
     const editor = this.replyEditor();
-    const body = editor ? editor.getFullHtml() : this.replyBody();
-    if (!mail || !body) return;
+    const mode = this.replyMode();
+    const body = (editor ? editor.getFullHtml() : this.replyBody()).trim();
+    if (!mail || !body || !mode) return;
 
-    const subject = mail.subject.startsWith('Re:') ? mail.subject : `Re: ${mail.subject}`;
+    const to = this.replyTo().trim();
+    const cc = this.replyCc().trim();
+    const bcc = this.replyBcc().trim();
+    const subject = this.replySubject().trim();
+    if (!to) return;
+
+    const isReply = mode === 'reply' || mode === 'replyAll';
     await this.emailService.sendEmail(
-      mail.from.email, subject, body, '', '',
-      mail.messageId || '', mail.messageId || ''
+      to,
+      subject,
+      body,
+      cc,
+      bcc,
+      isReply ? mail.messageId || '' : '',
+      isReply ? mail.messageId || '' : '',
     );
-    this.showReply.set(false);
-    this.replyBody.set('');
+    this.closeReplyComposer();
   }
+
   onReplyChange(html: string): void {
     this.replyBody.set(html);
+  }
+
+  printEmail(): void {
+    const mail = this.email();
+    if (!mail) return;
+
+    const printWindow = window.open('', '_blank', 'width=960,height=720');
+    if (!printWindow) return;
+
+    const bodyHtml = this.getPrintableBodyHtml(mail);
+    const printable = `<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8">
+    <title>${this.escapeHtml(mail.subject || 'Message')}</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 32px; color: #1f2937; line-height: 1.5; }
+      h1 { font-size: 24px; margin: 0 0 16px; }
+      .meta { margin-bottom: 24px; font-size: 14px; }
+      .meta-row { margin: 4px 0; }
+      .label { font-weight: 700; }
+      .content { border-top: 1px solid #d1d5db; padding-top: 24px; }
+      pre { white-space: pre-wrap; font-family: Arial, sans-serif; }
+      img { max-width: 100%; height: auto; }
+    </style>
+  </head>
+  <body>
+    <h1>${this.escapeHtml(mail.subject || '(Sans objet)')}</h1>
+    <div class="meta">
+      <div class="meta-row"><span class="label">De :</span> ${this.escapeHtml(this.formatAddress(mail.from))}</div>
+      <div class="meta-row"><span class="label">Date :</span> ${this.escapeHtml(new Date(mail.date).toLocaleString())}</div>
+      <div class="meta-row"><span class="label">A :</span> ${this.escapeHtml(this.formatRecipientDetails(mail.to))}</div>
+      ${mail.cc.length ? `<div class="meta-row"><span class="label">Cc :</span> ${this.escapeHtml(this.formatRecipientDetails(mail.cc))}</div>` : ''}
+      ${mail.bcc.length ? `<div class="meta-row"><span class="label">Cci :</span> ${this.escapeHtml(this.formatRecipientDetails(mail.bcc))}</div>` : ''}
+    </div>
+    <div class="content">${bodyHtml}</div>
+  </body>
+</html>`;
+
+    printWindow.document.open();
+    printWindow.document.write(printable);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.onafterprint = () => printWindow.close();
+    window.setTimeout(() => {
+      printWindow.print();
+    }, 150);
   }
 
   // Snooze
@@ -327,10 +434,136 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     return addresses.map((a) => a.name || a.email).join(', ');
   }
 
+  replyModeLabel(): string {
+    switch (this.replyMode()) {
+      case 'replyAll':
+        return 'Repondre a tous';
+      case 'forward':
+        return 'Transferer';
+      case 'reply':
+      default:
+        return 'Repondre';
+    }
+  }
+
   formatSize(bytes: number): string {
     if (bytes < 1024) return `${bytes} o`;
     if (bytes < 1048576) return `${Math.round(bytes / 1024)} Ko`;
     return `${(bytes / 1048576).toFixed(1)} Mo`;
+  }
+
+  private buildReplyAllRecipients(mail: Email): { to: string; cc: string; bcc: string } {
+    const ownEmails = new Set(this.getCurrentAccountEmails());
+    const to = this.uniqueEmails(
+      [mail.from.email, ...mail.to.map((address) => address.email)],
+      ownEmails,
+    );
+    const cc = this.uniqueEmails(
+      mail.cc.map((address) => address.email),
+      ownEmails,
+      new Set(to.map((email) => email.toLowerCase())),
+    );
+    const bcc = this.uniqueEmails(
+      mail.bcc.map((address) => address.email),
+      ownEmails,
+      new Set([...to, ...cc].map((email) => email.toLowerCase())),
+    );
+
+    if (!to.length && mail.from.email) {
+      to.push(mail.from.email);
+    }
+
+    return {
+      to: to.join(', '),
+      cc: cc.join(', '),
+      bcc: bcc.join(', '),
+    };
+  }
+
+  private uniqueEmails(emails: string[], ...excludedSets: Set<string>[]): string[] {
+    const excluded = new Set<string>();
+    for (const set of excludedSets) {
+      for (const value of set) {
+        excluded.add(value.toLowerCase());
+      }
+    }
+
+    const seen = new Set<string>();
+    const unique: string[] = [];
+    for (const email of emails) {
+      const trimmed = email.trim();
+      if (!trimmed) continue;
+      const normalized = trimmed.toLowerCase();
+      if (excluded.has(normalized) || seen.has(normalized)) continue;
+      seen.add(normalized);
+      unique.push(trimmed);
+    }
+    return unique;
+  }
+
+  private getCurrentAccountEmails(): string[] {
+    return this.settingsService.accounts
+      .map((account) => account.email.trim().toLowerCase())
+      .filter(Boolean);
+  }
+
+  private withSubjectPrefix(subject: string, prefix: 'Re:' | 'Fwd:'): string {
+    const trimmed = (subject || '').trim();
+    if (!trimmed) return prefix;
+
+    const normalizedPrefix = prefix.replace(':', '');
+    const alreadyPrefixed = new RegExp(`^${normalizedPrefix}:`, 'i');
+    if (alreadyPrefixed.test(trimmed)) return trimmed;
+    return `${prefix} ${trimmed}`;
+  }
+
+  private buildForwardBody(mail: Email): string {
+    const originalBody = mail.htmlBody
+      ? mail.htmlBody
+      : this.escapeHtml(mail.body || '').replace(/\n/g, '<br>');
+
+    return [
+      '<p><br></p>',
+      '<p>---------- Message transfere ----------</p>',
+      `<p><strong>De :</strong> ${this.escapeHtml(this.formatAddress(mail.from))}<br>`,
+      `<strong>Date :</strong> ${this.escapeHtml(new Date(mail.date).toLocaleString())}<br>`,
+      `<strong>Objet :</strong> ${this.escapeHtml(mail.subject || '(Sans objet)')}<br>`,
+      `<strong>A :</strong> ${this.escapeHtml(this.formatRecipientDetails(mail.to))}`,
+      `${mail.cc.length ? `<br><strong>Cc :</strong> ${this.escapeHtml(this.formatRecipientDetails(mail.cc))}` : ''}`,
+      `${mail.bcc.length ? `<br><strong>Cci :</strong> ${this.escapeHtml(this.formatRecipientDetails(mail.bcc))}` : ''}</p>`,
+      '<hr>',
+      originalBody,
+    ].join('');
+  }
+
+  private getPrintableBodyHtml(mail: Email): string {
+    const decrypted = this.decryptedBody();
+    if (decrypted) {
+      return `<pre>${this.escapeHtml(decrypted)}</pre>`;
+    }
+
+    const html = this.sanitizedHtml();
+    if (html) return html;
+
+    return `<pre>${this.escapeHtml(mail.body || '')}</pre>`;
+  }
+
+  private formatAddress(address: EmailAddress): string {
+    if (!address) return '';
+    return address.name ? `${address.name} <${address.email}>` : address.email;
+  }
+
+  private formatRecipientDetails(addresses: EmailAddress[]): string {
+    return addresses.map((address) => this.formatAddress(address)).join(', ');
+  }
+
+  private escapeHtml(value: string): string {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
 }

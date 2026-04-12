@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy, inject, effect } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject, effect, HostListener } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { AuthService } from './services/auth.service';
 import { ConfirmDialogComponent } from './components/confirm-dialog/confirm-dialog.component';
@@ -22,5 +22,22 @@ export class AppComponent {
         document.documentElement.classList.remove('dark');
       }
     });
+  }
+
+  @HostListener('document:contextmenu', ['$event'])
+  onDocumentContextMenu(event: MouseEvent): void {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      event.preventDefault();
+      return;
+    }
+
+    const allowNativeMenu = target.closest(
+      'input, textarea, select, [contenteditable=""], [contenteditable="true"], [data-allow-native-context-menu]'
+    );
+
+    if (!allowNativeMenu) {
+      event.preventDefault();
+    }
   }
 }

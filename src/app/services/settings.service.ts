@@ -42,6 +42,7 @@ export interface AppSettings {
   signatures: EmailSignature[];
   templates: EmailTemplate[];
   showFolders: boolean;
+  showLabelsSection: boolean;
   accentColor: string;
 }
 
@@ -54,6 +55,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   signatures: [],
   templates: [],
   showFolders: true,
+  showLabelsSection: true,
   accentColor: '#403d84',
 };
 
@@ -92,6 +94,10 @@ export class SettingsService {
     return this.settings().accentColor;
   }
 
+  get showLabelsSection(): boolean {
+    return this.settings().showLabelsSection;
+  }
+
   update(partial: Partial<AppSettings>): void {
     this.settings.update((s) => {
       const updated = { ...s, ...partial };
@@ -106,6 +112,10 @@ export class SettingsService {
 
   toggleShowFolders(): void {
     this.update({ showFolders: !this.settings().showFolders });
+  }
+
+  toggleShowLabelsSection(): void {
+    this.update({ showLabelsSection: !this.settings().showLabelsSection });
   }
 
   setAccentColor(color: string): void {
