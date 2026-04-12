@@ -3,7 +3,18 @@
 }
 
 .group:hover.email-row-unread {
-  background-color: color-mix(in srgb, var(--color-amber-500) 8%, white);
+  background-color: color-mix(in srgb, var(--color-amber-500) 10%, white);
+}
+
+/* Dark mode: force a visible hover on read rows.
+   !important is needed because styles.css applies
+   `.dark .bg-white { background-color: #1f1f1f !important }`
+   to read rows (which carry the `bg-white` class), and that
+   global !important would otherwise win over this hover rule.
+   The delta is kept in line with the light mode hover
+   (white -> gray-50, ~6 units) so the feel matches. */
+:host-context(.dark) .group:hover {
+  background-color: #262626 !important; /* neutral-800 */
 }
 
 :host-context(.dark) .email-row-unread {
@@ -11,7 +22,7 @@
 }
 
 :host-context(.dark) .group:hover.email-row-unread {
-  background-color: color-mix(in srgb, var(--color-amber-500) 16%, rgb(17 24 39));
+  background-color: color-mix(in srgb, var(--color-amber-500) 22%, rgb(17 24 39)) !important;
 }
 
 :host-context(.dark) .email-row-unread-dark-strong {
@@ -19,5 +30,5 @@
 }
 
 :host-context(.dark) .group:hover.email-row-unread-dark-strong {
-  background-color: color-mix(in srgb, var(--color-amber-500) 25%, rgb(17 24 39));
+  background-color: color-mix(in srgb, var(--color-amber-500) 30%, rgb(17 24 39)) !important;
 }
