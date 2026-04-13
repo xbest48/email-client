@@ -1,6 +1,6 @@
 import { Component, inject, signal, computed, output, ChangeDetectionStrategy, viewChild, ElementRef, afterNextRender } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { SettingsService, EmailSignature, EmailTemplate } from '../../services/settings.service';
+import { SettingsService, EmailAccount, EmailSignature, EmailTemplate } from '../../services/settings.service';
 import { RichEditorComponent } from '../rich-editor/rich-editor.component';
 import { AuthService } from '../../services/auth.service';
 import { LabelService, Label } from '../../services/label.service';
@@ -50,6 +50,8 @@ export class SettingsComponent {
   readonly twoFactorEnabled = signal(false);
 
   // Account form
+  readonly showAccountForm = signal(false);
+  readonly editingAccountId = signal<string | null>(null);
   readonly accountEmail = signal('');
   readonly accountPassword = signal('');
   readonly accountDisplayName = signal('');
@@ -214,18 +216,58 @@ export class SettingsComponent {
     }
   }
 
-  addAccount(): void {
-    if (!this.accountEmail() || !this.accountPassword() || !this.accountImapHost() || !this.accountSmtpHost()) return;
-    this.settingsService.addAccount({
-      email: this.accountEmail(),
-      password: this.accountPassword(),
-      displayName: this.accountDisplayName(),
-      imapHost: this.accountImapHost(),
-      imapPort: this.accountImapPort(),
-      smtpHost: this.accountSmtpHost(),
-      smtpPort: this.accountSmtpPort(),
-    });
+  openAddAccountForm(): void {
     this.resetAccountForm();
+    this.showAccountForm.set(true);
+  }
+
+  editAccount(account: EmailAccount): void {
+    this.editingAccountId.set(account.id);
+    this.accountEmail.set(account.email);
+    this.accountPassword.set('');
+    this.accountDisplayName.set(account.displayName ?? '');
+    this.accountImapHost.set(account.imapHost);
+    this.accountImapPort.set(account.imapPort);
+    this.accountSmtpHost.set(account.smtpHost);
+    this.accountSmtpPort.set(account.smtpPort);
+    this.showAccountForm.set(true);
+  }
+
+  cancelAccountForm(): void {
+    this.resetAccountForm();
+    this.showAccountForm.set(false);
+  }
+
+  async saveAccount(): Promise<void> {
+    if (!this.accountEmail() || !this.accountImapHost() || !this.accountSmtpHost()) return;
+
+    const editingId = this.editingAccountId();
+    if (editingId) {
+      const data: Partial<EmailAccount> = {
+        email: this.accountEmail(),
+        displayName: this.accountDisplayName(),
+        imapHost: this.accountImapHost(),
+        imapPort: this.accountImapPort(),
+        smtpHost: this.accountSmtpHost(),
+        smtpPort: this.accountSmtpPort(),
+      };
+      if (this.accountPassword()) {
+        data.password = this.accountPassword();
+      }
+      await this.settingsService.updateAccount(editingId, data);
+    } else {
+      if (!this.accountPassword()) return;
+      await this.settingsService.addAccount({
+        email: this.accountEmail(),
+        password: this.accountPassword(),
+        displayName: this.accountDisplayName(),
+        imapHost: this.accountImapHost(),
+        imapPort: this.accountImapPort(),
+        smtpHost: this.accountSmtpHost(),
+        smtpPort: this.accountSmtpPort(),
+      });
+    }
+    this.cancelAccountForm();
   }
 
   async updateAccountDisplayName(accountId: string, displayName: string): Promise<void> {
@@ -234,6 +276,9 @@ export class SettingsComponent {
 
   removeAccount(id: string): void {
     this.settingsService.removeAccount(id);
+    if (this.editingAccountId() === id) {
+      this.cancelAccountForm();
+    }
   }
 
   toggleSignatureSourceMode(): void {
@@ -583,6 +628,7 @@ export class SettingsComponent {
   }
 
   private resetAccountForm(): void {
+    this.editingAccountId.set(null);
     this.accountEmail.set('');
     this.accountPassword.set('');
     this.accountDisplayName.set('');
