@@ -197,13 +197,25 @@ export class RichEditorComponent implements OnDestroy {
   }
 
   private prepareHtmlForRendering(html: string): string {
-    return html.replace(
-      /(<img\b[^>]*\bsrc\s*=\s*["'])(data:image\/[^;"']+;base64,[^"']+)(["'][^>]*>)/gi,
-      (_match, prefix: string, dataUrl: string, suffix: string) => {
+    // Convert <img src="data:..."> to object URLs
+    let result = html.replace(
+      /(<img\b[^>]*?\bsrc\s*=\s*)(["'])(data:image\/[^"']+)\2/gi,
+      (_match, prefix: string, quote: string, dataUrl: string) => {
         const objectUrl = this.createObjectUrlFromDataImage(dataUrl);
-        return `${prefix}${objectUrl}${suffix}`;
+        return `${prefix}${quote}${objectUrl}${quote}`;
       },
     );
+
+    // Also convert CSS url(data:...) to object URLs (covers background-image etc.)
+    result = result.replace(
+      /(url\s*\(\s*)(["']?)(data:image\/[^"')]+)\2(\s*\))/gi,
+      (_match, urlOpen: string, quote: string, dataUrl: string, urlClose: string) => {
+        const objectUrl = this.createObjectUrlFromDataImage(dataUrl);
+        return `${urlOpen}${quote}${objectUrl}${quote}${urlClose}`;
+      },
+    );
+
+    return result;
   }
 
   private restoreEmbeddedDataImageUrls(html: string): string {

@@ -6,7 +6,8 @@ import { RelativeTimePipe } from '../../pipes/relative-time.pipe';
 import { Email, ImapFolder } from '../../models/email.model';
 import { KeyboardShortcutService } from '../../services/keyboard-shortcut.service';
 import { SwipeDirective } from '../../directives/swipe.directive';
-import { LabelService } from '../../services/label.service';
+import { LabelService, Label } from '../../services/label.service';
+import { SettingsService } from '../../services/settings.service';
 
 const FOLDER_MAP: Record<string, string> = {
   inbox: 'INBOX',
@@ -35,6 +36,7 @@ export class EmailListComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly shortcutService = inject(KeyboardShortcutService);
   protected readonly labelService = inject(LabelService);
+  protected readonly settingsService = inject(SettingsService);
 
   readonly selectedIds = signal<Set<string>>(new Set());
   readonly focusedIndex = signal(-1);
@@ -47,15 +49,21 @@ export class EmailListComponent implements OnInit, OnDestroy {
   readonly isTrashFolder = signal(false);
   readonly contextMenu = signal<{ x: number; y: number; email: Email } | null>(null);
   readonly contextSubmenu = signal<'labels' | null>(null);
+  readonly contextEmailLabelIds = signal<Set<string>>(new Set());
   readonly mobileActionMenu = signal<Email | null>(null);
   readonly mobileSelectionMode = signal(false);
   private readonly scrollContainer = viewChild<ElementRef<HTMLDivElement>>('scrollContainer');
+  private readonly contextMenuEl = viewChild<ElementRef<HTMLDivElement>>('contextMenuEl');
 
   readonly allSelected = computed(() => {
     const emails = this.emails();
     const selected = this.selectedIds();
     return emails.length > 0 && emails.every((e) => selected.has(this.emailKey(e)));
   });
+
+  readonly useStrongerDarkUnreadAccent = computed(() =>
+    this.getRelativeLuminance(this.settingsService.accentColor) < 0.12
+  );
 
   private shortcutSub?: Subscription;
 
@@ -156,6 +164,7 @@ export class EmailListComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.shortcutSub?.unsubscribe();
+    this.clearLabelsSubmenuTimers();
   }
 
   refresh(): void {
@@ -256,6 +265,22 @@ export class EmailListComponent implements OnInit, OnDestroy {
     this.selectedIds.set(new Set());
   }
 
+  private getRelativeLuminance(hex: string): number {
+    const normalized = hex.replace('#', '').trim();
+    if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return 1;
+
+    const [r, g, b] = [
+      parseInt(normalized.slice(0, 2), 16),
+      parseInt(normalized.slice(2, 4), 16),
+      parseInt(normalized.slice(4, 6), 16),
+    ].map((channel) => {
+      const srgb = channel / 255;
+      return srgb <= 0.04045 ? srgb / 12.92 : ((srgb + 0.055) / 1.055) ** 2.4;
+    });
+
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }
+
   async onSwipeLeft(email: Email): Promise<void> {
     await this.trashEmailAndRefill(email);
   }
@@ -283,22 +308,89 @@ export class EmailListComponent implements OnInit, OnDestroy {
   onContextMenu(event: MouseEvent, email: Email): void {
     event.preventDefault();
     event.stopPropagation();
-    const menuWidth = 220;
-    const menuHeight = 420;
-    const x = Math.min(event.clientX, window.innerWidth - menuWidth);
-    const y = Math.min(event.clientY, window.innerHeight - menuHeight);
-    this.contextMenu.set({ x, y: Math.max(8, y), email });
+    // Rough initial placement to avoid a visible flash outside the viewport.
+    // A precise adjustment is performed once the menu is rendered and can
+    // be measured (see adjustContextMenuPosition).
+    const estWidth = 288;
+    const estHeight = 520;
+    const margin = 8;
+    const initialX = Math.max(margin, Math.min(event.clientX, window.innerWidth - estWidth - margin));
+    const initialY = Math.max(margin, Math.min(event.clientY, window.innerHeight - estHeight - margin));
+    this.contextMenu.set({ x: initialX, y: initialY, email });
     this.contextSubmenu.set(null);
+    const cachedIds = this.labelService.emailLabelMap().get(`${email.folder}:${email.uid}`);
+    this.contextEmailLabelIds.set(new Set(cachedIds ?? []));
+    const clickX = event.clientX;
+    const clickY = event.clientY;
+    // Wait for Angular to render the menu so we can measure its actual size.
+    requestAnimationFrame(() => this.adjustContextMenuPosition(clickX, clickY));
+  }
+
+  private adjustContextMenuPosition(clickX: number, clickY: number): void {
+    const el = this.contextMenuEl()?.nativeElement;
+    const menu = this.contextMenu();
+    if (!el || !menu) return;
+    const rect = el.getBoundingClientRect();
+    const margin = 8;
+    const maxX = Math.max(margin, window.innerWidth - rect.width - margin);
+    const maxY = Math.max(margin, window.innerHeight - rect.height - margin);
+    const x = Math.max(margin, Math.min(clickX, maxX));
+    const y = Math.max(margin, Math.min(clickY, maxY));
+    if (x !== menu.x || y !== menu.y) {
+      this.contextMenu.set({ ...menu, x, y });
+    }
   }
 
   closeContextMenu(): void {
+    this.clearLabelsSubmenuTimers();
     this.contextMenu.set(null);
     this.contextSubmenu.set(null);
+    this.contextEmailLabelIds.set(new Set());
     this.mobileActionMenu.set(null);
   }
 
   toggleContextSubmenu(menu: 'labels'): void {
     this.contextSubmenu.update((current) => current === menu ? null : menu);
+  }
+
+  private labelsSubmenuOpenTimer: ReturnType<typeof setTimeout> | null = null;
+  private labelsSubmenuCloseTimer: ReturnType<typeof setTimeout> | null = null;
+
+  onLabelsHoverEnter(): void {
+    if (this.labelsSubmenuCloseTimer !== null) {
+      clearTimeout(this.labelsSubmenuCloseTimer);
+      this.labelsSubmenuCloseTimer = null;
+    }
+    if (this.contextSubmenu() === 'labels') return;
+    if (this.labelsSubmenuOpenTimer !== null) clearTimeout(this.labelsSubmenuOpenTimer);
+    this.labelsSubmenuOpenTimer = setTimeout(() => {
+      this.contextSubmenu.set('labels');
+      this.labelsSubmenuOpenTimer = null;
+    }, 1000);
+  }
+
+  onLabelsHoverLeave(): void {
+    if (this.labelsSubmenuOpenTimer !== null) {
+      clearTimeout(this.labelsSubmenuOpenTimer);
+      this.labelsSubmenuOpenTimer = null;
+    }
+    if (this.contextSubmenu() !== 'labels') return;
+    if (this.labelsSubmenuCloseTimer !== null) clearTimeout(this.labelsSubmenuCloseTimer);
+    this.labelsSubmenuCloseTimer = setTimeout(() => {
+      this.contextSubmenu.set(null);
+      this.labelsSubmenuCloseTimer = null;
+    }, 200);
+  }
+
+  private clearLabelsSubmenuTimers(): void {
+    if (this.labelsSubmenuOpenTimer !== null) {
+      clearTimeout(this.labelsSubmenuOpenTimer);
+      this.labelsSubmenuOpenTimer = null;
+    }
+    if (this.labelsSubmenuCloseTimer !== null) {
+      clearTimeout(this.labelsSubmenuCloseTimer);
+      this.labelsSubmenuCloseTimer = null;
+    }
   }
 
   openMobileActionMenu(event: MouseEvent, email: Email): void {
@@ -370,11 +462,22 @@ export class EmailListComponent implements OnInit, OnDestroy {
       ? this.emails().filter((e) => this.selectedIds().has(this.emailKey(e)))
       : [menu.email];
 
+    const alreadyAssigned = this.contextEmailLabelIds().has(labelId);
+
     for (const email of emailsToLabel) {
-      await this.labelService.addEmailToLabel(labelId, email.folder, email.uid);
+      if (alreadyAssigned) {
+        await this.labelService.removeEmailFromLabel(labelId, email.folder, email.uid);
+      } else {
+        await this.labelService.addEmailToLabel(labelId, email.folder, email.uid);
+      }
     }
 
-    this.closeContextMenu();
+    this.contextEmailLabelIds.update((set) => {
+      const next = new Set(set);
+      if (alreadyAssigned) next.delete(labelId);
+      else next.add(labelId);
+      return next;
+    });
   }
 
   contextSpam(): void {
@@ -437,6 +540,15 @@ export class EmailListComponent implements OnInit, OnDestroy {
 
   emailKey(email: Email): string {
     return `${email.folder}:${email.uid}`;
+  }
+
+  labelsFor(email: Email): Label[] {
+    return this.labelService.getLabelsForCachedEmail(email.folder, email.uid);
+  }
+
+  recipientLabel(email: Email): string {
+    const first = email.to.length > 0 ? email.to[0] : null;
+    return first?.name || first?.email || '(sans destinataire)';
   }
 
   private resolveFolder(label: string): string {

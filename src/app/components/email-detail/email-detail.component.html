@@ -127,6 +127,18 @@
       </button>
 
       <button
+        (click)="printEmail()"
+        class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-800 rounded-lg transition-colors
+               focus:outline-none focus:ring-2 focus:ring-amber-400"
+        type="button"
+        aria-label="Imprimer"
+        title="Imprimer">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 9V4h12v5M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v6H6v-6z"/>
+        </svg>
+      </button>
+
+      <button
         (click)="toggleUnread()"
         class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-800 rounded-lg transition-colors
                focus:outline-none focus:ring-2 focus:ring-amber-400"
@@ -213,18 +225,43 @@
             <span class="text-xs text-gray-400">{{ mail.date | relativeTime }}</span>
           </div>
 
-          <!-- Reply button -->
-          <button
-            (click)="showReply.set(true)"
-            class="shrink-0 p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-300 rounded-lg transition-colors
-                   focus:outline-none focus:ring-2 focus:ring-amber-400"
-            type="button"
-            aria-label="Repondre"
-            title="Repondre">
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
-            </svg>
-          </button>
+          <div class="flex items-center gap-1 shrink-0">
+            <button
+              (click)="openReply('reply')"
+              class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-300 rounded-lg transition-colors
+                     focus:outline-none focus:ring-2 focus:ring-amber-400"
+              type="button"
+              aria-label="Repondre"
+              title="Repondre">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
+              </svg>
+            </button>
+            <button
+              (click)="openReply('replyAll')"
+              class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-300 rounded-lg transition-colors
+                     focus:outline-none focus:ring-2 focus:ring-amber-400"
+              type="button"
+              aria-label="Repondre a tous"
+              title="Repondre a tous">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 10h8a8 8 0 018 8v2"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 10l6 6m-6-6l6-6"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2 10l6 6m-6-6l6-6"/>
+              </svg>
+            </button>
+            <button
+              (click)="openReply('forward')"
+              class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-300 rounded-lg transition-colors
+                     focus:outline-none focus:ring-2 focus:ring-amber-400"
+              type="button"
+              aria-label="Transferer"
+              title="Transferer">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M14 9l7 7-7 7M21 16H9a6 6 0 01-6-6V4"/>
+              </svg>
+            </button>
+          </div>
         </div>
 
         <!-- Tracking Pixel Notice -->
@@ -455,11 +492,49 @@
         <!-- Reply box -->
         @if (showReply()) {
           <div class="mt-6 border-t border-gray-200 dark:border-gray-700 pt-4">
-            <label for="reply-body" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Repondre</label>
+            <label for="reply-body" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">{{ replyModeLabel() }}</label>
+            <div class="space-y-2 mb-3">
+              <div class="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/40 px-3 py-2">
+                <span class="w-8 shrink-0 text-sm text-gray-500 dark:text-gray-400">A</span>
+                <input
+                  type="text"
+                  [value]="replyTo()"
+                  (input)="replyTo.set($any($event.target).value)"
+                  class="flex-1 bg-transparent text-sm text-gray-800 dark:text-gray-200 focus:outline-none"
+                  placeholder="destinataire@email.com">
+              </div>
+              <div class="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/40 px-3 py-2">
+                <span class="w-8 shrink-0 text-sm text-gray-500 dark:text-gray-400">Cc</span>
+                <input
+                  type="text"
+                  [value]="replyCc()"
+                  (input)="replyCc.set($any($event.target).value)"
+                  class="flex-1 bg-transparent text-sm text-gray-800 dark:text-gray-200 focus:outline-none"
+                  placeholder="cc@email.com">
+              </div>
+              <div class="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/40 px-3 py-2">
+                <span class="w-8 shrink-0 text-sm text-gray-500 dark:text-gray-400">Cci</span>
+                <input
+                  type="text"
+                  [value]="replyBcc()"
+                  (input)="replyBcc.set($any($event.target).value)"
+                  class="flex-1 bg-transparent text-sm text-gray-800 dark:text-gray-200 focus:outline-none"
+                  placeholder="cci@email.com">
+              </div>
+              <div class="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800/40 px-3 py-2">
+                <span class="w-12 shrink-0 text-sm text-gray-500 dark:text-gray-400">Objet</span>
+                <input
+                  type="text"
+                  [value]="replySubject()"
+                  (input)="replySubject.set($any($event.target).value)"
+                  class="flex-1 bg-transparent text-sm text-gray-800 dark:text-gray-200 focus:outline-none"
+                  placeholder="Objet du message">
+              </div>
+            </div>
             <div class="border border-gray-200 dark:border-gray-600 rounded-xl overflow-hidden">
               <app-rich-editor
                 #replyEditor
-                placeholder="Ecrivez votre reponse..."
+                placeholder="Ecrivez votre message..."
                 [initialContent]="replyBody()"
                 [footerHtml]="settingsService.getDefaultSignature()?.html ?? ''"
                 toolbarPosition="top"
@@ -468,7 +543,7 @@
             </div>
             <div class="flex justify-end gap-2 mt-3">
               <button
-                (click)="showReply.set(false); replyBody.set('')"
+                (click)="closeReplyComposer()"
                 class="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors
                        focus:outline-none focus:ring-2 focus:ring-amber-400"
                 type="button">
@@ -479,7 +554,7 @@
                 class="px-4 py-2 text-sm bg-amber-500 text-white font-medium rounded-lg
                        hover:bg-amber-600 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
                 type="button"
-                [disabled]="!replyBody()">
+                [disabled]="!replyTo().trim() || !replyBody().trim()">
                 Envoyer
               </button>
             </div>

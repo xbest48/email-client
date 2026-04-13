@@ -145,13 +145,17 @@ export class AuthService {
     }
   }
 
-  async signInWithWebAuthn(email: string, response: any): Promise<{ success: boolean; requires2FA?: boolean; tempToken?: string }> {
+  async signInWithWebAuthn(email: string | null, response: any): Promise<{ success: boolean; requires2FA?: boolean; tempToken?: string }> {
     this.loginError.set('');
     try {
+      const payload: { email?: string; response: any } = { response };
+      if (email) {
+        payload.email = email;
+      }
       const res = await firstValueFrom(
         this.http.post<{ access_token?: string; isTwoFactorRequired?: boolean; temp_token?: string }>(
           `${this.apiUrl}/auth/webauthn/login/verify`,
-          { email, response }
+          payload
         )
       );
 

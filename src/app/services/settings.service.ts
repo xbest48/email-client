@@ -42,6 +42,7 @@ export interface AppSettings {
   signatures: EmailSignature[];
   templates: EmailTemplate[];
   showFolders: boolean;
+  showLabelsSection: boolean;
   accentColor: string;
 }
 
@@ -54,6 +55,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   signatures: [],
   templates: [],
   showFolders: true,
+  showLabelsSection: true,
   accentColor: '#403d84',
 };
 
@@ -78,7 +80,10 @@ export class SettingsService {
   }
 
   get signatures(): EmailSignature[] {
-    return this.settings().signatures;
+    return this.settings().signatures.map((signature) => ({
+      ...signature,
+      html: this.normalizeSignatureHtml(signature.html),
+    }));
   }
 
   get showFolders(): boolean {
@@ -87,6 +92,10 @@ export class SettingsService {
 
   get accentColor(): string {
     return this.settings().accentColor;
+  }
+
+  get showLabelsSection(): boolean {
+    return this.settings().showLabelsSection;
   }
 
   update(partial: Partial<AppSettings>): void {
@@ -103,6 +112,10 @@ export class SettingsService {
 
   toggleShowFolders(): void {
     this.update({ showFolders: !this.settings().showFolders });
+  }
+
+  toggleShowLabelsSection(): void {
+    this.update({ showLabelsSection: !this.settings().showLabelsSection });
   }
 
   setAccentColor(color: string): void {
@@ -170,7 +183,7 @@ export class SettingsService {
 
   addSignature(signature: Omit<EmailSignature, 'id'>): void {
     const id = crypto.randomUUID();
-    const normalizedSignature = { ...signature, html: this.normalizeEmbeddedDataImageUrls(signature.html) };
+    const normalizedSignature = { ...signature, html: this.normalizeSignatureHtml(signature.html) };
     this.settings.update((s) => {
       const sigs = normalizedSignature.isDefault
         ? s.signatures.map((sig) => ({ ...sig, isDefault: false }))
@@ -183,7 +196,7 @@ export class SettingsService {
 
   updateSignature(id: string, partial: Partial<EmailSignature>): void {
     const normalizedPartial = partial.html !== undefined
-      ? { ...partial, html: this.normalizeEmbeddedDataImageUrls(partial.html) }
+      ? { ...partial, html: this.normalizeSignatureHtml(partial.html) }
       : partial;
 
     this.settings.update((s) => {
@@ -206,7 +219,13 @@ export class SettingsService {
   }
 
   getDefaultSignature(): EmailSignature | undefined {
-    return this.settings().signatures.find((s) => s.isDefault);
+    const signature = this.settings().signatures.find((s) => s.isDefault);
+    if (!signature) return undefined;
+
+    return {
+      ...signature,
+      html: this.normalizeSignatureHtml(signature.html),
+    };
   }
 
   // --- Templates ---
@@ -270,7 +289,7 @@ export class SettingsService {
         settings = { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
         settings.signatures = (settings.signatures ?? []).map((sig) => ({
           ...sig,
-          html: this.normalizeEmbeddedDataImageUrls(sig.html),
+          html: typeof sig.html === 'string' ? sig.html : '',
         }));
       }
     } catch {
@@ -300,10 +319,55 @@ export class SettingsService {
   }
 
   private normalizeEmbeddedDataImageUrls(html: string): string {
-    return html.replace(
-      /(<img\b[^>]*\bsrc\s*=\s*["']data:image\/[^;"']+;base64,)([\s\S]*?)(["'][^>]*>)/gi,
-      (_match, prefix: string, data: string, suffix: string) => `${prefix}${data.replace(/\s+/g, '')}${suffix}`,
+    const stripWhitespace = (dataUrl: string) =>
+      /;base64,/i.test(dataUrl) ? dataUrl.replace(/\s+/g, '') : dataUrl;
+
+    // Normalize <img src="data:..."> — use the same capture-only-src-value
+    // approach as the backend to avoid issues with > inside other attributes.
+    let result = html.replace(
+      /(<img\b[^>]*?\bsrc\s*=\s*)(["'])(data:image\/[^"']+)\2/gi,
+      (_match, prefix: string, quote: string, dataUrl: string) =>
+        `${prefix}${quote}${stripWhitespace(dataUrl)}${quote}`,
     );
+
+    // Also normalize CSS url(data:...) patterns (background-image etc.)
+    result = result.replace(
+      /(url\s*\(\s*)(["']?)(data:image\/[^"')]+)\2(\s*\))/gi,
+      (_match, urlOpen: string, quote: string, dataUrl: string, urlClose: string) =>
+        `${urlOpen}${quote}${stripWhitespace(dataUrl)}${quote}${urlClose}`,
+    );
+
+    return result;
+  }
+
+  private normalizeSignatureHtml(html: string): string {
+    return this.normalizeEmbeddedDataImageUrls(this.decodeEscapedHtmlIfNeeded(html));
+  }
+
+  private decodeEscapedHtmlIfNeeded(html: string): string {
+    if (!html) return html;
+
+    let normalized = html;
+    for (let index = 0; index < 2; index += 1) {
+      const decoded = this.decodeHtmlEntities(normalized);
+      if (decoded === normalized) break;
+      if (!this.looksLikeDecodedMarkup(normalized, decoded)) break;
+      normalized = decoded;
+    }
+
+    return normalized;
+  }
+
+  private decodeHtmlEntities(value: string): string {
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = value;
+    return textarea.value;
+  }
+
+  private looksLikeDecodedMarkup(original: string, decoded: string): boolean {
+    const hadEscapedTags = /(?:&lt;|&#60;|&#x3c;)\s*\/?\s*[a-z!][\s\S]*?(?:&gt;|&#62;|&#x3e;)/i.test(original);
+    const hasRealTags = /<\s*\/?\s*[a-z!][^>]*>/i.test(decoded);
+    return hadEscapedTags && hasRealTags;
   }
 
   private applyAccentTheme(baseHex: string): void {

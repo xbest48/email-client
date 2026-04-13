@@ -31,7 +31,7 @@ export class SandboxedHtmlDirective implements OnDestroy {
 
   private prepareHtmlForRendering(html: string): string {
     return html.replace(
-      /(<img\b[^>]*\bsrc\s*=\s*["'])(data:image\/[^;"']+;base64,[^"']+)(["'][^>]*>)/gi,
+      /(<img\b[^>]*\bsrc\s*=\s*["'])(data:image\/[^"']+)(["'][^>]*>)/gi,
       (_match, prefix: string, dataUrl: string, suffix: string) => {
         const objectUrl = this.createObjectUrlFromDataImage(dataUrl);
         return `${prefix}${objectUrl}${suffix}`;

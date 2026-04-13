@@ -6,6 +6,7 @@ import { AuthService } from '../../services/auth.service';
 import { SettingsService } from '../../services/settings.service';
 import { LabelService } from '../../services/label.service';
 import { SnoozeService } from '../../services/snooze.service';
+import { ConfirmDialogService } from '../../services/confirm-dialog.service';
 import { Email, ImapFolder } from '../../models/email.model';
 
 interface NavItem {
@@ -29,12 +30,12 @@ export class SidebarComponent {
   protected readonly settingsService = inject(SettingsService);
   protected readonly labelService = inject(LabelService);
   protected readonly snoozeService = inject(SnoozeService);
+  private readonly confirmDialog = inject(ConfirmDialogService);
 
   readonly isOpen = input(true);
   readonly compose = output<void>();
   readonly signOut = output<void>();
 
-  readonly showLabelsSection = signal(true);
   readonly showAddFolder = signal(false);
   readonly newFolderName = signal('');
   readonly showAddLabel = signal(false);
@@ -84,6 +85,10 @@ export class SidebarComponent {
     this.settingsService.toggleShowFolders();
   }
 
+  toggleLabelsSection(): void {
+    this.settingsService.toggleShowLabelsSection();
+  }
+
   onFolderContextMenu(event: MouseEvent, folder: ImapFolder): void {
     event.preventDefault();
     this.contextMenu.set({
@@ -99,12 +104,20 @@ export class SidebarComponent {
 
   async deleteFolder(folder: ImapFolder): Promise<void> {
     this.contextMenu.set(null);
-    if (confirm(`Supprimer le dossier "${folder.name}" ?`)) {
-      try {
-        await this.emailService.deleteFolder(folder.path);
-      } catch (err) {
-        console.error('Failed to delete folder', err);
-      }
+    const confirmed = await this.confirmDialog.confirm({
+      title: 'Supprimer le dossier',
+      message: `Voulez-vous vraiment supprimer le dossier "${folder.name}" ?`,
+      confirmLabel: 'Supprimer',
+      cancelLabel: 'Annuler',
+      tone: 'danger',
+    });
+
+    if (!confirmed) return;
+
+    try {
+      await this.emailService.deleteFolder(folder.path);
+    } catch (err) {
+      console.error('Failed to delete folder', err);
     }
   }
 

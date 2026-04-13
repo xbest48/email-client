@@ -6,6 +6,7 @@ import { AuthService } from '../../services/auth.service';
 import { ScheduledService } from '../../services/scheduled.service';
 import { ContactService, Contact } from '../../services/contact.service';
 import { PgpService } from '../../services/pgp.service';
+import { ConfirmDialogService } from '../../services/confirm-dialog.service';
 import { RichEditorComponent } from '../rich-editor/rich-editor.component';
 
 @Component({
@@ -22,6 +23,7 @@ export class ComposeComponent implements OnInit, OnDestroy {
   protected readonly scheduledService = inject(ScheduledService);
   protected readonly contactService = inject(ContactService);
   protected readonly pgpService = inject(PgpService);
+  private readonly confirmDialog = inject(ConfirmDialogService);
 
   readonly close = output<void>();
 
@@ -44,9 +46,11 @@ export class ComposeComponent implements OnInit, OnDestroy {
   readonly toSuggestions = signal<Contact[]>([]);
   readonly showToSuggestions = signal(false);
   readonly draftSavedAt = signal<string | null>(null);
+  readonly sendError = signal<string | null>(null);
 
   readonly bodyEditor = viewChild<RichEditorComponent>('bodyEditor');
   readonly fileInputRef = viewChild<ElementRef<HTMLInputElement>>('fileInput');
+  readonly toInputRef = viewChild<ElementRef<HTMLInputElement>>('toInput');
 
   readonly templates = computed(() => this.settingsService.templates);
 
@@ -132,11 +136,13 @@ export class ComposeComponent implements OnInit, OnDestroy {
   }
 
   onBodyChange(html: string): void {
+    this.sendError.set(null);
     this.htmlBody.set(html);
   }
 
   // Contact autocomplete
   onToInput(): void {
+    this.sendError.set(null);
     const query = this.to();
     if (this.contactTimeout) clearTimeout(this.contactTimeout);
     if (query.length < 2) {
@@ -206,10 +212,41 @@ export class ComposeComponent implements OnInit, OnDestroy {
   }
 
   // Send
-  async onSend(event: Event): Promise<void> {
-    event.preventDefault();
+  async onSend(): Promise<void> {
+    if (this.sending()) return;
+
+    this.sendError.set(null);
+
+    const to = this.to().trim();
     const editor = this.bodyEditor();
-    if (!this.to() || !editor || editor.isEmpty()) return;
+    if (!to) {
+      this.sendError.set('Ajoutez au moins un destinataire.');
+      this.toInputRef()?.nativeElement.focus();
+      return;
+    }
+    if (!this.areRecipientsValid(to)) {
+      this.sendError.set('L’adresse du destinataire semble invalide.');
+      this.toInputRef()?.nativeElement.focus();
+      return;
+    }
+    if (!editor) {
+      this.sendError.set("L'editeur du message n'est pas pret.");
+      return;
+    }
+    const subject = this.subject().trim();
+    const bodyHtml = this.stripDetachedSignature(editor.getHtml());
+    if (this.isMeaningfullyEmpty(bodyHtml) && !subject) {
+      this.sendError.set('Ajoutez un sujet ou du contenu au message avant l’envoi.');
+      return;
+    }
+    if (!subject && !await this.confirmDialog.confirm({
+      title: 'Sujet vide',
+      message: 'Le sujet est vide. Voulez-vous envoyer le message quand meme ?',
+      confirmLabel: 'Envoyer',
+      cancelLabel: 'Annuler',
+    })) {
+      return;
+    }
 
     this.sending.set(true);
     try {
@@ -217,7 +254,7 @@ export class ComposeComponent implements OnInit, OnDestroy {
 
       // PGP encryption
       if (this.encryptPgp()) {
-        const encrypted = await this.pgpService.encrypt(html, this.to());
+        const encrypted = await this.pgpService.encrypt(html, to);
         if (encrypted) html = encrypted;
       }
 
@@ -225,9 +262,9 @@ export class ComposeComponent implements OnInit, OnDestroy {
       const files = this.attachments();
       const readReceipt = this.requestReadReceipt();
       if (delay > 0) {
-        this.emailService.sendEmail(this.to(), this.subject(), html, this.cc(), this.bcc(), '', '', delay * 1000, files, readReceipt);
+        this.emailService.sendEmail(to, this.subject(), html, this.cc(), this.bcc(), '', '', delay * 1000, files, readReceipt);
       } else {
-        await this.emailService.sendEmail(this.to(), this.subject(), html, this.cc(), this.bcc(), '', '', 0, files, readReceipt);
+        await this.emailService.sendEmail(to, this.subject(), html, this.cc(), this.bcc(), '', '', 0, files, readReceipt);
       }
       this.settingsService.clearDraft();
       if (this.remoteDraft?.folder && this.remoteDraft.uid) {
@@ -241,6 +278,7 @@ export class ComposeComponent implements OnInit, OnDestroy {
       this.close.emit();
     } catch (err) {
       console.error('Failed to send email', err);
+      this.sendError.set("L'envoi du message a echoue.");
     } finally {
       this.sending.set(false);
     }
@@ -248,15 +286,49 @@ export class ComposeComponent implements OnInit, OnDestroy {
 
   // Scheduled send
   async onScheduleSend(): Promise<void> {
+    this.sendError.set(null);
+
     const editor = this.bodyEditor();
     const dateStr = this.scheduleDate();
-    if (!this.to() || !editor || editor.isEmpty() || !dateStr) return;
+    const to = this.to().trim();
+    if (!to) {
+      this.sendError.set('Ajoutez au moins un destinataire.');
+      this.toInputRef()?.nativeElement.focus();
+      return;
+    }
+    if (!this.areRecipientsValid(to)) {
+      this.sendError.set('L’adresse du destinataire semble invalide.');
+      this.toInputRef()?.nativeElement.focus();
+      return;
+    }
+    if (!editor) {
+      this.sendError.set("L'editeur du message n'est pas pret.");
+      return;
+    }
+    const subject = this.subject().trim();
+    const bodyHtml = this.stripDetachedSignature(editor.getHtml());
+    if (this.isMeaningfullyEmpty(bodyHtml) && !subject) {
+      this.sendError.set("Ajoutez un sujet ou du contenu avant de programmer l'envoi.");
+      return;
+    }
+    if (!subject && !await this.confirmDialog.confirm({
+      title: 'Sujet vide',
+      message: "Le sujet est vide. Voulez-vous programmer l'envoi quand meme ?",
+      confirmLabel: 'Programmer',
+      cancelLabel: 'Annuler',
+    })) {
+      return;
+    }
+    if (!dateStr) {
+      this.sendError.set("Choisissez une date d'envoi.");
+      return;
+    }
 
     this.sending.set(true);
     try {
       const html = editor.getFullHtml();
       await this.scheduledService.schedule({
-        to: this.to(),
+        to,
         subject: this.subject(),
         body: html,
         cc: this.cc() || undefined,
@@ -275,6 +347,7 @@ export class ComposeComponent implements OnInit, OnDestroy {
       this.close.emit();
     } catch (err) {
       console.error('Failed to schedule email', err);
+      this.sendError.set("La programmation de l'envoi a echoue.");
     } finally {
       this.sending.set(false);
     }
@@ -371,6 +444,27 @@ export class ComposeComponent implements OnInit, OnDestroy {
     }
 
     return cleaned;
+  }
+
+  private areRecipientsValid(value: string): boolean {
+    return value
+      .split(/[;,]/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .every((email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
+  }
+
+  private isMeaningfullyEmpty(html: string): boolean {
+    const normalized = html
+      .replace(/<hr[^>]*>/gi, '')
+      .replace(/<br\s*\/?>/gi, '')
+      .replace(/<\/?(div|p|span)[^>]*>/gi, '')
+      .replace(/&nbsp;/gi, '')
+      .replace(/-/g, '')
+      .replace(/\s+/g, '')
+      .trim();
+
+    return normalized === '';
   }
 
   private isVisuallyEmpty(html: string): boolean {

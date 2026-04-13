@@ -39,6 +39,13 @@ export class UsersService {
     return this.credentialsRepository.find({ where: { user: { id: userId } } });
   }
 
+  async findCredentialById(id: string): Promise<WebAuthnCredential | null> {
+    return this.credentialsRepository.findOne({
+      where: { id },
+      relations: ['user'],
+    });
+  }
+
   async updateCredentialCounter(credentialId: string, counter: number): Promise<void> {
     await this.credentialsRepository.update(credentialId, { counter });
   }

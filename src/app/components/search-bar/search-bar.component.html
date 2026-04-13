@@ -1,6 +1,6 @@
 <div class="relative w-full max-w-2xl">
   <!-- Main search bar -->
-  <form (submit)="onSearch($event)" class="relative" role="search">
+  <form (submit)="preventSubmit($event)" class="relative" role="search">
     <label for="search-input" class="sr-only">Rechercher des emails</label>
     <div class="relative">
       <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none"
@@ -15,6 +15,7 @@
         [(ngModel)]="query"
         (input)="onQueryInput()"
         (search)="onQueryInput()"
+        (keydown.enter)="suppressEnter($event)"
         name="query"
         placeholder="Rechercher des emails..."
         class="w-full pl-10 pr-12 py-2.5 bg-gray-100 hover:bg-gray-200/70 focus:bg-white

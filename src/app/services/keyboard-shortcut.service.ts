@@ -93,26 +93,28 @@ export class KeyboardShortcutService implements OnDestroy {
 
   private resolveAction(event: KeyboardEvent): ShortcutAction | null {
     const key = event.key;
+    const lowerKey = key.toLowerCase();
 
     if (key === 'Escape') return 'closeModal';
 
     if (event.shiftKey) {
-      if (key === '?' || key === '/') return 'showHelp';
-      if (key === 'I') return 'toggleReadUnread';
+      if (key === '?') return 'showHelp';
+      if (key === '/') return 'focusSearch';
+      if (lowerKey === 'i') return 'toggleReadUnread';
       if (key === '#' || key === '3') return 'trash';
       return null;
     }
 
-    switch (key) {
+    switch (lowerKey) {
       case 'c': return 'compose';
       case 'r': return 'reply';
       case 's': return 'toggleStar';
       case 'e': return 'trash';
       case 'j':
-      case 'ArrowDown': return 'nextEmail';
+      case 'arrowdown': return 'nextEmail';
       case 'k':
-      case 'ArrowUp': return 'prevEmail';
-      case 'Enter':
+      case 'arrowup': return 'prevEmail';
+      case 'enter':
       case 'o': return 'openEmail';
       case 'u': return 'goBack';
       case '/': return 'focusSearch';

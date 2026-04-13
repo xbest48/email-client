@@ -14,6 +14,14 @@ const origin = `http://${rpID}:4200`;
 export class AuthService {
   private readonly totp: TOTP;
 
+  // Short-lived in-memory store of challenges issued for usernameless
+  // (discoverable credential) WebAuthn logins. The key is the challenge, the
+  // value is the issued-at epoch. Entries older than DISCOVERABLE_CHALLENGE_TTL
+  // are rejected at verification time. For multi-instance deployments this
+  // should be moved to a shared store (Redis, DB, signed cookie...).
+  private readonly pendingDiscoverableChallenges = new Map<string, number>();
+  private static readonly DISCOVERABLE_CHALLENGE_TTL_MS = 5 * 60 * 1000;
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
@@ -124,7 +132,8 @@ export class AuthService {
         transports: passkey.transports as any,
       })),
       authenticatorSelection: {
-        residentKey: 'preferred',
+        residentKey: 'required',
+        requireResidentKey: true,
         userVerification: 'preferred',
       },
     });
@@ -170,30 +179,54 @@ export class AuthService {
     return { verified: false };
   }
 
-  async generateWebAuthnLoginOptions(email: string) {
-    const user = await this.usersService.findByEmail(email);
-    if (!user) {
-      throw new BadRequestException('User not found');
+  async generateWebAuthnLoginOptions(email?: string) {
+    // Classic flow: an email is provided. We scope the allowCredentials to
+    // that user and store the challenge on the user record (legacy passkeys
+    // that were registered without resident key still work).
+    if (email) {
+      const user = await this.usersService.findByEmail(email);
+      if (!user) {
+        throw new BadRequestException('User not found');
+      }
+
+      const userPasskeys = await this.usersService.findCredentialsByUser(user.id);
+
+      const options = await generateAuthenticationOptions({
+        rpID,
+        allowCredentials: userPasskeys.map(passkey => ({
+          id: passkey.id,
+          type: 'public-key',
+          transports: passkey.transports as any,
+        })),
+        userVerification: 'preferred',
+      });
+
+      await this.usersService.update(user.id, { currentChallenge: options.challenge });
+
+      return options;
     }
 
-    const userPasskeys = await this.usersService.findCredentialsByUser(user.id);
-
+    // Usernameless flow: no email. The browser will offer the user any
+    // discoverable credential (resident key) registered for this RP and
+    // return the associated userHandle in the assertion.
     const options = await generateAuthenticationOptions({
       rpID,
-      allowCredentials: userPasskeys.map(passkey => ({
-        id: passkey.id,
-        type: 'public-key',
-        transports: passkey.transports as any,
-      })),
+      allowCredentials: [],
       userVerification: 'preferred',
     });
 
-    await this.usersService.update(user.id, { currentChallenge: options.challenge });
-
+    this.rememberDiscoverableChallenge(options.challenge);
     return options;
   }
 
-  async verifyWebAuthnLogin(email: string, body: any) {
+  async verifyWebAuthnLogin(email: string | undefined, body: any) {
+    if (email) {
+      return this.verifyWebAuthnLoginWithEmail(email, body);
+    }
+    return this.verifyWebAuthnLoginUsernameless(body);
+  }
+
+  private async verifyWebAuthnLoginWithEmail(email: string, body: any) {
     const user = await this.usersService.findByEmail(email);
     if (!user || !user.currentChallenge) {
       throw new BadRequestException('No active challenge');
@@ -237,5 +270,83 @@ export class AuthService {
     }
 
     throw new UnauthorizedException('Passkey verification failed');
+  }
+
+  private async verifyWebAuthnLoginUsernameless(body: any) {
+    const expectedChallenge = this.extractChallengeFromClientData(body?.response?.clientDataJSON);
+    if (!expectedChallenge || !this.consumeDiscoverableChallenge(expectedChallenge)) {
+      throw new BadRequestException('No active challenge');
+    }
+
+    const passkey = await this.usersService.findCredentialById(body.id);
+    if (!passkey || !passkey.user) {
+      throw new BadRequestException('Could not find matching passkey');
+    }
+
+    const user = passkey.user;
+
+    let verification;
+    try {
+      verification = await verifyAuthenticationResponse({
+        response: body,
+        expectedChallenge,
+        expectedOrigin: origin,
+        expectedRPID: rpID,
+        credential: {
+          id: passkey.id,
+          publicKey: Buffer.from(passkey.publicKey, 'base64url'),
+          counter: passkey.counter,
+          transports: passkey.transports as any,
+        },
+      });
+    } catch (error: any) {
+      throw new BadRequestException(error.message);
+    }
+
+    if (verification.verified && verification.authenticationInfo) {
+      const { newCounter } = verification.authenticationInfo;
+      await this.usersService.updateCredentialCounter(passkey.id, newCounter);
+
+      if (user.isTwoFactorEnabled) {
+        return { isTwoFactorRequired: true, temp_token: this.generateTemp2FAToken(user) };
+      }
+
+      return this.generateToken(user);
+    }
+
+    throw new UnauthorizedException('Passkey verification failed');
+  }
+
+  private rememberDiscoverableChallenge(challenge: string): void {
+    const now = Date.now();
+    // Opportunistic cleanup of expired entries.
+    for (const [key, issuedAt] of this.pendingDiscoverableChallenges) {
+      if (now - issuedAt > AuthService.DISCOVERABLE_CHALLENGE_TTL_MS) {
+        this.pendingDiscoverableChallenges.delete(key);
+      }
+    }
+    this.pendingDiscoverableChallenges.set(challenge, now);
+  }
+
+  private consumeDiscoverableChallenge(challenge: string): boolean {
+    const issuedAt = this.pendingDiscoverableChallenges.get(challenge);
+    if (issuedAt === undefined) {
+      return false;
+    }
+    this.pendingDiscoverableChallenges.delete(challenge);
+    return Date.now() - issuedAt <= AuthService.DISCOVERABLE_CHALLENGE_TTL_MS;
+  }
+
+  private extractChallengeFromClientData(clientDataJSON: unknown): string | null {
+    if (typeof clientDataJSON !== 'string' || clientDataJSON.length === 0) {
+      return null;
+    }
+    try {
+      const decoded = Buffer.from(clientDataJSON, 'base64url').toString('utf8');
+      const parsed = JSON.parse(decoded) as { challenge?: unknown };
+      return typeof parsed.challenge === 'string' ? parsed.challenge : null;
+    } catch {
+      return null;
+    }
   }
 }
