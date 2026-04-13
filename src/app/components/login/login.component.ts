@@ -24,7 +24,15 @@ export class LoginComponent {
   readonly totpCode = signal('');
   readonly loading = signal(false);
   readonly requires2FA = signal(false);
+  readonly rememberMe = signal(false);
   private pendingTempToken: string | null = null;
+
+  onOAuthSignIn(provider: 'google' | 'microsoft' | 'apple'): void {
+    // Placeholder: OAuth providers will be wired up later.
+    this.auth.loginError.set(
+      `La connexion avec ${provider} sera disponible prochainement.`
+    );
+  }
 
   async onSignIn(): Promise<void> {
     if (this.requires2FA()) {

@@ -8,6 +8,7 @@ import { FilterService, FilterRule } from '../../services/filter.service';
 import { PgpService } from '../../services/pgp.service';
 import { ConfirmDialogService } from '../../services/confirm-dialog.service';
 import { SandboxedHtmlDirective } from '../../directives/sandboxed-html.directive';
+import { ThemeService, ThemeMode } from '../../services/theme.service';
 import * as QRCode from 'qrcode';
 import { startRegistration } from '@simplewebauthn/browser';
 
@@ -28,7 +29,19 @@ export class SettingsComponent {
   protected readonly labelService = inject(LabelService);
   protected readonly filterService = inject(FilterService);
   protected readonly pgpService = inject(PgpService);
+  protected readonly themeService = inject(ThemeService);
   private readonly confirmDialog = inject(ConfirmDialogService);
+
+  readonly themeMode = this.themeService.mode;
+  readonly themeModes: ReadonlyArray<{ value: ThemeMode; label: string; description: string }> = [
+    { value: 'light', label: 'Clair', description: 'Interface claire en permanence.' },
+    { value: 'dark', label: 'Sombre', description: 'Interface sombre en permanence.' },
+    { value: 'system', label: 'Systeme', description: "Suit le theme de votre systeme d'exploitation." },
+  ];
+
+  setThemeMode(mode: ThemeMode): void {
+    this.themeService.setMode(mode);
+  }
   readonly activeTab = signal<SettingsTab>('general');
 
   // Security
@@ -55,7 +68,6 @@ export class SettingsComponent {
   readonly accentPresetColors = ['#403d84', '#1d4ed8', '#ffd200', '#b6d0f2', '#ffcbba', '#c6ebc5', '#ffbacd'];
   readonly selectedAccentColor = signal(this.settingsService.accentColor);
   readonly customAccentColor = signal(this.settingsService.accentColor);
-  readonly darkMode = computed(() => this.authService.user()?.darkMode ?? false);
   readonly blockTrackingPixels = computed(() => this.authService.user()?.blockTrackingPixels ?? false);
   readonly undoSendDelay = computed(() => this.authService.user()?.undoSendDelay ?? 0);
 
@@ -371,7 +383,6 @@ export class SettingsComponent {
     try {
       const current = this.authService.user() || { email: '' };
       await this.authService.updateSettings({
-        darkMode: current.darkMode,
         undoSendDelay: current.undoSendDelay,
         blockTrackingPixels: current.blockTrackingPixels,
         imagePolicy: current.imagePolicy,

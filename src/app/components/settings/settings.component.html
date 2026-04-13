@@ -585,20 +585,32 @@
           <h3 class="text-sm font-semibold text-gray-800 dark:text-white mb-3">Preferences de l'application</h3>
 
           <div class="space-y-4">
-            <label class="flex items-center gap-3 cursor-pointer group">
-              <div class="relative flex items-center">
-                <input type="checkbox"
-                       [checked]="darkMode()"
-                       (change)="updateSetting('darkMode', !darkMode())"
-                       name="darkModeCheckbox"
-                       class="sr-only peer">
-                <div class="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-amber-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-gray-300 dark:after:border-gray-600 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+            <fieldset>
+              <legend class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Theme d'apparence</legend>
+              <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                Choisissez le mode d'affichage. Le mode "Systeme" s'adapte automatiquement au theme de votre appareil.
+              </p>
+              <div class="grid grid-cols-3 gap-2">
+                @for (option of themeModes; track option.value) {
+                  <button
+                    type="button"
+                    (click)="setThemeMode(option.value)"
+                    [attr.aria-pressed]="themeMode() === option.value"
+                    class="flex flex-col items-start gap-1 px-3 py-2 rounded-lg border text-left transition-colors
+                           focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    [class.border-amber-500]="themeMode() === option.value"
+                    [class.bg-amber-50]="themeMode() === option.value"
+                    [class.dark:bg-amber-500/10]="themeMode() === option.value"
+                    [class.border-gray-300]="themeMode() !== option.value"
+                    [class.dark:border-gray-600]="themeMode() !== option.value"
+                    [class.hover:bg-gray-50]="themeMode() !== option.value"
+                    [class.dark:hover:bg-gray-700]="themeMode() !== option.value">
+                    <span class="text-sm font-semibold text-gray-800 dark:text-gray-100">{{ option.label }}</span>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ option.description }}</span>
+                  </button>
+                }
               </div>
-              <div>
-                <span class="text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">Mode Sombre</span>
-                <p class="text-xs text-gray-500 dark:text-gray-400">Activer le theme sombre pour reduire la fatigue visuelle.</p>
-              </div>
-            </label>
+            </fieldset>
 
             <label class="flex items-center gap-3 cursor-pointer group">
               <div class="relative flex items-center">
