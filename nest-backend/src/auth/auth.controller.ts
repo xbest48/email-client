@@ -104,12 +104,12 @@ export class AuthController {
   }
 
   @Post('webauthn/login/generate-options')
-  async generateWebAuthnLoginOptions(@Body() body: { email: string }) {
-    return this.authService.generateWebAuthnLoginOptions(body.email);
+  async generateWebAuthnLoginOptions(@Body() body: { email?: string }) {
+    return this.authService.generateWebAuthnLoginOptions(body?.email);
   }
 
   @Post('webauthn/login/verify')
-  async verifyWebAuthnLogin(@Body() body: { email: string; response: any }) {
-    return this.authService.verifyWebAuthnLogin(body.email, body.response);
+  async verifyWebAuthnLogin(@Body() body: { email?: string; response: any }) {
+    return this.authService.verifyWebAuthnLogin(body?.email, body.response);
   }
 }

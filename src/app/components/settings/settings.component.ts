@@ -1,6 +1,6 @@
 import { Component, inject, signal, computed, output, ChangeDetectionStrategy, viewChild, ElementRef, afterNextRender } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { SettingsService, EmailSignature, EmailTemplate } from '../../services/settings.service';
+import { SettingsService, EmailAccount, EmailSignature, EmailTemplate } from '../../services/settings.service';
 import { RichEditorComponent } from '../rich-editor/rich-editor.component';
 import { AuthService } from '../../services/auth.service';
 import { LabelService, Label } from '../../services/label.service';
@@ -8,6 +8,7 @@ import { FilterService, FilterRule } from '../../services/filter.service';
 import { PgpService } from '../../services/pgp.service';
 import { ConfirmDialogService } from '../../services/confirm-dialog.service';
 import { SandboxedHtmlDirective } from '../../directives/sandboxed-html.directive';
+import { ThemeService, ThemeMode } from '../../services/theme.service';
 import * as QRCode from 'qrcode';
 import { startRegistration } from '@simplewebauthn/browser';
 
@@ -28,7 +29,19 @@ export class SettingsComponent {
   protected readonly labelService = inject(LabelService);
   protected readonly filterService = inject(FilterService);
   protected readonly pgpService = inject(PgpService);
+  protected readonly themeService = inject(ThemeService);
   private readonly confirmDialog = inject(ConfirmDialogService);
+
+  readonly themeMode = this.themeService.mode;
+  readonly themeModes: ReadonlyArray<{ value: ThemeMode; label: string; description: string }> = [
+    { value: 'light', label: 'Clair', description: 'Interface claire en permanence.' },
+    { value: 'dark', label: 'Sombre', description: 'Interface sombre en permanence.' },
+    { value: 'system', label: 'Systeme', description: "Suit le theme de votre systeme d'exploitation." },
+  ];
+
+  setThemeMode(mode: ThemeMode): void {
+    this.themeService.setMode(mode);
+  }
   readonly activeTab = signal<SettingsTab>('general');
 
   // Security
@@ -37,6 +50,8 @@ export class SettingsComponent {
   readonly twoFactorEnabled = signal(false);
 
   // Account form
+  readonly showAccountForm = signal(false);
+  readonly editingAccountId = signal<string | null>(null);
   readonly accountEmail = signal('');
   readonly accountPassword = signal('');
   readonly accountDisplayName = signal('');
@@ -55,7 +70,6 @@ export class SettingsComponent {
   readonly accentPresetColors = ['#403d84', '#1d4ed8', '#ffd200', '#b6d0f2', '#ffcbba', '#c6ebc5', '#ffbacd'];
   readonly selectedAccentColor = signal(this.settingsService.accentColor);
   readonly customAccentColor = signal(this.settingsService.accentColor);
-  readonly darkMode = computed(() => this.authService.user()?.darkMode ?? false);
   readonly blockTrackingPixels = computed(() => this.authService.user()?.blockTrackingPixels ?? false);
   readonly undoSendDelay = computed(() => this.authService.user()?.undoSendDelay ?? 0);
 
@@ -202,18 +216,58 @@ export class SettingsComponent {
     }
   }
 
-  addAccount(): void {
-    if (!this.accountEmail() || !this.accountPassword() || !this.accountImapHost() || !this.accountSmtpHost()) return;
-    this.settingsService.addAccount({
-      email: this.accountEmail(),
-      password: this.accountPassword(),
-      displayName: this.accountDisplayName(),
-      imapHost: this.accountImapHost(),
-      imapPort: this.accountImapPort(),
-      smtpHost: this.accountSmtpHost(),
-      smtpPort: this.accountSmtpPort(),
-    });
+  openAddAccountForm(): void {
     this.resetAccountForm();
+    this.showAccountForm.set(true);
+  }
+
+  editAccount(account: EmailAccount): void {
+    this.editingAccountId.set(account.id);
+    this.accountEmail.set(account.email);
+    this.accountPassword.set('');
+    this.accountDisplayName.set(account.displayName ?? '');
+    this.accountImapHost.set(account.imapHost);
+    this.accountImapPort.set(account.imapPort);
+    this.accountSmtpHost.set(account.smtpHost);
+    this.accountSmtpPort.set(account.smtpPort);
+    this.showAccountForm.set(true);
+  }
+
+  cancelAccountForm(): void {
+    this.resetAccountForm();
+    this.showAccountForm.set(false);
+  }
+
+  async saveAccount(): Promise<void> {
+    if (!this.accountEmail() || !this.accountImapHost() || !this.accountSmtpHost()) return;
+
+    const editingId = this.editingAccountId();
+    if (editingId) {
+      const data: Partial<EmailAccount> = {
+        email: this.accountEmail(),
+        displayName: this.accountDisplayName(),
+        imapHost: this.accountImapHost(),
+        imapPort: this.accountImapPort(),
+        smtpHost: this.accountSmtpHost(),
+        smtpPort: this.accountSmtpPort(),
+      };
+      if (this.accountPassword()) {
+        data.password = this.accountPassword();
+      }
+      await this.settingsService.updateAccount(editingId, data);
+    } else {
+      if (!this.accountPassword()) return;
+      await this.settingsService.addAccount({
+        email: this.accountEmail(),
+        password: this.accountPassword(),
+        displayName: this.accountDisplayName(),
+        imapHost: this.accountImapHost(),
+        imapPort: this.accountImapPort(),
+        smtpHost: this.accountSmtpHost(),
+        smtpPort: this.accountSmtpPort(),
+      });
+    }
+    this.cancelAccountForm();
   }
 
   async updateAccountDisplayName(accountId: string, displayName: string): Promise<void> {
@@ -222,6 +276,9 @@ export class SettingsComponent {
 
   removeAccount(id: string): void {
     this.settingsService.removeAccount(id);
+    if (this.editingAccountId() === id) {
+      this.cancelAccountForm();
+    }
   }
 
   toggleSignatureSourceMode(): void {
@@ -371,7 +428,6 @@ export class SettingsComponent {
     try {
       const current = this.authService.user() || { email: '' };
       await this.authService.updateSettings({
-        darkMode: current.darkMode,
         undoSendDelay: current.undoSendDelay,
         blockTrackingPixels: current.blockTrackingPixels,
         imagePolicy: current.imagePolicy,
@@ -572,6 +628,7 @@ export class SettingsComponent {
   }
 
   private resetAccountForm(): void {
+    this.editingAccountId.set(null);
     this.accountEmail.set('');
     this.accountPassword.set('');
     this.accountDisplayName.set('');
