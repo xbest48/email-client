@@ -64,18 +64,25 @@ export class LoginComponent {
   }
 
   async onPasskeySignIn(): Promise<void> {
-    if (!this.email()) return;
     this.loading.set(true);
     this.auth.loginError.set('');
 
+    // Hybrid flow: if an email is provided we scope the challenge to that
+    // user (keeps working for legacy passkeys registered without a resident
+    // key). Otherwise we fall back to a usernameless/discoverable credential
+    // challenge and let the browser pick among resident keys for this site.
+    const emailValue = this.email();
+    const useUsernameless = !emailValue;
+
     try {
+      const optionsPayload = useUsernameless ? {} : { email: emailValue };
       const options = await firstValueFrom(
-        this.http.post<any>(`${environment.apiUrl}/auth/webauthn/login/generate-options`, { email: this.email() })
+        this.http.post<any>(`${environment.apiUrl}/auth/webauthn/login/generate-options`, optionsPayload)
       );
 
       const asseResp = await startAuthentication({ optionsJSON: options });
 
-      const result = await this.auth.signInWithWebAuthn(this.email(), asseResp);
+      const result = await this.auth.signInWithWebAuthn(useUsernameless ? null : emailValue, asseResp);
 
       if (result.requires2FA && result.tempToken) {
         this.requires2FA.set(true);
