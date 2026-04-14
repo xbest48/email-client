@@ -74,6 +74,8 @@ export class AuthController {
       imagePolicy: user.imagePolicy || 'ask',
       imageAllowedDomains: JSON.parse(user.imageAllowedDomains || '[]'),
       imageBlockedDomains: JSON.parse(user.imageBlockedDomains || '[]'),
+      hasOpenAiApiKey: !!user.openAiApiKey,
+      isAiEnabled: user.isAiEnabled,
     };
   }
 

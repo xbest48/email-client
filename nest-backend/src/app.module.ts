@@ -7,6 +7,7 @@ import { Account } from './accounts/account.entity';
 import { EmailModule } from './email/email.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
+import { AiModule } from './ai/ai.module';
 import { User } from './users/user.entity';
 import { WebAuthnCredential } from './users/webauthn-credential.entity';
 import { LabelsModule } from './labels/labels.module';
@@ -47,6 +48,7 @@ import { PgpKey, PgpContactKey } from './pgp/pgp-key.entity';
     EmailModule,
     UsersModule,
     AuthModule,
+    AiModule,
     LabelsModule,
     FiltersModule,
     SnoozeModule,
