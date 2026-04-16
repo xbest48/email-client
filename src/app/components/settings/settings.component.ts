@@ -1,10 +1,11 @@
 import { environment } from '../../environments/environment';
 import { HttpClient } from '@angular/common/http';
-import { Component, inject, signal, computed, output, ChangeDetectionStrategy, viewChild, ElementRef, afterNextRender } from '@angular/core';
+import { Component, inject, signal, computed, output, ChangeDetectionStrategy, viewChild, ElementRef, afterNextRender, effect } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { SettingsService, EmailAccount, EmailSignature, EmailTemplate } from '../../services/settings.service';
 import { RichEditorComponent } from '../rich-editor/rich-editor.component';
-import { AuthService } from '../../services/auth.service';
+import { ActiveSession, AiProvider, AuthService } from '../../services/auth.service';
 import { LabelService, Label } from '../../services/label.service';
 import { FilterService, FilterRule } from '../../services/filter.service';
 import { PgpService } from '../../services/pgp.service';
@@ -33,6 +34,7 @@ export class SettingsComponent {
   protected readonly pgpService = inject(PgpService);
   protected readonly themeService = inject(ThemeService);
   private readonly confirmDialog = inject(ConfirmDialogService);
+  private readonly router = inject(Router);
 
   readonly themeMode = this.themeService.mode;
   readonly themeModes: ReadonlyArray<{ value: ThemeMode; label: string; description: string }> = [
@@ -50,6 +52,11 @@ export class SettingsComponent {
   readonly qrCodeUrl = signal<string | null>(null);
   readonly twoFactorCode = signal('');
   readonly twoFactorEnabled = signal(false);
+  readonly activeSessions = signal<ActiveSession[]>([]);
+  readonly sessionsLoading = signal(false);
+  readonly sessionsLoaded = signal(false);
+  readonly revokeSessionLoadingId = signal<string | null>(null);
+  readonly revokeOtherSessionsLoading = signal(false);
 
   // Account form
   readonly showAccountForm = signal(false);
@@ -63,6 +70,7 @@ export class SettingsComponent {
   readonly accountSmtpPort = signal(465);
 
   // Signature form
+  readonly showSignatureForm = signal(false);
   readonly signatureName = signal('');
   readonly signatureIsDefault = signal(false);
   readonly editingSignatureId = signal<string | null>(null);
@@ -71,11 +79,25 @@ export class SettingsComponent {
   readonly pageSize = signal(this.settingsService.pageSize);
   readonly accentPresetColors = ['#403d84', '#1d4ed8', '#ffd200', '#b6d0f2', '#ffcbba', '#c6ebc5', '#ffbacd'];
   readonly selectedAccentColor = signal(this.settingsService.accentColor);
-  readonly openAiApiKey = signal('');
+  readonly aiApiKey = signal('');
+  readonly aiProvider = signal<AiProvider>('openai');
+  readonly aiApiUrl = signal('');
+  readonly hideAiHintsPreference = signal(false);
   readonly savingAiSettings = signal(false);
   readonly customAccentColor = signal(this.settingsService.accentColor);
   readonly blockTrackingPixels = computed(() => this.authService.user()?.blockTrackingPixels ?? false);
   readonly undoSendDelay = computed(() => this.authService.user()?.undoSendDelay ?? 0);
+  readonly aiProviderOptions: ReadonlyArray<{ value: AiProvider; label: string }> = [
+    { value: 'openai', label: 'OpenAI' },
+    { value: 'anthropic', label: 'Anthropic' },
+    { value: 'google', label: 'Google' },
+    { value: 'mistral', label: 'Mistral' },
+    { value: 'other', label: 'Autre' },
+  ];
+  readonly aiProviderLabel = computed(() => {
+    const provider = this.authService.user()?.aiProvider ?? 'openai';
+    return this.aiProviderOptions.find((option) => option.value === provider)?.label ?? 'OpenAI';
+  });
 
   readonly signatureEditor = viewChild<RichEditorComponent>('signatureEditor');
   readonly signatureSourceMode = signal(false);
@@ -124,6 +146,19 @@ export class SettingsComponent {
   constructor() {
     afterNextRender(() => {
       this.updateTabsScrollState();
+    });
+
+    effect(() => {
+      const user = this.authService.user();
+      this.aiProvider.set(user?.aiProvider ?? 'openai');
+      this.aiApiUrl.set(user?.aiApiUrl ?? '');
+      this.hideAiHintsPreference.set(!!user?.hideAiHints);
+    });
+
+    effect(() => {
+      if (this.activeTab() === 'security' && !this.sessionsLoaded()) {
+        void this.loadActiveSessions();
+      }
     });
   }
 
@@ -302,6 +337,11 @@ export class SettingsComponent {
     this.signatureSourceMode.set(!sourceMode);
   }
 
+  openAddSignatureForm(): void {
+    this.resetSignatureForm();
+    this.showSignatureForm.set(true);
+  }
+
   saveSignature(): void {
     const name = this.signatureName();
     if (!name) return;
@@ -332,7 +372,7 @@ export class SettingsComponent {
       });
     }
 
-    this.resetSignatureForm();
+    this.cancelSignatureForm();
   }
 
   editSignature(sig: EmailSignature): void {
@@ -340,28 +380,19 @@ export class SettingsComponent {
     this.signatureName.set(sig.name);
     this.signatureIsDefault.set(sig.isDefault);
     this.signatureHtmlSource.set(sig.html);
-    if (this.signatureSourceMode()) {
-      // Already in source mode, just update the textarea
-    } else {
-      const editor = this.signatureEditor();
-      if (editor) {
-        editor.setHtml(sig.html);
-      }
-    }
+    this.showSignatureForm.set(true);
   }
 
   removeSignature(id: string): void {
     this.settingsService.removeSignature(id);
     if (this.editingSignatureId() === id) {
-      this.resetSignatureForm();
+      this.cancelSignatureForm();
     }
   }
 
-  cancelEditSignature(): void {
-    this.editingSignatureId.set(null);
-    this.signatureName.set('');
-    this.signatureIsDefault.set(false);
-    this.signatureEditor()?.clear();
+  cancelSignatureForm(): void {
+    this.resetSignatureForm();
+    this.showSignatureForm.set(false);
   }
 
   async setup2FA(): Promise<void> {
@@ -411,6 +442,117 @@ export class SettingsComponent {
     } catch (e) {
       console.error('Passkey registration failed', e);
     }
+  }
+
+  async loadActiveSessions(force = false): Promise<void> {
+    if (this.sessionsLoading()) return;
+    if (this.sessionsLoaded() && !force) return;
+
+    this.sessionsLoading.set(true);
+    try {
+      const sessions = await this.authService.getActiveSessions();
+      this.activeSessions.set(sessions);
+      this.sessionsLoaded.set(true);
+    } catch (e) {
+      console.error('Failed to load active sessions', e);
+      await this.confirmDialog.alert({
+        title: 'Sessions indisponibles',
+        message: "La liste des sessions actives n'a pas pu etre chargee.",
+        tone: 'error',
+      });
+    } finally {
+      this.sessionsLoading.set(false);
+    }
+  }
+
+  async revokeSession(session: ActiveSession): Promise<void> {
+    const confirmed = await this.confirmDialog.confirm({
+      title: session.isCurrent ? 'Fermer cette session' : 'Revoquer la session',
+      message: session.isCurrent
+        ? 'Cette action va fermer votre session actuelle sur cet appareil.'
+        : 'Cette session sera deconnectee et ne pourra plus se rafraichir.',
+      confirmLabel: session.isCurrent ? 'Fermer la session' : 'Revoquer',
+      cancelLabel: 'Annuler',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+
+    this.revokeSessionLoadingId.set(session.id);
+    try {
+      await this.authService.revokeSessionById(session.id);
+      this.activeSessions.update((sessions) => sessions.filter((item) => item.id !== session.id));
+      if (session.isCurrent) {
+        await this.authService.signOut();
+        this.close.emit();
+        await this.router.navigate(['/login']);
+        return;
+      }
+      await this.loadActiveSessions(true);
+    } catch (e) {
+      console.error('Failed to revoke session', e);
+      await this.confirmDialog.alert({
+        title: 'Action impossible',
+        message: "La session n'a pas pu etre revoquee.",
+        tone: 'error',
+      });
+    } finally {
+      this.revokeSessionLoadingId.set(null);
+    }
+  }
+
+  async revokeOtherSessions(): Promise<void> {
+    const confirmed = await this.confirmDialog.confirm({
+      title: 'Fermer les autres sessions',
+      message: 'Toutes les autres sessions actives seront deconnectees. Votre session actuelle restera ouverte.',
+      confirmLabel: 'Fermer les autres',
+      cancelLabel: 'Annuler',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+
+    this.revokeOtherSessionsLoading.set(true);
+    try {
+      await this.authService.revokeOtherSessions();
+      await this.loadActiveSessions(true);
+    } catch (e) {
+      console.error('Failed to revoke other sessions', e);
+      await this.confirmDialog.alert({
+        title: 'Action impossible',
+        message: "Les autres sessions n'ont pas pu etre revoquees.",
+        tone: 'error',
+      });
+    } finally {
+      this.revokeOtherSessionsLoading.set(false);
+    }
+  }
+
+  sessionLabel(session: ActiveSession): string {
+    const userAgent = (session.userAgent || '').toLowerCase();
+    if (userAgent.includes('iphone') || userAgent.includes('ipad')) return 'iPhone / iPad';
+    if (userAgent.includes('android')) return 'Android';
+    if (userAgent.includes('mac os') || userAgent.includes('macintosh')) return 'Mac';
+    if (userAgent.includes('windows')) return 'Windows';
+    if (userAgent.includes('linux')) return 'Linux';
+    return 'Appareil inconnu';
+  }
+
+  sessionDetails(session: ActiveSession): string {
+    const parts = [
+      session.rememberMe ? 'Session persistante' : 'Session temporaire',
+      session.ipAddress || null,
+    ].filter(Boolean);
+    return parts.join(' • ');
+  }
+
+  formatSessionDate(value: string | null): string {
+    if (!value) return 'Inconnue';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+      ? value
+      : date.toLocaleString('fr-FR', {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        });
   }
 
   savePageSize(): void {
@@ -654,14 +796,30 @@ export class SettingsComponent {
   async saveAiSettings(): Promise<void> {
     this.savingAiSettings.set(true);
     try {
-      const apiKey = this.openAiApiKey().trim();
+      const apiKey = this.aiApiKey().trim();
+      const provider = this.aiProvider();
+      const apiUrl = this.aiApiUrl().trim();
       const current = this.authService.user() || { email: '' };
+      const hasExistingKey = !!(this.authService.user()?.hasAiApiKey);
+
+      if (!hasExistingKey && !apiKey) {
+        alert('Ajoutez une clé API avant de sauvegarder.');
+        return;
+      }
+      if (provider === 'other' && !apiUrl) {
+        alert("Une URL d'API est requise pour le fournisseur Autre.");
+        return;
+      }
+
       await this.authService.updateSettings({
         ...current,
-        openAiApiKey: apiKey || undefined,
-        isAiEnabled: !!apiKey
+        aiApiKey: apiKey || undefined,
+        aiProvider: provider,
+        aiApiUrl: provider === 'other' ? apiUrl : '',
+        hideAiHints: this.hideAiHintsPreference(),
+        isAiEnabled: apiKey ? true : current.isAiEnabled
       });
-      this.openAiApiKey.set('');
+      this.aiApiKey.set('');
       alert('Paramètres IA sauvegardés');
     } catch (e) {
       console.error('Failed to save AI settings', e);
@@ -672,15 +830,16 @@ export class SettingsComponent {
   }
 
   async deleteOpenAiApiKey(): Promise<void> {
-    if (!confirm('Supprimer votre clé API OpenAI ? Les fonctionnalités IA seront désactivées.')) return;
+    if (!confirm('Supprimer votre clé API IA ? Les fonctionnalités IA seront désactivées.')) return;
     this.savingAiSettings.set(true);
     try {
       const current = this.authService.user() || { email: '' };
       await this.authService.updateSettings({
         ...current,
-        openAiApiKey: '',
+        aiApiKey: '',
         isAiEnabled: false
       });
+      this.aiApiKey.set('');
       alert('Clé API supprimée');
     } catch (e) {
       console.error('Failed to delete API key', e);
@@ -691,7 +850,7 @@ export class SettingsComponent {
 
   async toggleAiEnabled(): Promise<void> {
     const current = this.authService.user();
-    if (!current?.hasOpenAiApiKey) return;
+    if (!current?.hasAiApiKey) return;
     this.savingAiSettings.set(true);
     try {
       await this.authService.updateSettings({
@@ -700,6 +859,22 @@ export class SettingsComponent {
       });
     } catch (e) {
       console.error('Failed to toggle AI', e);
+    } finally {
+      this.savingAiSettings.set(false);
+    }
+  }
+
+  async updateAiHintsVisibility(): Promise<void> {
+    const current = this.authService.user();
+    if (!current) return;
+    this.savingAiSettings.set(true);
+    try {
+      await this.authService.updateSettings({
+        ...current,
+        hideAiHints: this.hideAiHintsPreference(),
+      });
+    } catch (e) {
+      console.error('Failed to update AI hint visibility', e);
     } finally {
       this.savingAiSettings.set(false);
     }

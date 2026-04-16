@@ -10,6 +10,7 @@ import { AuthModule } from './auth/auth.module';
 import { AiModule } from './ai/ai.module';
 import { User } from './users/user.entity';
 import { WebAuthnCredential } from './users/webauthn-credential.entity';
+import { AuthSession } from './users/auth-session.entity';
 import { LabelsModule } from './labels/labels.module';
 import { Label } from './labels/label.entity';
 import { EmailLabel } from './labels/email-label.entity';
@@ -33,6 +34,7 @@ import { PgpKey, PgpContactKey } from './pgp/pgp-key.entity';
         Account,
         User,
         WebAuthnCredential,
+        AuthSession,
         Label,
         EmailLabel,
         FilterRule,

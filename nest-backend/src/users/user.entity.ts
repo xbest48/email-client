@@ -1,5 +1,6 @@
 import { Entity, Column, PrimaryGeneratedColumn, OneToMany } from 'typeorm';
 import { Account } from '../accounts/account.entity';
+import { AuthSession } from './auth-session.entity';
 
 @Entity()
 export class User {
@@ -20,6 +21,12 @@ export class User {
 
   @Column({ nullable: true })
   currentChallenge?: string; // Used for WebAuthn
+
+  @Column({ nullable: true })
+  refreshTokenHash?: string;
+
+  @Column({ type: 'datetime', nullable: true })
+  refreshTokenExpiresAt?: Date;
 
   @Column({ default: false })
   darkMode: boolean;
@@ -42,9 +49,24 @@ export class User {
   @Column({ nullable: true })
   openAiApiKey?: string;
 
+  @Column({ nullable: true })
+  aiApiKey?: string;
+
+  @Column({ default: 'openai' })
+  aiProvider: 'openai' | 'anthropic' | 'google' | 'mistral' | 'other';
+
+  @Column({ nullable: true })
+  aiApiUrl?: string;
+
   @Column({ default: false })
   isAiEnabled: boolean;
 
+  @Column({ default: false })
+  hideAiHints: boolean;
+
   @OneToMany(() => Account, account => account.user)
   accounts: Account[];
+
+  @OneToMany(() => AuthSession, (authSession) => authSession.user)
+  authSessions: AuthSession[];
 }

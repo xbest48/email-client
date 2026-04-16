@@ -5,13 +5,40 @@ import * as bcrypt from 'bcryptjs';
 import { TOTP, NobleCryptoPlugin, ScureBase32Plugin } from 'otplib';
 import * as qrcode from 'qrcode';
 import { generateRegistrationOptions, verifyRegistrationResponse, generateAuthenticationOptions, verifyAuthenticationResponse } from '@simplewebauthn/server';
+import { AuthSession } from '../users/auth-session.entity';
 
 const rpName = 'MailFlow';
 const rpID = 'localhost';
 const origin = `http://${rpID}:4200`;
 
+interface SessionTokens {
+  access_token: string;
+  refresh_token: string;
+  rememberMe: boolean;
+}
+
+interface SessionContext {
+  userAgent?: string;
+  ipAddress?: string;
+}
+
+export interface ActiveSessionInfo {
+  id: string;
+  createdAt: string;
+  lastSeenAt: string | null;
+  expiresAt: string;
+  rememberMe: boolean;
+  userAgent: string | null;
+  ipAddress: string | null;
+  isCurrent: boolean;
+}
+
 @Injectable()
 export class AuthService {
+  static readonly ACCESS_TOKEN_TTL = '15m';
+  static readonly SESSION_REFRESH_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+  static readonly PERSISTENT_REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
   private readonly totp: TOTP;
 
   // Short-lived in-memory store of challenges issued for usernameless
@@ -32,7 +59,7 @@ export class AuthService {
     });
   }
 
-  async register(email: string, pass: string) {
+  async register(email: string, pass: string, context?: SessionContext) {
     const existing = await this.usersService.findByEmail(email);
     if (existing) {
       throw new BadRequestException('User already exists');
@@ -40,10 +67,10 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(pass, 10);
     const user = await this.usersService.create({ email, passwordHash });
 
-    return this.generateToken(user);
+    return this.createSession(user, true, context);
   }
 
-  async login(email: string, pass: string) {
+  async login(email: string, pass: string, rememberMe = false, context?: SessionContext) {
     const user = await this.usersService.findByEmail(email);
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
@@ -57,7 +84,7 @@ export class AuthService {
       return { isTwoFactorRequired: true, temp_token: this.generateTemp2FAToken(user) };
     }
 
-    return this.generateToken(user);
+    return this.createSession(user, rememberMe, context);
   }
 
   generateTemp2FAToken(user: any) {
@@ -69,11 +96,92 @@ export class AuthService {
     return this.jwtService.verify(token);
   }
 
-  generateToken(user: any) {
-    const payload = { email: user.email, sub: user.id };
+  async createSession(user: any, rememberMe = false, context?: SessionContext): Promise<SessionTokens> {
+    const session = await this.usersService.createAuthSession({
+      user,
+      refreshTokenHash: '',
+      expiresAt: new Date(Date.now() + this.getRefreshTokenTtlMs(rememberMe)),
+      rememberMe,
+      userAgent: context?.userAgent || undefined,
+      ipAddress: context?.ipAddress || undefined,
+      lastSeenAt: new Date(),
+    });
+    const accessToken = this.signAccessToken(user, session.id);
+    const refreshToken = this.signRefreshToken(user.id, session.id, rememberMe);
+    await this.storeRefreshToken(session.id, refreshToken, rememberMe, context);
+
     return {
-      access_token: this.jwtService.sign(payload),
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      rememberMe,
     };
+  }
+
+  async refreshSession(refreshToken: string): Promise<SessionTokens> {
+    const payload = this.verifyRefreshToken(refreshToken);
+    const session = await this.usersService.findAuthSessionById(payload.sid);
+    const user = await this.usersService.findById(payload.sub);
+    if (!user || !session || !session.refreshTokenHash || session.revokedAt) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    if (session.user.id !== user.id) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    if (new Date(session.expiresAt).getTime() <= Date.now()) {
+      await this.usersService.revokeAuthSession(session.id);
+      throw new UnauthorizedException('Refresh token expired');
+    }
+
+    const matches = await bcrypt.compare(refreshToken, session.refreshTokenHash);
+    if (!matches) {
+      await this.usersService.revokeAuthSession(session.id);
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const accessToken = this.signAccessToken(user, session.id);
+    const nextRememberMe = !!payload.rememberMe;
+    const nextRefreshToken = this.signRefreshToken(user.id, session.id, nextRememberMe);
+    await this.storeRefreshToken(session.id, nextRefreshToken, nextRememberMe);
+
+    return {
+      access_token: accessToken,
+      refresh_token: nextRefreshToken,
+      rememberMe: nextRememberMe,
+    };
+  }
+
+  async revokeSession(refreshToken?: string): Promise<void> {
+    if (!refreshToken) return;
+
+    try {
+      const payload = this.verifyRefreshToken(refreshToken);
+      await this.usersService.revokeAuthSession(payload.sid);
+    } catch {
+      // Ignore invalid refresh tokens during logout and just clear the cookie.
+    }
+  }
+
+  async listActiveSessions(userId: string, currentSessionId?: string): Promise<ActiveSessionInfo[]> {
+    const sessions = await this.usersService.findActiveAuthSessionsByUser(userId);
+    return sessions.map((session) => this.toActiveSessionInfo(session, currentSessionId));
+  }
+
+  async revokeSessionById(userId: string, sessionId: string): Promise<void> {
+    const session = await this.usersService.findAuthSessionById(sessionId);
+    if (!session || session.user.id !== userId || session.revokedAt) {
+      throw new UnauthorizedException('Session introuvable');
+    }
+    await this.usersService.revokeAuthSession(sessionId);
+  }
+
+  async revokeOtherSessions(userId: string, currentSessionId: string): Promise<void> {
+    await this.usersService.revokeOtherAuthSessions(userId, currentSessionId);
+  }
+
+  generateToken(user: any, context?: SessionContext) {
+    return this.createSession(user, true, context);
   }
 
   async generateTwoFactorSecret(user: any) {
@@ -219,14 +327,14 @@ export class AuthService {
     return options;
   }
 
-  async verifyWebAuthnLogin(email: string | undefined, body: any) {
+  async verifyWebAuthnLogin(email: string | undefined, body: any, rememberMe = false, context?: SessionContext) {
     if (email) {
-      return this.verifyWebAuthnLoginWithEmail(email, body);
+      return this.verifyWebAuthnLoginWithEmail(email, body, rememberMe, context);
     }
-    return this.verifyWebAuthnLoginUsernameless(body);
+    return this.verifyWebAuthnLoginUsernameless(body, rememberMe, context);
   }
 
-  private async verifyWebAuthnLoginWithEmail(email: string, body: any) {
+  private async verifyWebAuthnLoginWithEmail(email: string, body: any, rememberMe: boolean, context?: SessionContext) {
     const user = await this.usersService.findByEmail(email);
     if (!user || !user.currentChallenge) {
       throw new BadRequestException('No active challenge');
@@ -266,13 +374,13 @@ export class AuthService {
         return { isTwoFactorRequired: true, temp_token: this.generateTemp2FAToken(user) };
       }
 
-      return this.generateToken(user);
+        return this.createSession(user, rememberMe, context);
     }
 
     throw new UnauthorizedException('Passkey verification failed');
   }
 
-  private async verifyWebAuthnLoginUsernameless(body: any) {
+  private async verifyWebAuthnLoginUsernameless(body: any, rememberMe: boolean, context?: SessionContext) {
     const expectedChallenge = this.extractChallengeFromClientData(body?.response?.clientDataJSON);
     if (!expectedChallenge || !this.consumeDiscoverableChallenge(expectedChallenge)) {
       throw new BadRequestException('No active challenge');
@@ -311,7 +419,7 @@ export class AuthService {
         return { isTwoFactorRequired: true, temp_token: this.generateTemp2FAToken(user) };
       }
 
-      return this.generateToken(user);
+        return this.createSession(user, rememberMe, context);
     }
 
     throw new UnauthorizedException('Passkey verification failed');
@@ -348,5 +456,80 @@ export class AuthService {
     } catch {
       return null;
     }
+  }
+
+  private signAccessToken(user: any, sessionId: string): string {
+    const payload = { email: user.email, sub: user.id, sid: sessionId, type: 'access' };
+    return this.jwtService.sign(payload, {
+      secret: this.getAccessTokenSecret(),
+      expiresIn: AuthService.ACCESS_TOKEN_TTL,
+    });
+  }
+
+  private signRefreshToken(userId: string, sessionId: string, rememberMe: boolean): string {
+    const payload = { sub: userId, sid: sessionId, type: 'refresh', rememberMe };
+    return this.jwtService.sign(payload, {
+      secret: this.getRefreshTokenSecret(),
+      expiresIn: `${this.getRefreshTokenTtlMs(rememberMe)}ms`,
+    });
+  }
+
+  private verifyRefreshToken(refreshToken: string): { sub: string; sid: string; type: string; rememberMe?: boolean } {
+    const payload = this.jwtService.verify(refreshToken, {
+      secret: this.getRefreshTokenSecret(),
+    }) as { sub: string; sid: string; type: string; rememberMe?: boolean };
+
+    if (payload.type !== 'refresh' || !payload.sid) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    return payload;
+  }
+
+  private async storeRefreshToken(
+    sessionId: string,
+    refreshToken: string,
+    rememberMe: boolean,
+    context?: SessionContext,
+  ): Promise<void> {
+    const payload = this.verifyRefreshToken(refreshToken);
+    const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
+    const expiresAt = new Date(Date.now() + this.getRefreshTokenTtlMs(rememberMe));
+
+    await this.usersService.updateAuthSession(sessionId, {
+      refreshTokenHash,
+      expiresAt,
+      rememberMe: !!payload.rememberMe,
+      lastSeenAt: new Date(),
+      ...(context?.userAgent ? { userAgent: context.userAgent } : {}),
+      ...(context?.ipAddress ? { ipAddress: context.ipAddress } : {}),
+    });
+  }
+
+  private getAccessTokenSecret(): string {
+    return process.env.JWT_SECRET || 'fallback-secret-key-for-dev';
+  }
+
+  private getRefreshTokenSecret(): string {
+    return process.env.JWT_REFRESH_SECRET || this.getAccessTokenSecret();
+  }
+
+  private getRefreshTokenTtlMs(rememberMe: boolean): number {
+    return rememberMe
+      ? AuthService.PERSISTENT_REFRESH_TOKEN_TTL_MS
+      : AuthService.SESSION_REFRESH_TOKEN_TTL_MS;
+  }
+
+  private toActiveSessionInfo(session: AuthSession, currentSessionId?: string): ActiveSessionInfo {
+    return {
+      id: session.id,
+      createdAt: session.createdAt.toISOString(),
+      lastSeenAt: session.lastSeenAt ? new Date(session.lastSeenAt).toISOString() : null,
+      expiresAt: new Date(session.expiresAt).toISOString(),
+      rememberMe: !!session.rememberMe,
+      userAgent: session.userAgent || null,
+      ipAddress: session.ipAddress || null,
+      isCurrent: session.id === currentSessionId,
+    };
   }
 }

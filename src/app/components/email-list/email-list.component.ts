@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed, ChangeDetectionStrategy, OnInit, OnDestroy, viewChild, ElementRef } from '@angular/core';
+import { Component, inject, signal, computed, ChangeDetectionStrategy, OnInit, OnDestroy, viewChild, ElementRef, effect } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { EmailService } from '../../services/email.service';
@@ -8,6 +8,9 @@ import { KeyboardShortcutService } from '../../services/keyboard-shortcut.servic
 import { SwipeDirective } from '../../directives/swipe.directive';
 import { LabelService, Label } from '../../services/label.service';
 import { SettingsService } from '../../services/settings.service';
+import { AuthService } from '../../services/auth.service';
+import { AiService, EmailTriageResult } from '../../services/ai.service';
+import { TaskService } from '../../services/task.service';
 
 const FOLDER_MAP: Record<string, string> = {
   inbox: 'INBOX',
@@ -37,21 +40,44 @@ export class EmailListComponent implements OnInit, OnDestroy {
   private readonly shortcutService = inject(KeyboardShortcutService);
   protected readonly labelService = inject(LabelService);
   protected readonly settingsService = inject(SettingsService);
+  protected readonly authService = inject(AuthService);
+  private readonly aiService = inject(AiService);
+  protected readonly taskService = inject(TaskService);
 
   readonly selectedIds = signal<Set<string>>(new Set());
   readonly focusedIndex = signal(-1);
   private currentFolder = 'INBOX';
   private currentQuery = '';
+  private readonly triageInFlight = new Set<string>();
 
   readonly emails = computed(() => this.emailService.currentEmails());
   readonly title = signal('Boite de reception');
   readonly isSentFolder = signal(false);
   readonly isTrashFolder = signal(false);
+  readonly isSpamFolder = signal(false);
   readonly contextMenu = signal<{ x: number; y: number; email: Email } | null>(null);
   readonly contextSubmenu = signal<'labels' | null>(null);
   readonly contextEmailLabelIds = signal<Set<string>>(new Set());
   readonly mobileActionMenu = signal<Email | null>(null);
   readonly mobileSelectionMode = signal(false);
+  readonly dismissAiHint = signal(false);
+  readonly aiEnabled = computed(() =>
+    !!this.authService.user()?.hasAiApiKey && !!this.authService.user()?.isAiEnabled
+  );
+  readonly aiSettingsHint = computed(() => {
+    const user = this.authService.user();
+    if (!user) return null;
+    if (user.hideAiHints || this.dismissAiHint()) return null;
+    if (user.hasAiApiKey && !user.isAiEnabled) {
+      return "Le tri intelligent est desactive. Activez l'IA dans Reglages > Intelligence Artificielle.";
+    }
+    if (!user.hasAiApiKey) {
+      return "Configurez une cle API dans Reglages > Intelligence Artificielle pour activer le tri intelligent.";
+    }
+    return null;
+  });
+  readonly aiInsights = signal<Map<string, EmailTriageResult>>(new Map());
+  readonly showTaskPanel = signal(false);
   private readonly scrollContainer = viewChild<ElementRef<HTMLDivElement>>('scrollContainer');
   private readonly contextMenuEl = viewChild<ElementRef<HTMLDivElement>>('contextMenuEl');
 
@@ -67,6 +93,42 @@ export class EmailListComponent implements OnInit, OnDestroy {
 
   private shortcutSub?: Subscription;
 
+  constructor() {
+    effect(() => {
+      this.authService.user();
+      this.dismissAiHint.set(false);
+    });
+
+    effect(() => {
+      if (!this.aiEnabled()) {
+        this.aiInsights.set(new Map());
+        this.triageInFlight.clear();
+        this.showTaskPanel.set(false);
+        return;
+      }
+
+      if (this.isSentFolder() || this.isTrashFolder()) {
+        return;
+      }
+
+      const emails = this.emails();
+      if (!emails.length) return;
+
+      const insights = this.aiInsights();
+      const pendingEmails = emails
+        .filter((email) => !insights.has(this.emailKey(email)) && !this.triageInFlight.has(this.emailKey(email)))
+        .slice(0, 12);
+
+      if (!pendingEmails.length) return;
+
+      for (const email of pendingEmails) {
+        this.triageInFlight.add(this.emailKey(email));
+      }
+
+      void this.loadAiInsights(pendingEmails);
+    });
+  }
+
   ngOnInit(): void {
     this.route.params.subscribe(async (params) => {
       const label = params['label'] ?? 'inbox';
@@ -81,11 +143,13 @@ export class EmailListComponent implements OnInit, OnDestroy {
         this.title.set(this.getFolderTitle(folderParam));
         this.isSentFolder.set(false);
         this.isTrashFolder.set(this.emailService.folders().some((f) => f.path === folderParam && f.specialUse === '\\Trash'));
+        this.isSpamFolder.set(this.isJunkFolderPath(folderParam));
       } else {
         this.currentFolder = this.resolveFolder(label);
         this.title.set(FOLDER_TITLES[label] ?? label);
         this.isSentFolder.set(label === 'sent');
         this.isTrashFolder.set(label === 'trash');
+        this.isSpamFolder.set(label === 'spam');
       }
 
       this.selectedIds.set(new Set());
@@ -168,6 +232,7 @@ export class EmailListComponent implements OnInit, OnDestroy {
   }
 
   refresh(): void {
+    this.aiInsights.set(new Map());
     this.emailService.fetchEmails(this.currentFolder, this.currentQuery);
   }
 
@@ -246,6 +311,14 @@ export class EmailListComponent implements OnInit, OnDestroy {
     const ids = this.selectedIds();
     const emailsToSpam = this.emails().filter((e) => ids.has(this.emailKey(e)));
     this.emailService.bulkSpamInBackground(emailsToSpam);
+    this.selectedIds.set(new Set());
+    await this.refillVisibleEmails();
+  }
+
+  async bulkNotSpam(): Promise<void> {
+    const ids = this.selectedIds();
+    const emailsToRestore = this.emails().filter((e) => ids.has(this.emailKey(e)));
+    this.emailService.bulkNotSpamInBackground(emailsToRestore);
     this.selectedIds.set(new Set());
     await this.refillVisibleEmails();
   }
@@ -491,6 +564,17 @@ export class EmailListComponent implements OnInit, OnDestroy {
     this.closeContextMenu();
   }
 
+  contextNotSpam(): void {
+    const menu = this.contextMenu();
+    if (!menu) return;
+    if (this.isSelected(menu.email)) {
+      void this.bulkNotSpam();
+    } else {
+      void this.notSpamEmailAndRefill(menu.email);
+    }
+    this.closeContextMenu();
+  }
+
   contextTrash(): void {
     const menu = this.contextMenu();
     if (!menu) return;
@@ -516,6 +600,13 @@ export class EmailListComponent implements OnInit, OnDestroy {
     this.mobileActionMenu.set(null);
   }
 
+  mobileMenuNotSpam(): void {
+    const email = this.mobileActionMenu();
+    if (!email) return;
+    void this.notSpamEmailAndRefill(email);
+    this.mobileActionMenu.set(null);
+  }
+
   private async trashEmailAndRefill(email: Email): Promise<void> {
     await this.emailService.trashEmail(email);
     await this.refillVisibleEmails();
@@ -527,6 +618,15 @@ export class EmailListComponent implements OnInit, OnDestroy {
 
   private async spamEmailAndRefill(email: Email): Promise<void> {
     await this.emailService.spamEmail(email);
+    await this.refillVisibleEmails();
+  }
+
+  async notSpamEmail(email: Email): Promise<void> {
+    await this.notSpamEmailAndRefill(email);
+  }
+
+  private async notSpamEmailAndRefill(email: Email): Promise<void> {
+    await this.emailService.markAsNotSpam(email);
     await this.refillVisibleEmails();
   }
 
@@ -546,9 +646,74 @@ export class EmailListComponent implements OnInit, OnDestroy {
     return this.labelService.getLabelsForCachedEmail(email.folder, email.uid);
   }
 
+  triageFor(email: Email): EmailTriageResult | null {
+    return this.aiInsights().get(this.emailKey(email)) ?? null;
+  }
+
+  formatTaskDate(value: string | null): string {
+    if (!value) return 'Sans date';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+      ? value
+      : date.toLocaleString('fr-FR', {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        });
+  }
+
+  toggleTaskPanel(): void {
+    if (!this.aiEnabled()) {
+      this.showTaskPanel.set(false);
+      return;
+    }
+    this.showTaskPanel.update((value) => !value);
+  }
+
+  toggleTaskCompleted(taskId: string): void {
+    this.taskService.toggleCompleted(taskId);
+  }
+
+  removeTask(taskId: string): void {
+    this.taskService.removeTask(taskId);
+  }
+
   recipientLabel(email: Email): string {
     const first = email.to.length > 0 ? email.to[0] : null;
     return first?.name || first?.email || '(sans destinataire)';
+  }
+
+  private isJunkFolderPath(path: string): boolean {
+    const normalizedPath = path.trim().toLowerCase();
+    return this.emailService.folders().some(
+      (folder) => folder.path === path && folder.specialUse === '\\Junk'
+    ) || normalizedPath === 'spam' || normalizedPath === 'junk';
+  }
+
+  private async loadAiInsights(emails: Email[]): Promise<void> {
+    try {
+      const results = await this.aiService.triage(
+        emails.map((email) => ({
+          id: this.emailKey(email),
+          from: email.from.email || email.from.name,
+          subject: email.subject,
+          snippet: email.snippet,
+        })),
+      );
+
+      this.aiInsights.update((existing) => {
+        const next = new Map(existing);
+        for (const result of results) {
+          next.set(result.id, result);
+        }
+        return next;
+      });
+    } catch (err) {
+      console.error('Failed to load AI triage insights', err);
+    } finally {
+      for (const email of emails) {
+        this.triageInFlight.delete(this.emailKey(email));
+      }
+    }
   }
 
   private resolveFolder(label: string): string {

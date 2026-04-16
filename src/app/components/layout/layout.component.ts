@@ -106,9 +106,9 @@ export class LayoutComponent implements OnInit, OnDestroy {
     this.searchBar()?.focusInput();
   }
 
-  onSignOut(): void {
-    this.auth.signOut();
-    this.router.navigate(['/login']);
+  async onSignOut(): Promise<void> {
+    await this.auth.signOut();
+    await this.router.navigate(['/login']);
   }
 
   isMobile(): boolean {

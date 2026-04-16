@@ -7,6 +7,7 @@ import { ScheduledService } from '../../services/scheduled.service';
 import { ContactService, Contact } from '../../services/contact.service';
 import { PgpService } from '../../services/pgp.service';
 import { ConfirmDialogService } from '../../services/confirm-dialog.service';
+import { AiService } from '../../services/ai.service';
 import { RichEditorComponent } from '../rich-editor/rich-editor.component';
 
 @Component({
@@ -24,6 +25,7 @@ export class ComposeComponent implements OnInit, OnDestroy {
   protected readonly contactService = inject(ContactService);
   protected readonly pgpService = inject(PgpService);
   private readonly confirmDialog = inject(ConfirmDialogService);
+  private readonly aiService = inject(AiService);
 
   readonly close = output<void>();
 
@@ -47,6 +49,26 @@ export class ComposeComponent implements OnInit, OnDestroy {
   readonly showToSuggestions = signal(false);
   readonly draftSavedAt = signal<string | null>(null);
   readonly sendError = signal<string | null>(null);
+  readonly showAiAssistant = signal(false);
+  readonly aiPrompt = signal('');
+  readonly aiLoading = signal(false);
+  readonly aiError = signal<string | null>(null);
+  readonly dismissAiHint = signal(false);
+  readonly canUseAi = computed(() =>
+    !!this.authService.user()?.hasAiApiKey && !!this.authService.user()?.isAiEnabled
+  );
+  readonly aiSettingsHint = computed(() => {
+    const user = this.authService.user();
+    if (!user) return null;
+    if (user.hideAiHints || this.dismissAiHint()) return null;
+    if (user.hasAiApiKey && !user.isAiEnabled) {
+      return "Les outils IA sont desactives. Activez-les dans Reglages > Intelligence Artificielle.";
+    }
+    if (!user.hasAiApiKey) {
+      return "Pour utiliser l'IA ici, configurez une cle API dans Reglages > Intelligence Artificielle.";
+    }
+    return null;
+  });
 
   readonly bodyEditor = viewChild<RichEditorComponent>('bodyEditor');
   readonly fileInputRef = viewChild<ElementRef<HTMLInputElement>>('fileInput');
@@ -60,6 +82,19 @@ export class ComposeComponent implements OnInit, OnDestroy {
   private draftSaveInFlight = false;
 
   constructor() {
+    effect(() => {
+      if (!this.canUseAi()) {
+        this.showAiAssistant.set(false);
+        this.aiLoading.set(false);
+        this.aiError.set(null);
+      }
+    });
+
+    effect(() => {
+      this.authService.user();
+      this.dismissAiHint.set(false);
+    });
+
     effect(() => {
       const signatureHtml = this.settingsService.getDefaultSignature()?.html ?? '';
       const currentBody = this.htmlBody();
@@ -137,6 +172,7 @@ export class ComposeComponent implements OnInit, OnDestroy {
 
   onBodyChange(html: string): void {
     this.sendError.set(null);
+    this.aiError.set(null);
     this.htmlBody.set(html);
   }
 
@@ -357,9 +393,66 @@ export class ComposeComponent implements OnInit, OnDestroy {
     this.maximized.set(!this.maximized());
   }
 
+  async generateDraftWithAi(): Promise<void> {
+    const prompt = this.aiPrompt().trim();
+    const currentDraft = this.bodyEditor()?.getHtml() || this.htmlBody();
+    if (!prompt && !currentDraft.trim()) {
+      this.aiError.set('Ajoutez une consigne courte pour generer le message.');
+      return;
+    }
+
+    await this.runAiCompose(prompt || 'Ameliore le brouillon existant.');
+  }
+
+  async rewriteDraft(tone: 'professional' | 'friendly' | 'concise' | 'correct'): Promise<void> {
+    const promptByTone: Record<'professional' | 'friendly' | 'concise' | 'correct', string> = {
+      professional: 'Reecris ce message avec un ton plus professionnel et plus structure.',
+      friendly: 'Reecris ce message avec un ton plus chaleureux et plus amical.',
+      concise: 'Raccourcis ce message et rends-le plus concis sans perdre les informations importantes.',
+      correct: "Corrige les fautes d'orthographe, de grammaire et clarifie les formulations ambiguës.",
+    };
+
+    const currentDraft = this.bodyEditor()?.getHtml() || this.htmlBody();
+    const prompt = this.aiPrompt().trim() || promptByTone[tone];
+    if (!prompt && !currentDraft.trim()) {
+      this.aiError.set('Ajoutez une consigne ou commencez un brouillon avant de demander une reformulation.');
+      return;
+    }
+
+    await this.runAiCompose(prompt, tone);
+  }
+
   onClose(): void {
     void this.saveDraft();
     this.close.emit();
+  }
+
+  private async runAiCompose(prompt: string, tone?: string): Promise<void> {
+    if (!this.canUseAi()) {
+      this.aiError.set("Configurez et activez l'IA dans les reglages pour utiliser cette fonction.");
+      return;
+    }
+
+    this.aiLoading.set(true);
+    this.aiError.set(null);
+
+    try {
+      const currentDraft = this.bodyEditor()?.getHtml() || this.htmlBody();
+      const generated = await this.aiService.compose(prompt, {
+        currentDraft,
+        tone,
+      });
+      const editor = this.bodyEditor();
+      if (editor) {
+        editor.setHtml(generated);
+      }
+      this.htmlBody.set(generated);
+    } catch (err) {
+      console.error('Failed to use AI compose', err);
+      this.aiError.set("La generation IA a echoue.");
+    } finally {
+      this.aiLoading.set(false);
+    }
   }
 
   private stripDetachedSignature(html: string, signatureHtml = this.settingsService.getDefaultSignature()?.html ?? ''): string {

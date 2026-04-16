@@ -2,11 +2,12 @@ import { Component, ChangeDetectionStrategy, inject, HostListener } from '@angul
 import { RouterOutlet } from '@angular/router';
 import { ThemeService } from './services/theme.service';
 import { ConfirmDialogComponent } from './components/confirm-dialog/confirm-dialog.component';
+import { ToastStackComponent } from './components/toast-stack/toast-stack.component';
 
 @Component({
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, ConfirmDialogComponent],
+  imports: [RouterOutlet, ConfirmDialogComponent, ToastStackComponent],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })

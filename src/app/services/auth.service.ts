@@ -1,9 +1,10 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../environments/environment';
 
 export type ImagePolicy = 'ask' | 'always' | 'never';
+export type AiProvider = 'openai' | 'anthropic' | 'google' | 'mistral' | 'other';
 
 export interface UserProfile {
   id?: string;
@@ -14,9 +15,14 @@ export interface UserProfile {
   imagePolicy?: ImagePolicy;
   imageAllowedDomains?: string[];
   imageBlockedDomains?: string[];
+  hasAiApiKey?: boolean;
   hasOpenAiApiKey?: boolean;
+  aiApiKey?: string;
   openAiApiKey?: string;
+  aiProvider?: AiProvider;
+  aiApiUrl?: string;
   isAiEnabled?: boolean;
+  hideAiHints?: boolean;
 }
 
 export interface LoginCredentials {
@@ -24,14 +30,30 @@ export interface LoginCredentials {
   password?: string;
 }
 
+export interface ActiveSession {
+  id: string;
+  createdAt: string;
+  lastSeenAt: string | null;
+  expiresAt: string;
+  rememberMe: boolean;
+  userAgent: string | null;
+  ipAddress: string | null;
+  isCurrent: boolean;
+}
+
+type TokenStorageMode = 'local' | 'session';
+
 @Injectable({ providedIn: 'root' })
 export class AuthService {
+  private static readonly TOKEN_STORAGE_KEY = 'auth_token';
+  private static readonly TOKEN_STORAGE_MODE_KEY = 'auth_token_storage_mode';
+
   private readonly http = inject(HttpClient);
   private readonly apiUrl = environment.apiUrl;
 
   private readonly userProfile = signal<UserProfile | null>(null);
   private readonly authenticated = signal(false);
-  private readonly token = signal<string | null>(localStorage.getItem('auth_token'));
+  private readonly token = signal<string | null>(this.readStoredToken());
   readonly loginError = signal('');
 
   readonly isAuthenticated = computed(() => this.authenticated());
@@ -39,6 +61,7 @@ export class AuthService {
 
   // We keep a promise to ensure we only load once on startup
   private initialLoadPromise: Promise<void> | null = null;
+  private refreshPromise: Promise<boolean> | null = null;
 
   constructor() {
     this.initialLoadPromise = this.checkAuthStatus();
@@ -49,11 +72,11 @@ export class AuthService {
   }
 
   getToken(): string | null {
-    return this.token();
+    return this.token() ?? this.readStoredToken();
   }
 
   async checkAuthStatus(): Promise<void> {
-    const currentToken = this.token();
+    const currentToken = this.getToken();
     if (!currentToken) {
       this.authenticated.set(false);
       this.userProfile.set(null);
@@ -63,23 +86,33 @@ export class AuthService {
     try {
       // Using the new NestJS /api/auth/profile endpoint
       const user = await firstValueFrom(
-        this.http.get<UserProfile>(`${this.apiUrl}/auth/profile`)
+        this.http.get<UserProfile>(`${this.apiUrl}/auth/profile`, { withCredentials: true })
       );
+      this.token.set(currentToken);
       this.authenticated.set(true);
       this.userProfile.set(user);
-    } catch {
-      this.setToken(null);
-      this.authenticated.set(false);
-      this.userProfile.set(null);
+    } catch (err: unknown) {
+      const status = err instanceof HttpErrorResponse ? err.status : undefined;
+      if (status === 401 || status === 403) {
+        this.clearAuthState();
+        return;
+      }
+
+      // Temporary backend/network failures should not wipe a valid stored token.
+      this.token.set(currentToken);
     }
   }
 
-  private setToken(newToken: string | null) {
+  private setToken(newToken: string | null, rememberMe = true) {
     this.token.set(newToken);
+    localStorage.removeItem(AuthService.TOKEN_STORAGE_KEY);
+    sessionStorage.removeItem(AuthService.TOKEN_STORAGE_KEY);
+    localStorage.removeItem(AuthService.TOKEN_STORAGE_MODE_KEY);
+    sessionStorage.removeItem(AuthService.TOKEN_STORAGE_MODE_KEY);
     if (newToken) {
-      localStorage.setItem('auth_token', newToken);
-    } else {
-      localStorage.removeItem('auth_token');
+      const storage = rememberMe ? localStorage : sessionStorage;
+      storage.setItem(AuthService.TOKEN_STORAGE_KEY, newToken);
+      storage.setItem(AuthService.TOKEN_STORAGE_MODE_KEY, rememberMe ? 'local' : 'session');
     }
   }
 
@@ -89,10 +122,11 @@ export class AuthService {
       const res = await firstValueFrom(
         this.http.post<{ access_token: string }>(
           `${this.apiUrl}/auth/register`,
-          credentials
+          credentials,
+          { withCredentials: true },
         )
       );
-      this.setToken(res.access_token);
+      this.setToken(res.access_token, true);
       await this.checkAuthStatus();
       return true;
     } catch (err: unknown) {
@@ -102,13 +136,17 @@ export class AuthService {
     }
   }
 
-  async signIn(credentials: LoginCredentials): Promise<{ success: boolean; requires2FA?: boolean; tempToken?: string }> {
+  async signIn(
+    credentials: LoginCredentials,
+    rememberMe = false,
+  ): Promise<{ success: boolean; requires2FA?: boolean; tempToken?: string }> {
     this.loginError.set('');
     try {
       const res = await firstValueFrom(
         this.http.post<{ access_token?: string; isTwoFactorRequired?: boolean; temp_token?: string }>(
           `${this.apiUrl}/auth/login`,
-          credentials
+          { ...credentials, rememberMe },
+          { withCredentials: true },
         )
       );
 
@@ -117,7 +155,7 @@ export class AuthService {
       }
 
       if (res.access_token) {
-        this.setToken(res.access_token);
+        this.setToken(res.access_token, rememberMe);
         await this.checkAuthStatus();
         return { success: true };
       }
@@ -129,13 +167,17 @@ export class AuthService {
     }
   }
 
-  async verify2FA(tempToken: string, code: string): Promise<boolean> {
+  async verify2FA(tempToken: string, code: string, rememberMe = false): Promise<boolean> {
     this.loginError.set('');
     try {
       const res = await firstValueFrom(
-        this.http.post<{ access_token: string }>(`${this.apiUrl}/auth/2fa/authenticate`, { tempToken, code })
+        this.http.post<{ access_token: string }>(
+          `${this.apiUrl}/auth/2fa/authenticate`,
+          { tempToken, code, rememberMe },
+          { withCredentials: true },
+        )
       );
-      this.setToken(res.access_token);
+      this.setToken(res.access_token, rememberMe);
       await this.checkAuthStatus();
       return true;
     } catch (err: unknown) {
@@ -145,17 +187,22 @@ export class AuthService {
     }
   }
 
-  async signInWithWebAuthn(email: string | null, response: any): Promise<{ success: boolean; requires2FA?: boolean; tempToken?: string }> {
+  async signInWithWebAuthn(
+    email: string | null,
+    response: any,
+    rememberMe = false,
+  ): Promise<{ success: boolean; requires2FA?: boolean; tempToken?: string }> {
     this.loginError.set('');
     try {
-      const payload: { email?: string; response: any } = { response };
+      const requestBody: { email?: string; response: any; rememberMe: boolean } = { response, rememberMe };
       if (email) {
-        payload.email = email;
+        requestBody.email = email;
       }
       const res = await firstValueFrom(
         this.http.post<{ access_token?: string; isTwoFactorRequired?: boolean; temp_token?: string }>(
           `${this.apiUrl}/auth/webauthn/login/verify`,
-          payload
+          requestBody,
+          { withCredentials: true },
         )
       );
 
@@ -164,7 +211,7 @@ export class AuthService {
       }
 
       if (res.access_token) {
-        this.setToken(res.access_token);
+        this.setToken(res.access_token, rememberMe);
         await this.checkAuthStatus();
         return { success: true };
       }
@@ -178,14 +225,14 @@ export class AuthService {
 
   async generate2FA(): Promise<{ otpauthUrl: string }> {
     return firstValueFrom(
-      this.http.post<{ otpauthUrl: string }>(`${this.apiUrl}/auth/2fa/generate`, {})
+      this.http.post<{ otpauthUrl: string }>(`${this.apiUrl}/auth/2fa/generate`, {}, { withCredentials: true })
     );
   }
 
   async turnOn2FA(code: string): Promise<boolean> {
     try {
       await firstValueFrom(
-        this.http.post(`${this.apiUrl}/auth/2fa/turn-on`, { code })
+        this.http.post(`${this.apiUrl}/auth/2fa/turn-on`, { code }, { withCredentials: true })
       );
       return true;
     } catch {
@@ -195,14 +242,14 @@ export class AuthService {
 
   async generateWebAuthnRegisterOptions(): Promise<any> {
     return firstValueFrom(
-      this.http.get(`${this.apiUrl}/auth/webauthn/register/generate-options`)
+      this.http.get(`${this.apiUrl}/auth/webauthn/register/generate-options`, { withCredentials: true })
     );
   }
 
   async verifyWebAuthnRegister(response: any): Promise<boolean> {
     try {
       const res = await firstValueFrom(
-        this.http.post<{ verified: boolean }>(`${this.apiUrl}/auth/webauthn/register/verify`, response)
+        this.http.post<{ verified: boolean }>(`${this.apiUrl}/auth/webauthn/register/verify`, response, { withCredentials: true })
       );
       return res.verified;
     } catch {
@@ -212,14 +259,125 @@ export class AuthService {
 
   async updateSettings(settings: Partial<UserProfile>): Promise<void> {
     await firstValueFrom(
-      this.http.post(`${this.apiUrl}/auth/profile/settings`, settings)
+      this.http.post(`${this.apiUrl}/auth/profile/settings`, settings, { withCredentials: true })
     );
     await this.checkAuthStatus();
   }
 
-  signOut(): void {
+  async getActiveSessions(): Promise<ActiveSession[]> {
+    return firstValueFrom(
+      this.http.get<ActiveSession[]>(`${this.apiUrl}/auth/sessions`, { withCredentials: true })
+    );
+  }
+
+  async revokeSessionById(sessionId: string): Promise<void> {
+    await firstValueFrom(
+      this.http.post(`${this.apiUrl}/auth/sessions/${encodeURIComponent(sessionId)}/revoke`, {}, { withCredentials: true })
+    );
+  }
+
+  async revokeOtherSessions(): Promise<void> {
+    await firstValueFrom(
+      this.http.post(`${this.apiUrl}/auth/sessions/revoke-others`, {}, { withCredentials: true })
+    );
+  }
+
+  async refreshAccessToken(): Promise<boolean> {
+    if (this.refreshPromise) {
+      return this.refreshPromise;
+    }
+
+    this.refreshPromise = this.performRefreshAccessToken();
+    try {
+      return await this.refreshPromise;
+    } finally {
+      this.refreshPromise = null;
+    }
+  }
+
+  shouldAttachAccessToken(url: string): boolean {
+    return !this.isPublicAuthRoute(url) && !this.isRefreshRoute(url) && !this.isLogoutRoute(url);
+  }
+
+  shouldAttemptRefresh(url: string): boolean {
+    return !this.isPublicAuthRoute(url) && !this.isRefreshRoute(url) && !this.isLogoutRoute(url);
+  }
+
+  async signOut(): Promise<void> {
+    try {
+      await firstValueFrom(
+        this.http.post(`${this.apiUrl}/auth/logout`, {}, { withCredentials: true })
+      );
+    } catch {
+      // Local cleanup still matters even if the backend is temporarily unavailable.
+    } finally {
+      this.clearAuthState();
+    }
+  }
+
+  clearAuthState(): void {
     this.setToken(null);
     this.authenticated.set(false);
     this.userProfile.set(null);
+  }
+
+  private readStoredToken(): string | null {
+    return localStorage.getItem(AuthService.TOKEN_STORAGE_KEY)
+      ?? sessionStorage.getItem(AuthService.TOKEN_STORAGE_KEY);
+  }
+
+  private async performRefreshAccessToken(): Promise<boolean> {
+    try {
+      const res = await firstValueFrom(
+        this.http.post<{ access_token: string }>(
+          `${this.apiUrl}/auth/refresh`,
+          {},
+          { withCredentials: true },
+        )
+      );
+
+      this.setToken(res.access_token, this.getStoredTokenMode() === 'local');
+      return true;
+    } catch {
+      this.clearAuthState();
+      return false;
+    }
+  }
+
+  private getStoredTokenMode(): TokenStorageMode {
+    const mode = localStorage.getItem(AuthService.TOKEN_STORAGE_MODE_KEY)
+      ?? sessionStorage.getItem(AuthService.TOKEN_STORAGE_MODE_KEY);
+
+    if (mode === 'local' || mode === 'session') {
+      return mode;
+    }
+
+    if (localStorage.getItem(AuthService.TOKEN_STORAGE_KEY)) {
+      return 'local';
+    }
+
+    if (sessionStorage.getItem(AuthService.TOKEN_STORAGE_KEY)) {
+      return 'session';
+    }
+
+    return 'local';
+  }
+
+  private isPublicAuthRoute(url: string): boolean {
+    return [
+      '/auth/login',
+      '/auth/register',
+      '/auth/2fa/authenticate',
+      '/auth/webauthn/login/generate-options',
+      '/auth/webauthn/login/verify',
+    ].some((route) => url.includes(route));
+  }
+
+  private isRefreshRoute(url: string): boolean {
+    return url.includes('/auth/refresh');
+  }
+
+  private isLogoutRoute(url: string): boolean {
+    return url.includes('/auth/logout');
   }
 }

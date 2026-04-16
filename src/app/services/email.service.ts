@@ -30,6 +30,12 @@ export class EmailService {
     return this.folders().find((folder) => folder.specialUse === specialUse)?.path ?? null;
   }
 
+  private getInboxFolderPath(): string {
+    return this.getSpecialFolderPath('\\Inbox')
+      ?? this.folders().find((folder) => folder.path.toLowerCase() === 'inbox')?.path
+      ?? 'INBOX';
+  }
+
   private getHeaders() {
     const accountId = this.settingsService.activeAccountId();
     let headers = new HttpHeaders();
@@ -166,16 +172,15 @@ export class EmailService {
   async markAsRead(email: Email): Promise<void> {
     if (email.isRead) return;
     await this.setFlag(email, '\\Seen', true);
-    this.currentEmails.update((emails) =>
-      emails.map((e) => (e.uid === email.uid && e.folder === email.folder ? { ...e, isRead: true } : e))
-    );
+    this.updateEmailState(email, { isRead: true });
+    this.adjustFolderUnseenCount(email.folder, -1);
   }
 
   async markAsUnread(email: Email): Promise<void> {
+    if (!email.isRead) return;
     await this.setFlag(email, '\\Seen', false);
-    this.currentEmails.update((emails) =>
-      emails.map((e) => (e.uid === email.uid && e.folder === email.folder ? { ...e, isRead: false } : e))
-    );
+    this.updateEmailState(email, { isRead: false });
+    this.adjustFolderUnseenCount(email.folder, 1);
   }
 
   async toggleStar(email: Email): Promise<void> {
@@ -202,6 +207,16 @@ export class EmailService {
       emails.filter((e) => !(e.uid === email.uid && e.folder === email.folder))
     );
     this.currentTotal.update((total) => Math.max(0, total - 1));
+    this.adjustFolderMessageCount(email.folder, -1);
+    if (!email.isRead) {
+      this.adjustFolderUnseenCount(email.folder, -1);
+    }
+    if (destination && destination !== email.folder) {
+      this.adjustFolderMessageCount(destination, 1);
+      if (!email.isRead) {
+        this.adjustFolderUnseenCount(destination, 1);
+      }
+    }
   }
 
   async spamEmail(email: Email): Promise<void> {
@@ -210,6 +225,14 @@ export class EmailService {
       throw new Error('Dossier Spam introuvable');
     }
     await this.moveToFolder(email, junkFolder);
+    if (this.selectedEmail()?.uid === email.uid) {
+      this.selectedEmail.set(null);
+    }
+  }
+
+  async markAsNotSpam(email: Email): Promise<void> {
+    const inboxFolder = this.getInboxFolderPath();
+    await this.moveToFolder(email, inboxFolder);
     if (this.selectedEmail()?.uid === email.uid) {
       this.selectedEmail.set(null);
     }
@@ -242,6 +265,7 @@ export class EmailService {
     if (this.selectedEmail() && keys.has(`${this.selectedEmail()!.folder}:${this.selectedEmail()!.uid}`)) {
       this.selectedEmail.set(null);
     }
+    this.adjustFolderStatusesForBulkMove(emails, this.trashFolder || null);
     for (const email of emails) {
       const promise = this.trashFolder
         ? firstValueFrom(
@@ -273,6 +297,7 @@ export class EmailService {
     if (this.selectedEmail() && keys.has(`${this.selectedEmail()!.folder}:${this.selectedEmail()!.uid}`)) {
       this.selectedEmail.set(null);
     }
+    this.adjustFolderStatusesForBulkMove(emails, junkFolder);
     for (const email of emails) {
       firstValueFrom(
         this.http.post(
@@ -281,6 +306,26 @@ export class EmailService {
           { headers: this.getHeaders(), withCredentials: true }
         )
       ).catch(err => console.error('Background spam failed', err));
+    }
+  }
+
+  bulkNotSpamInBackground(emails: Email[]): void {
+    const inboxFolder = this.getInboxFolderPath();
+    const keys = new Set(emails.map(e => `${e.folder}:${e.uid}`));
+    this.currentEmails.update(list => list.filter(e => !keys.has(`${e.folder}:${e.uid}`)));
+    this.currentTotal.update((total) => Math.max(0, total - keys.size));
+    if (this.selectedEmail() && keys.has(`${this.selectedEmail()!.folder}:${this.selectedEmail()!.uid}`)) {
+      this.selectedEmail.set(null);
+    }
+    this.adjustFolderStatusesForBulkMove(emails, inboxFolder);
+    for (const email of emails) {
+      firstValueFrom(
+        this.http.post(
+          `${this.apiUrl}/email/${encodeURIComponent(email.folder)}/${email.uid}/move`,
+          { destination: inboxFolder },
+          { headers: this.getHeaders(), withCredentials: true }
+        )
+      ).catch(err => console.error('Background not-spam failed', err));
     }
   }
 
@@ -528,5 +573,63 @@ export class EmailService {
         ? { ...selected, ...patch }
         : selected
     );
+  }
+
+  private adjustFolderStatusesForBulkMove(emails: Email[], destination: string | null): void {
+    const sourceStats = new Map<string, { messages: number; unseen: number }>();
+
+    for (const email of emails) {
+      const current = sourceStats.get(email.folder) ?? { messages: 0, unseen: 0 };
+      current.messages += 1;
+      if (!email.isRead) {
+        current.unseen += 1;
+      }
+      sourceStats.set(email.folder, current);
+    }
+
+    for (const [folder, stats] of sourceStats.entries()) {
+      this.adjustFolderMessageCount(folder, -stats.messages);
+      if (stats.unseen > 0) {
+        this.adjustFolderUnseenCount(folder, -stats.unseen);
+      }
+    }
+
+    if (!destination) return;
+
+    this.adjustFolderMessageCount(destination, emails.length);
+    const unreadCount = emails.filter((email) => !email.isRead).length;
+    if (unreadCount > 0) {
+      this.adjustFolderUnseenCount(destination, unreadCount);
+    }
+  }
+
+  private adjustFolderMessageCount(folderPath: string, delta: number): void {
+    if (!delta) return;
+    this.folderStatuses.update((statuses) => {
+      const current = statuses.get(folderPath);
+      if (!current) return statuses;
+
+      const next = new Map(statuses);
+      next.set(folderPath, {
+        ...current,
+        messages: Math.max(0, current.messages + delta),
+      });
+      return next;
+    });
+  }
+
+  private adjustFolderUnseenCount(folderPath: string, delta: number): void {
+    if (!delta) return;
+    this.folderStatuses.update((statuses) => {
+      const current = statuses.get(folderPath);
+      if (!current) return statuses;
+
+      const next = new Map(statuses);
+      next.set(folderPath, {
+        ...current,
+        unseen: Math.max(0, current.unseen + delta),
+      });
+      return next;
+    });
   }
 }

@@ -10,8 +10,9 @@ export const authGuard: CanActivateFn = async (route, state) => {
   const initialLoad = authService.getInitialLoadPromise();
   if (initialLoad) {
       await initialLoad;
-  } else if (!authService.user() && authService.getToken()) {
-      // Fallback
+  }
+
+  if (!authService.user() && authService.getToken()) {
       await authService.checkAuthStatus();
   }
 

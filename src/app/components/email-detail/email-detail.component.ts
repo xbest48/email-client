@@ -1,5 +1,5 @@
-import { Component, inject, signal, computed, ChangeDetectionStrategy, OnInit, OnDestroy, viewChild } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
+import { Component, inject, signal, computed, ChangeDetectionStrategy, OnInit, OnDestroy, viewChild, effect } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { Subscription } from 'rxjs';
 import { EmailService } from '../../services/email.service';
@@ -12,7 +12,9 @@ import { PgpService } from '../../services/pgp.service';
 import { KeyboardShortcutService } from '../../services/keyboard-shortcut.service';
 import { SandboxedHtmlDirective } from '../../directives/sandboxed-html.directive';
 import { SettingsService } from '../../services/settings.service';
-import { AiService } from '../../services/ai.service';
+import { AiActionItem, AiCategoryResult, AiPhishingResult, AiService } from '../../services/ai.service';
+import { TaskService } from '../../services/task.service';
+import { ToastService } from '../../services/toast.service';
 import { RichEditorComponent } from '../rich-editor/rich-editor.component';
 
 @Component({
@@ -25,7 +27,6 @@ import { RichEditorComponent } from '../rich-editor/rich-editor.component';
 export class EmailDetailComponent implements OnInit, OnDestroy {
   private readonly emailService = inject(EmailService);
   private readonly route = inject(ActivatedRoute);
-  private readonly router = inject(Router);
   protected readonly authService = inject(AuthService);
   protected readonly snoozeService = inject(SnoozeService);
   protected readonly labelService = inject(LabelService);
@@ -34,6 +35,8 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
   private readonly shortcutService = inject(KeyboardShortcutService);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly aiService = inject(AiService);
+  private readonly taskService = inject(TaskService);
+  private readonly toastService = inject(ToastService);
 
   readonly email = signal<Email | null>(null);
   readonly replyMode = signal<'reply' | 'replyAll' | 'forward' | null>(null);
@@ -56,21 +59,47 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
   readonly readReceiptDismissed = signal(false);
   readonly customSnoozeDate = signal('');
   readonly previewAttachment = signal<{ url: string; mimeType: string; filename: string } | null>(null);
+  readonly recipientsExpanded = signal(false);
 
   // AI Signals
+  readonly dismissAiHint = signal(false);
+  readonly aiEnabled = computed(() =>
+    !!this.authService.user()?.hasAiApiKey && !!this.authService.user()?.isAiEnabled
+  );
+  readonly aiSettingsHint = computed(() => {
+    const user = this.authService.user();
+    if (!user) return null;
+    if (user.hideAiHints || this.dismissAiHint()) return null;
+    if (user.hasAiApiKey && !user.isAiEnabled) {
+      return "Les outils IA sont desactives. Activez-les dans Reglages > Intelligence Artificielle.";
+    }
+    if (!user.hasAiApiKey) {
+      return "Ajoutez une cle API dans Reglages > Intelligence Artificielle pour utiliser le resume, la traduction et les suggestions.";
+    }
+    return null;
+  });
   readonly showAiMenu = signal(false);
   readonly aiLoading = signal(false);
   readonly aiSummary = signal<string | null>(null);
   readonly aiReplies = signal<string[]>([]);
-  readonly aiActionItems = signal<string[]>([]);
-  readonly aiPhishing = signal<{ level: 'low' | 'medium' | 'high'; reason: string } | null>(null);
-  readonly aiCategory = signal<string | null>(null);
+  readonly aiActionItems = signal<AiActionItem[]>([]);
+  readonly aiPhishing = signal<AiPhishingResult | null>(null);
+  readonly aiCategory = signal<AiCategoryResult | null>(null);
   readonly aiTranslation = signal<string | null>(null);
 
   readonly trustedPreviewUrl = computed<SafeResourceUrl | null>(() => {
     const preview = this.previewAttachment();
     if (!preview) return null;
     return this.sanitizer.bypassSecurityTrustResourceUrl(preview.url);
+  });
+
+  readonly isSpamEmail = computed(() => {
+    const mail = this.email();
+    if (!mail) return false;
+    const normalizedFolder = mail.folder.trim().toLowerCase();
+    return this.emailService.folders().some(
+      (folder) => folder.path === mail.folder && folder.specialUse === '\\Junk'
+    ) || normalizedFolder === 'spam' || normalizedFolder === 'junk';
   });
 
   readonly shouldBlockImages = computed(() => {
@@ -92,7 +121,6 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     const blockedDomains: string[] = user?.imageBlockedDomains ?? [];
     const blockImages = this.shouldBlockImages();
 
-    const placeholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
     html = html.replace(/<img\b[^>]*>/gi, (imgTag) => {
       const srcMatch = imgTag.match(/\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|(\S+))/i);
       if (!srcMatch) return imgTag;
@@ -126,6 +154,20 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
   });
 
   private shortcutSub?: Subscription;
+  private readonly collapsedRecipientCount = 2;
+
+  constructor() {
+    effect(() => {
+      if (!this.aiEnabled()) {
+        this.clearAiResults();
+      }
+    });
+
+    effect(() => {
+      this.authService.user();
+      this.dismissAiHint.set(false);
+    });
+  }
 
   ngOnInit(): void {
     this.route.params.subscribe(async (params) => {
@@ -135,10 +177,15 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
       if (folder && uid) {
         const msg = await this.emailService.fetchEmail(folder, parseInt(uid, 10));
         if (msg) {
+          this.clearAiResults();
+          this.recipientsExpanded.set(false);
           this.email.set(msg);
           this.emailService.markAsRead(msg);
           this.loadLabels(folder, parseInt(uid, 10));
           this.loadThread(folder, parseInt(uid, 10));
+          if (this.aiEnabled()) {
+            void this.detectPhishing(true);
+          }
         }
       }
     });
@@ -187,6 +234,14 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     const mail = this.email();
     if (mail) {
       await this.emailService.spamEmail(mail);
+      this.goBack();
+    }
+  }
+
+  async markAsNotSpam(): Promise<void> {
+    const mail = this.email();
+    if (mail) {
+      await this.emailService.markAsNotSpam(mail);
       this.goBack();
     }
   }
@@ -447,6 +502,56 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     return addresses.map((a) => a.name || a.email).join(', ');
   }
 
+  async copyEmailAddress(address: string): Promise<void> {
+    if (!address) return;
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(address);
+        this.toastService.show('success', `Adresse ${address} copiee.`);
+        return;
+      }
+    } catch {
+      // Fall back to the legacy copy approach below.
+    }
+
+    try {
+      const input = document.createElement('textarea');
+      input.value = address;
+      input.setAttribute('readonly', 'true');
+      input.style.position = 'fixed';
+      input.style.opacity = '0';
+      document.body.appendChild(input);
+      input.select();
+      const copied = document.execCommand('copy');
+      document.body.removeChild(input);
+
+      if (!copied) {
+        throw new Error('copy-failed');
+      }
+
+      this.toastService.show('success', `Adresse ${address} copiee.`);
+    } catch {
+      this.toastService.show('error', "L'adresse n'a pas pu etre copiee.");
+    }
+  }
+
+  formatRecipientsPreview(mail: Email): string {
+    const recipients = [...(mail.to ?? []), ...(mail.cc ?? [])];
+    return recipients
+      .slice(0, this.collapsedRecipientCount)
+      .map((recipient) => recipient.name || recipient.email)
+      .join(', ');
+  }
+
+  hasCollapsedRecipients(mail: Email): boolean {
+    return (mail.to?.length ?? 0) + (mail.cc?.length ?? 0) > this.collapsedRecipientCount;
+  }
+
+  toggleRecipientsExpanded(): void {
+    this.recipientsExpanded.update((expanded) => !expanded);
+  }
+
   replyModeLabel(): string {
     switch (this.replyMode()) {
       case 'replyAll':
@@ -510,6 +615,9 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
 
   applyReply(text: string): void {
     this.aiReplies.set([]);
+    if (!this.replyTo().trim()) {
+      this.openReply('reply');
+    }
     this.replyBody.set(text);
     this.replyMode.set('reply');
     setTimeout(() => {
@@ -534,8 +642,10 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     }
   }
 
-  async detectPhishing(): Promise<void> {
-    this.showAiMenu.set(false);
+  async detectPhishing(silent = false): Promise<void> {
+    if (!silent) {
+      this.showAiMenu.set(false);
+    }
     const content = this.getEmailText();
     if (!content) return;
     this.aiLoading.set(true);
@@ -544,7 +654,9 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
       this.aiPhishing.set(result);
     } catch (e) {
       console.error('Failed to detect phishing', e);
-      alert('Erreur lors de l\'analyse.');
+      if (!silent) {
+        alert('Erreur lors de l\'analyse.');
+      }
     } finally {
       this.aiLoading.set(false);
     }
@@ -590,6 +702,76 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     if (type === 'category') this.aiCategory.set(null);
     if (type === 'translation') this.aiTranslation.set(null);
   }
+
+  saveActionAsTask(action: AiActionItem): void {
+    const mail = this.email();
+    if (!mail) return;
+    this.taskService.addTask({
+      title: action.title,
+      details: action.details,
+      dueDate: action.dueDate,
+      sourceSubject: mail.subject || '(sans objet)',
+      sourceSender: mail.from.email,
+    });
+  }
+
+  downloadActionCalendar(action: AiActionItem): void {
+    if (!action.dueDate) return;
+
+    const start = new Date(action.dueDate);
+    const end = new Date(start.getTime() + 60 * 60 * 1000);
+    const formatIcsDate = (date: Date) => date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+    const escape = (value: string) => value.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
+    const uid = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `mailflow-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    const mail = this.email();
+    const ics = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//MailFlow//AI Action Items//FR',
+      'BEGIN:VEVENT',
+      `UID:${uid}`,
+      `DTSTAMP:${formatIcsDate(new Date())}`,
+      `DTSTART:${formatIcsDate(start)}`,
+      `DTEND:${formatIcsDate(end)}`,
+      `SUMMARY:${escape(action.title)}`,
+      `DESCRIPTION:${escape(action.details || `Depuis: ${mail?.subject || '(sans objet)'}`)}`,
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n');
+
+    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${action.title || 'evenement'}.ics`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  formatAiDueDate(value: string | null): string {
+    if (!value) return '';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+      ? value
+      : date.toLocaleString('fr-FR', {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        });
+  }
+
+  private clearAiResults(): void {
+    this.showAiMenu.set(false);
+    this.aiSummary.set(null);
+    this.aiReplies.set([]);
+    this.aiActionItems.set([]);
+    this.aiPhishing.set(null);
+    this.aiCategory.set(null);
+    this.aiTranslation.set(null);
+  }
+
   private buildReplyAllRecipients(mail: Email): { to: string; cc: string; bcc: string } {
     const ownEmails = new Set(this.getCurrentAccountEmails());
     const to = this.uniqueEmails(

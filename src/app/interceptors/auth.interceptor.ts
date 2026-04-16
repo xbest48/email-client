@@ -1,27 +1,42 @@
-import { HttpInterceptorFn } from '@angular/common/http';
+import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
+import { catchError, from, switchMap, throwError } from 'rxjs';
 import { AuthService } from '../services/auth.service';
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
-  // To avoid circular dependency loading issues and race conditions early on,
-  // we can also safely read from localStorage directly if authService isn't fully ready
-  let token = localStorage.getItem('auth_token');
+  const authService = inject(AuthService);
+  const token = authService.getToken();
+  const requestWithToken = token && authService.shouldAttachAccessToken(req.url)
+    ? req.clone({
+        headers: req.headers.set('Authorization', `Bearer ${token}`),
+      })
+    : req;
 
-  if (!token) {
-      try {
-          const authService = inject(AuthService);
-          token = authService.getToken();
-      } catch (e) {
-          // Ignore
+  return next(requestWithToken).pipe(
+    catchError((error: unknown) => {
+      if (!(error instanceof HttpErrorResponse) || error.status !== 401 || !authService.shouldAttemptRefresh(req.url)) {
+        return throwError(() => error);
       }
-  }
 
-  if (token) {
-    const authReq = req.clone({
-      headers: req.headers.set('Authorization', `Bearer ${token}`)
-    });
-    return next(authReq);
-  }
+      return from(authService.refreshAccessToken()).pipe(
+        switchMap((refreshed) => {
+          if (!refreshed) {
+            return throwError(() => error);
+          }
 
-  return next(req);
+          const freshToken = authService.getToken();
+          if (!freshToken) {
+            return throwError(() => error);
+          }
+
+          const retryRequest = req.clone({
+            headers: req.headers.set('Authorization', `Bearer ${freshToken}`),
+          });
+
+          return next(retryRequest);
+        }),
+        catchError(() => throwError(() => error)),
+      );
+    }),
+  );
 };

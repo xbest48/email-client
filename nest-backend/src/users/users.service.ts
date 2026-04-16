@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, MoreThan, Not, Repository } from 'typeorm';
 import { User } from './user.entity';
 import { WebAuthnCredential } from './webauthn-credential.entity';
+import { AuthSession } from './auth-session.entity';
 
 @Injectable()
 export class UsersService {
@@ -11,6 +12,8 @@ export class UsersService {
     private usersRepository: Repository<User>,
     @InjectRepository(WebAuthnCredential)
     private credentialsRepository: Repository<WebAuthnCredential>,
+    @InjectRepository(AuthSession)
+    private authSessionsRepository: Repository<AuthSession>,
   ) {}
 
   async findByEmail(email: string): Promise<User | null> {
@@ -48,5 +51,47 @@ export class UsersService {
 
   async updateCredentialCounter(credentialId: string, counter: number): Promise<void> {
     await this.credentialsRepository.update(credentialId, { counter });
+  }
+
+  async createAuthSession(session: Partial<AuthSession>): Promise<AuthSession> {
+    const newSession = this.authSessionsRepository.create(session);
+    return this.authSessionsRepository.save(newSession);
+  }
+
+  async findAuthSessionById(id: string): Promise<AuthSession | null> {
+    return this.authSessionsRepository.findOne({
+      where: { id },
+      relations: ['user'],
+    });
+  }
+
+  async findActiveAuthSessionsByUser(userId: string): Promise<AuthSession[]> {
+    return this.authSessionsRepository.find({
+      where: {
+        user: { id: userId },
+        revokedAt: IsNull(),
+        expiresAt: MoreThan(new Date()),
+      },
+      order: { lastSeenAt: 'DESC', createdAt: 'DESC' },
+    });
+  }
+
+  async updateAuthSession(id: string, partial: Partial<AuthSession>): Promise<void> {
+    await this.authSessionsRepository.update(id, partial);
+  }
+
+  async revokeAuthSession(id: string): Promise<void> {
+    await this.authSessionsRepository.update(id, { revokedAt: new Date() });
+  }
+
+  async revokeOtherAuthSessions(userId: string, currentSessionId: string): Promise<void> {
+    await this.authSessionsRepository.update(
+      {
+        user: { id: userId },
+        id: Not(currentSessionId),
+        revokedAt: IsNull(),
+      },
+      { revokedAt: new Date() },
+    );
   }
 }

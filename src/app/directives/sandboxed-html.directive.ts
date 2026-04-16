@@ -30,13 +30,42 @@ export class SandboxedHtmlDirective implements OnDestroy {
   }
 
   private prepareHtmlForRendering(html: string): string {
-    return html.replace(
-      /(<img\b[^>]*\bsrc\s*=\s*["'])(data:image\/[^"']+)(["'][^>]*>)/gi,
-      (_match, prefix: string, dataUrl: string, suffix: string) => {
-        const objectUrl = this.createObjectUrlFromDataImage(dataUrl);
-        return `${prefix}${objectUrl}${suffix}`;
-      },
-    );
+    const template = document.createElement('template');
+    template.innerHTML = html;
+
+    for (const image of Array.from(template.content.querySelectorAll('img'))) {
+      const src = image.getAttribute('src');
+      if (src?.startsWith('data:image/')) {
+        image.setAttribute('src', this.createObjectUrlFromDataImage(src));
+      }
+    }
+
+    for (const anchor of Array.from(template.content.querySelectorAll('a[href]'))) {
+      const href = anchor.getAttribute('href')?.trim();
+      if (!href || !this.shouldOpenInNewTab(href)) continue;
+
+      anchor.setAttribute('target', '_blank');
+      anchor.setAttribute('rel', 'noopener noreferrer');
+    }
+
+    return template.innerHTML;
+  }
+
+  private shouldOpenInNewTab(href: string): boolean {
+    if (href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) {
+      return false;
+    }
+
+    if (href.startsWith('//')) {
+      return true;
+    }
+
+    try {
+      const url = new URL(href, window.location.href);
+      return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch {
+      return false;
+    }
   }
 
   private createObjectUrlFromDataImage(dataUrl: string): string {

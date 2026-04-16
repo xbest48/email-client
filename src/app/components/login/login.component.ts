@@ -38,7 +38,7 @@ export class LoginComponent {
     if (this.requires2FA()) {
       if (!this.totpCode()) return;
       this.loading.set(true);
-      const success = await this.auth.verify2FA(this.pendingTempToken!, this.totpCode());
+      const success = await this.auth.verify2FA(this.pendingTempToken!, this.totpCode(), this.rememberMe());
       this.loading.set(false);
       if (success) {
         this.router.navigate(['/inbox']);
@@ -49,10 +49,13 @@ export class LoginComponent {
     if (!this.email() || !this.password()) return;
 
     this.loading.set(true);
-    const result = await this.auth.signIn({
-      email: this.email(),
-      password: this.password(),
-    });
+    const result = await this.auth.signIn(
+      {
+        email: this.email(),
+        password: this.password(),
+      },
+      this.rememberMe(),
+    );
     this.loading.set(false);
 
     if (result.requires2FA && result.tempToken) {
@@ -82,7 +85,11 @@ export class LoginComponent {
 
       const asseResp = await startAuthentication({ optionsJSON: options });
 
-      const result = await this.auth.signInWithWebAuthn(useUsernameless ? null : emailValue, asseResp);
+      const result = await this.auth.signInWithWebAuthn(
+        useUsernameless ? null : emailValue,
+        asseResp,
+        this.rememberMe(),
+      );
 
       if (result.requires2FA && result.tempToken) {
         this.requires2FA.set(true);

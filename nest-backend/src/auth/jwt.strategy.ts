@@ -13,6 +13,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
-    return { id: payload.sub, email: payload.email };
+    if (payload?.type && payload.type !== 'access') {
+      throw new UnauthorizedException('Invalid token type');
+    }
+    return { id: payload.sub, email: payload.email, sid: payload.sid };
   }
 }
