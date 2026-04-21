@@ -1,4 +1,4 @@
-import { Component, inject, signal, ChangeDetectionStrategy, OnInit, OnDestroy, viewChild } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy, OnInit, OnDestroy, viewChild, effect } from '@angular/core';
 import { Router, RouterOutlet, NavigationEnd } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { SidebarComponent } from '../sidebar/sidebar.component';
@@ -40,6 +40,17 @@ export class LayoutComponent implements OnInit, OnDestroy {
 
   private shortcutSub?: Subscription;
   private routerSub?: Subscription;
+
+  constructor() {
+    // Open the compose modal whenever another part of the app drops a prefill
+    // hint (e.g. the paper-plane button in email detail). ComposeComponent
+    // consumes and clears the signal on its own init.
+    effect(() => {
+      if (this.emailService.composePrefill()) {
+        this.openCompose();
+      }
+    });
+  }
 
   ngOnInit(): void {
     this.emailService.fetchFolders();

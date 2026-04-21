@@ -25,7 +25,7 @@ import { RichEditorComponent } from '../rich-editor/rich-editor.component';
   styleUrl: './email-detail.component.css',
 })
 export class EmailDetailComponent implements OnInit, OnDestroy {
-  private readonly emailService = inject(EmailService);
+  protected readonly emailService = inject(EmailService);
   private readonly route = inject(ActivatedRoute);
   protected readonly authService = inject(AuthService);
   protected readonly snoozeService = inject(SnoozeService);
@@ -343,9 +343,6 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     const mail = this.email();
     if (!mail) return;
 
-    const printWindow = window.open('', '_blank', 'width=960,height=720');
-    if (!printWindow) return;
-
     const bodyHtml = this.getPrintableBodyHtml(mail);
     const printable = `<!doctype html>
 <html lang="fr">
@@ -376,14 +373,44 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
   </body>
 </html>`;
 
-    printWindow.document.open();
-    printWindow.document.write(printable);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.onafterprint = () => printWindow.close();
-    window.setTimeout(() => {
-      printWindow.print();
-    }, 150);
+    // The printable HTML contains untrusted email content. Instead of using
+    // window.open() + document.write() (which loads the content in the same
+    // origin, exposing cookies/localStorage to any residual <script> inside
+    // the email), we render it into a hidden sandboxed iframe that disables
+    // scripts entirely, then trigger the browser's print dialog from there.
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.setAttribute('tabindex', '-1');
+    // allow-same-origin is NOT granted → scripts and event handlers in the
+    // email HTML cannot execute at all.
+    iframe.setAttribute('sandbox', 'allow-modals');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.srcdoc = printable;
+
+    const cleanup = () => {
+      window.setTimeout(() => iframe.remove(), 250);
+    };
+
+    iframe.addEventListener('load', () => {
+      try {
+        const win = iframe.contentWindow;
+        if (!win) {
+          cleanup();
+          return;
+        }
+        win.focus();
+        win.print();
+      } finally {
+        cleanup();
+      }
+    });
+
+    document.body.appendChild(iframe);
   }
 
   // Snooze

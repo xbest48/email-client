@@ -23,6 +23,7 @@ export interface UserProfile {
   aiApiUrl?: string;
   isAiEnabled?: boolean;
   hideAiHints?: boolean;
+  desktopNotificationsEnabled?: boolean;
 }
 
 export interface LoginCredentials {

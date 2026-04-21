@@ -76,6 +76,18 @@ export class UsersService {
     });
   }
 
+  /**
+   * Returns every session ever created for a user (including revoked/expired).
+   * Used by the new-device detection: an already-known device is one we've
+   * seen on any prior session for this user, regardless of its current state.
+   */
+  async findAllAuthSessionsByUser(userId: string): Promise<AuthSession[]> {
+    return this.authSessionsRepository.find({
+      where: { user: { id: userId } },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
   async updateAuthSession(id: string, partial: Partial<AuthSession>): Promise<void> {
     await this.authSessionsRepository.update(id, partial);
   }

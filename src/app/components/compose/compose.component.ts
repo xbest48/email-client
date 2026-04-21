@@ -113,6 +113,15 @@ export class ComposeComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    // Consume any pre-fill posted by another component (e.g. the "compose to
+    // sender" button in the email detail view). We clear the signal after
+    // applying so a subsequent manual open doesn't re-apply a stale value.
+    const prefill = this.emailService.composePrefill();
+    if (prefill) {
+      if (prefill.to) this.to.set(prefill.to);
+      this.emailService.composePrefill.set(null);
+    }
+
     // Auto-save draft every 3 seconds
     this.draftInterval = setInterval(() => void this.saveDraft(), 3000);
   }

@@ -18,22 +18,52 @@ export interface SendEmailDto {
 
 @Injectable()
 export class SmtpService {
+  private static readonly MAX_RECIPIENTS = 100;
+  // Characters that would allow header injection if present in a header value.
+  private static readonly HEADER_INJECTION_REGEX = /[\r\n\0]/;
+
+  private sanitizeHeaderValue(value: string, field: string): string {
+    if (typeof value !== 'string') return '';
+    if (SmtpService.HEADER_INJECTION_REGEX.test(value)) {
+      throw new Error(`Invalid characters in ${field}`);
+    }
+    return value;
+  }
+
+  private sanitizeAddressList(value: string | string[] | undefined, field: string): string | string[] | undefined {
+    if (value === undefined) return undefined;
+    const list = Array.isArray(value) ? value : [value];
+    if (list.length > SmtpService.MAX_RECIPIENTS) {
+      throw new Error(`Too many recipients in ${field}`);
+    }
+    const cleaned = list.map((addr) => this.sanitizeHeaderValue(String(addr), field));
+    return Array.isArray(value) ? cleaned : cleaned[0];
+  }
+
   private buildMailOptions(credentials: EmailCredentials, dto: SendEmailDto): nodemailer.SendMailOptions {
     const prepared = this.prepareInlineCssDataImages(dto.html, dto.attachments);
+    const senderName = dto.senderName
+      ? this.sanitizeHeaderValue(dto.senderName, 'senderName').replace(/"/g, '')
+      : undefined;
+    const subject = this.sanitizeHeaderValue(dto.subject || '', 'subject');
 
     const mailOptions: nodemailer.SendMailOptions = {
-      from: dto.senderName ? `"${dto.senderName}" <${credentials.email}>` : credentials.email,
-      to: dto.to || undefined,
-      subject: dto.subject || '',
+      from: senderName ? `"${senderName}" <${credentials.email}>` : credentials.email,
+      to: this.sanitizeAddressList(dto.to, 'to') || undefined,
+      subject,
       text: dto.text,
       html: prepared.html,
       attachDataUrls: true,
     };
 
-    if (dto.cc) mailOptions.cc = dto.cc;
-    if (dto.bcc) mailOptions.bcc = dto.bcc;
-    if (dto.inReplyTo) mailOptions.inReplyTo = dto.inReplyTo;
-    if (dto.references) mailOptions.references = dto.references;
+    if (dto.cc) mailOptions.cc = this.sanitizeAddressList(dto.cc, 'cc');
+    if (dto.bcc) mailOptions.bcc = this.sanitizeAddressList(dto.bcc, 'bcc');
+    if (dto.inReplyTo) mailOptions.inReplyTo = this.sanitizeHeaderValue(String(dto.inReplyTo), 'inReplyTo');
+    if (dto.references) {
+      mailOptions.references = Array.isArray(dto.references)
+        ? (this.sanitizeAddressList(dto.references, 'references') as string[])
+        : this.sanitizeHeaderValue(String(dto.references), 'references');
+    }
     if (dto.requestReadReceipt) {
       mailOptions.headers = {
         ...((mailOptions.headers as any) || {}),
@@ -165,7 +195,11 @@ export class SmtpService {
         pass: credentials.password,
       },
       tls: {
-        rejectUnauthorized: false,
+        // SMTP_ALLOW_INVALID_CERTS=true keeps the previous permissive behaviour
+        // (handy for self-signed dev servers). By default we now reject invalid
+        // certificates, which is what anyone running against a real provider
+        // wants.
+        rejectUnauthorized: process.env.SMTP_ALLOW_INVALID_CERTS !== 'true',
       },
     });
 
@@ -195,7 +229,11 @@ export class SmtpService {
         pass: credentials.password,
       },
       tls: {
-        rejectUnauthorized: false,
+        // SMTP_ALLOW_INVALID_CERTS=true keeps the previous permissive behaviour
+        // (handy for self-signed dev servers). By default we now reject invalid
+        // certificates, which is what anyone running against a real provider
+        // wants.
+        rejectUnauthorized: process.env.SMTP_ALLOW_INVALID_CERTS !== 'true',
       },
     });
 

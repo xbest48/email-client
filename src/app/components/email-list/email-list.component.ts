@@ -167,6 +167,14 @@ export class EmailListComponent implements OnInit, OnDestroy {
         this.emailService.currentPage.set(savedList.page);
         this.emailService.savedListState.set(null);
       } else {
+        // savedListState is a one-shot hint posted by openEmail(). If we can't
+        // use it now (folder changed, query changed, cache empty), it's stale
+        // and must be dropped — otherwise, navigating later back to its folder
+        // would short-circuit the fetch and display whichever emails are
+        // currently cached (e.g. from the folder we visited in between).
+        if (savedList) {
+          this.emailService.savedListState.set(null);
+        }
         await this.emailService.fetchEmails(this.currentFolder, this.currentQuery);
       }
 
@@ -177,6 +185,10 @@ export class EmailListComponent implements OnInit, OnDestroy {
           const el = this.scrollContainer()?.nativeElement;
           if (el) el.scrollTop = saved.scrollTop;
         });
+      } else if (saved) {
+        // Same story as savedListState: drop stale scroll hints so they don't
+        // leak into a later visit to the original folder.
+        this.emailService.savedScrollState.set(null);
       }
     });
 

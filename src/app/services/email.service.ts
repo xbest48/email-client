@@ -22,6 +22,14 @@ export class EmailService {
   readonly currentPage = signal(1);
   readonly savedScrollState = signal<{ folder: string; scrollTop: number } | null>(null);
   readonly savedListState = signal<{ folder: string; query: string; page: number } | null>(null);
+  /**
+   * One-shot hint used to pre-fill the compose modal (currently only the
+   * recipient). Setting it opens the modal via an effect in LayoutComponent,
+   * and ComposeComponent reads & clears it on init. Each set creates a new
+   * object reference so the effect fires even when opening to the same
+   * address twice in a row.
+   */
+  readonly composePrefill = signal<{ to?: string } | null>(null);
 
   private trashFolder = '';
   private fetchRequestId = 0;

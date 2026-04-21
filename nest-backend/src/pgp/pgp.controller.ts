@@ -1,6 +1,34 @@
 import { Controller, Get, Post, Delete, Body, Param, UseGuards, Request } from '@nestjs/common';
 import { PgpService } from './pgp.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { IsEmail, IsNotEmpty, IsString, Length, MaxLength } from 'class-validator';
+
+class SaveKeyPairDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(200_000)
+  publicKey!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(200_000)
+  privateKey!: string;
+
+  @IsString()
+  @Length(16, 128)
+  fingerprint!: string;
+}
+
+class SaveContactKeyDto {
+  @IsEmail()
+  @MaxLength(254)
+  email!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(200_000)
+  publicKey!: string;
+}
 
 @UseGuards(JwtAuthGuard)
 @Controller('api/pgp')
@@ -15,10 +43,7 @@ export class PgpController {
   }
 
   @Post('keys')
-  async saveKeyPair(
-    @Request() req: any,
-    @Body() body: { publicKey: string; privateKey: string; fingerprint: string },
-  ) {
+  async saveKeyPair(@Request() req: any, @Body() body: SaveKeyPairDto) {
     await this.pgpService.saveKeyPair(req.user.id, body.publicKey, body.privateKey, body.fingerprint);
     return { success: true };
   }
@@ -35,10 +60,7 @@ export class PgpController {
   }
 
   @Post('contacts')
-  async saveContactKey(
-    @Request() req: any,
-    @Body() body: { email: string; publicKey: string },
-  ) {
+  async saveContactKey(@Request() req: any, @Body() body: SaveContactKeyDto) {
     await this.pgpService.saveContactKey(req.user.id, body.email, body.publicKey);
     return { success: true };
   }

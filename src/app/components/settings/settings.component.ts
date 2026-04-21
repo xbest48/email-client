@@ -6,6 +6,8 @@ import { Router } from '@angular/router';
 import { SettingsService, EmailAccount, EmailSignature, EmailTemplate } from '../../services/settings.service';
 import { RichEditorComponent } from '../rich-editor/rich-editor.component';
 import { ActiveSession, AiProvider, AuthService } from '../../services/auth.service';
+import { NotificationService } from '../../services/notification.service';
+import { ToastService } from '../../services/toast.service';
 import { LabelService, Label } from '../../services/label.service';
 import { FilterService, FilterRule } from '../../services/filter.service';
 import { PgpService } from '../../services/pgp.service';
@@ -33,6 +35,8 @@ export class SettingsComponent {
   protected readonly filterService = inject(FilterService);
   protected readonly pgpService = inject(PgpService);
   protected readonly themeService = inject(ThemeService);
+  protected readonly notificationService = inject(NotificationService);
+  private readonly toastService = inject(ToastService);
   private readonly confirmDialog = inject(ConfirmDialogService);
   private readonly router = inject(Router);
 
@@ -87,6 +91,7 @@ export class SettingsComponent {
   readonly customAccentColor = signal(this.settingsService.accentColor);
   readonly blockTrackingPixels = computed(() => this.authService.user()?.blockTrackingPixels ?? false);
   readonly undoSendDelay = computed(() => this.authService.user()?.undoSendDelay ?? 0);
+  readonly desktopNotificationsEnabled = computed(() => this.authService.user()?.desktopNotificationsEnabled ?? false);
   readonly aiProviderOptions: ReadonlyArray<{ value: AiProvider; label: string }> = [
     { value: 'openai', label: 'OpenAI' },
     { value: 'anthropic', label: 'Anthropic' },
@@ -583,6 +588,55 @@ export class SettingsComponent {
       });
     } catch (e) {
       console.error('Failed to save settings', e);
+    }
+  }
+
+  /**
+   * Toggle handler for desktop notifications. Flipping ON from `default`
+   * triggers the browser prompt (we're inside a user gesture). If the user
+   * denies, we flip the saved preference back to OFF so the UI stays honest.
+   */
+  async toggleDesktopNotifications(): Promise<void> {
+    const currentlyOn = this.desktopNotificationsEnabled();
+
+    if (currentlyOn) {
+      await this.notificationService.setUserEnabled(false);
+      return;
+    }
+
+    if (!this.notificationService.supported()) {
+      this.toastService.show('error', 'Votre navigateur ne supporte pas les notifications bureau.');
+      return;
+    }
+
+    let permission = this.notificationService.permission();
+    if (permission === 'default') {
+      permission = await this.notificationService.requestPermission();
+    }
+
+    if (permission !== 'granted') {
+      await this.notificationService.setUserEnabled(false);
+      this.toastService.show(
+        'error',
+        permission === 'denied'
+          ? "Les notifications sont bloquées pour ce site. Autorisez-les dans les paramètres du navigateur pour les activer."
+          : "Autorisation des notifications refusée.",
+      );
+      return;
+    }
+
+    await this.notificationService.setUserEnabled(true);
+  }
+
+  testDesktopNotification(): void {
+    const result = this.notificationService.testNotification();
+    if (result.ok) {
+      this.toastService.show(
+        'success',
+        "Notification envoyée. Si elle ne s'affiche pas, vérifiez le mode Ne pas déranger / Concentration de votre système.",
+      );
+    } else {
+      this.toastService.show('error', result.reason ?? "Impossible d'afficher la notification.");
     }
   }
 

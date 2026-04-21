@@ -64,6 +64,9 @@ export class User {
   @Column({ default: false })
   hideAiHints: boolean;
 
+  @Column({ default: true })
+  desktopNotificationsEnabled: boolean;
+
   @OneToMany(() => Account, account => account.user)
   accounts: Account[];
 

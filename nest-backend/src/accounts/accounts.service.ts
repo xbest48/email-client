@@ -1,37 +1,17 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Account } from './account.entity';
-import * as crypto from 'crypto';
-
-const ALGORITHM = 'aes-256-cbc';
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '12345678901234567890123456789012'; // Must be 32 bytes
-const IV_LENGTH = 16;
+import { encrypt, decrypt, upgradeCiphertext } from '../users/crypto.util';
 
 @Injectable()
 export class AccountsService {
+  private readonly logger = new Logger(AccountsService.name);
+
   constructor(
     @InjectRepository(Account)
     private accountsRepository: Repository<Account>,
   ) {}
-
-  private encrypt(text: string): string {
-    const iv = crypto.randomBytes(IV_LENGTH);
-    const cipher = crypto.createCipheriv(ALGORITHM, Buffer.from(ENCRYPTION_KEY), iv);
-    let encrypted = cipher.update(text);
-    encrypted = Buffer.concat([encrypted, cipher.final()]);
-    return iv.toString('hex') + ':' + encrypted.toString('hex');
-  }
-
-  private decrypt(text: string): string {
-    const textParts = text.split(':');
-    const iv = Buffer.from(textParts.shift() as string, 'hex');
-    const encryptedText = Buffer.from(textParts.join(':'), 'hex');
-    const decipher = crypto.createDecipheriv(ALGORITHM, Buffer.from(ENCRYPTION_KEY), iv);
-    let decrypted = decipher.update(encryptedText);
-    decrypted = Buffer.concat([decrypted, decipher.final()]);
-    return decrypted.toString();
-  }
 
   async findAll(userId: string): Promise<Account[]> {
     const accounts = await this.accountsRepository.find({ where: { user: { id: userId } } });
@@ -50,19 +30,52 @@ export class AccountsService {
 
   async findOneWithPassword(id: string, userId: string): Promise<Account | null> {
     const acc = await this.accountsRepository.findOne({ where: { id, user: { id: userId } } });
-    if (acc && acc.password) {
-      try {
-        acc.password = this.decrypt(acc.password);
-      } catch (e) {
-        console.error('Failed to decrypt password for account', acc.id);
+    if (!acc) return null;
+    if (!acc.password) return acc;
+
+    try {
+      const plaintext = decrypt(acc.password);
+
+      // If the ciphertext is still in the legacy AES-256-CBC format but we
+      // could decrypt it (either because the current ENCRYPTION_KEY happens
+      // to match the old value, or because LEGACY_ENCRYPTION_KEY is set),
+      // transparently re-encrypt it in the authenticated GCM format so the
+      // next read no longer depends on the legacy path.
+      if (!acc.password.startsWith('v2:')) {
+        try {
+          await this.accountsRepository.update(
+            { id: acc.id },
+            { password: upgradeCiphertext(acc.password) },
+          );
+        } catch (err) {
+          this.logger.warn(
+            `Account ${acc.id}: re-encryption to GCM failed, keeping legacy ciphertext`,
+            err as Error,
+          );
+        }
       }
+
+      acc.password = plaintext;
+      return acc;
+    } catch (err) {
+      // Do NOT pass the still-encrypted blob through to IMAP — that would
+      // produce an opaque 503 "Connexion impossible". Raise a clear 401 so
+      // the UI can prompt the user to re-enter the mailbox password.
+      this.logger.error(
+        `Account ${acc.id}: stored password cannot be decrypted. ` +
+          `This usually means ENCRYPTION_KEY changed since the account was created. ` +
+          `Set LEGACY_ENCRYPTION_KEY to the previous value or ask the user to re-save the password.`,
+        err as Error,
+      );
+      throw new UnauthorizedException(
+        'Le mot de passe du compte email est illisible. Veuillez le saisir à nouveau dans les paramètres du compte.',
+      );
     }
-    return acc;
   }
 
   async create(account: Partial<Account>): Promise<Account> {
     if (account.password) {
-      account.password = this.encrypt(account.password);
+      account.password = encrypt(account.password);
     }
     const newAccount = this.accountsRepository.create(account);
     const savedAccount = await this.accountsRepository.save(newAccount);

@@ -5,9 +5,11 @@
 /tmp
 /out-tsc
 /bazel-out
+**/dist/
 
 # Node
 /node_modules
+**/node_modules
 npm-debug.log
 yarn-error.log
 
@@ -42,3 +44,20 @@ __screenshots__/
 # System files
 .DS_Store
 Thumbs.db
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+**/settings.sqlite
+**/settings.sqlite-journal
+
+# Local dev helpers, logs, screenshots — must never be committed
+fix_*.js
+test_fetch_emails.js
+get_backend_error.js
+patch_headers.ts
+angular_output.log
+nest_backend.log
+nest_output.log
+*_auto_load.png

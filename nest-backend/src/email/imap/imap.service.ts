@@ -233,7 +233,16 @@ export class ImapService implements OnModuleDestroy {
         emails.push(this.formatEmailSummary(msg as any, folder));
       }
 
-      emails.reverse();
+      // Sort newest first by envelope date. IMAP sequence order is not always
+      // aligned with chronological order (APPENDed messages can carry old
+      // dates, some servers don't sort by arrival), so relying on seq order +
+      // reverse is brittle. Sorting explicitly by date matches what the other
+      // list methods (flagged, by-reference) already do.
+      emails.sort((a, b) => {
+        const da = a.date ? new Date(a.date).getTime() : 0;
+        const db = b.date ? new Date(b.date).getTime() : 0;
+        return db - da;
+      });
 
       return { emails, total, page, pageSize };
     } finally {
@@ -309,7 +318,13 @@ export class ImapService implements OnModuleDestroy {
         emails.push(this.formatEmailSummary(msg as any, folder));
       }
 
-      emails.reverse();
+      // See fetchEmails: sort by envelope date desc for stable newest-first
+      // ordering regardless of the server's fetch iteration order.
+      emails.sort((a, b) => {
+        const da = a.date ? new Date(a.date).getTime() : 0;
+        const db = b.date ? new Date(b.date).getTime() : 0;
+        return db - da;
+      });
       return { emails, total: results.length };
     } finally {
       this.safeReleaseLock(lock);

@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AccountsModule } from './accounts/accounts.module';
@@ -25,11 +27,13 @@ import { Contact } from './contacts/contact.entity';
 import { PgpModule } from './pgp/pgp.module';
 import { PgpKey, PgpContactKey } from './pgp/pgp-key.entity';
 
+const IS_PROD = process.env.NODE_ENV === 'production';
+
 @Module({
   imports: [
     TypeOrmModule.forRoot({
       type: 'sqlite',
-      database: 'settings.sqlite',
+      database: process.env.DB_PATH || 'settings.sqlite',
       entities: [
         Account,
         User,
@@ -44,8 +48,17 @@ import { PgpKey, PgpContactKey } from './pgp/pgp-key.entity';
         PgpKey,
         PgpContactKey,
       ],
-      synchronize: true,
+      // WARNING: synchronize: true is convenient but DROPS columns when the
+      // TypeORM schema diverges from the DB. Opt in explicitly via env.
+      synchronize: !IS_PROD && process.env.DB_SYNC !== 'false',
     }),
+    ThrottlerModule.forRoot([
+      {
+        name: 'default',
+        ttl: 60_000,
+        limit: 120,
+      },
+    ]),
     AccountsModule,
     EmailModule,
     UsersModule,
@@ -59,6 +72,11 @@ import { PgpKey, PgpContactKey } from './pgp/pgp-key.entity';
     PgpModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    // Apply rate limiting globally. Individual endpoints can override the
+    // limits with @Throttle or opt out with @SkipThrottle.
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+  ],
 })
 export class AppModule {}

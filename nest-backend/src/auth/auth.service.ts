@@ -2,14 +2,18 @@ import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import * as bcrypt from 'bcryptjs';
+import * as crypto from 'crypto';
 import { TOTP, NobleCryptoPlugin, ScureBase32Plugin } from 'otplib';
 import * as qrcode from 'qrcode';
 import { generateRegistrationOptions, verifyRegistrationResponse, generateAuthenticationOptions, verifyAuthenticationResponse } from '@simplewebauthn/server';
 import { AuthSession } from '../users/auth-session.entity';
-
-const rpName = 'MailFlow';
-const rpID = 'localhost';
-const origin = `http://${rpID}:4200`;
+import { SecurityNotificationService } from './security-notification.service';
+import {
+  BCRYPT_ROUNDS,
+  getAccessTokenSecret,
+  getRefreshTokenSecret,
+  getWebAuthnConfig,
+} from './auth.config';
 
 interface SessionTokens {
   access_token: string;
@@ -49,9 +53,18 @@ export class AuthService {
   private readonly pendingDiscoverableChallenges = new Map<string, number>();
   private static readonly DISCOVERABLE_CHALLENGE_TTL_MS = 5 * 60 * 1000;
 
+  // Single-use store for temporary 2FA tokens. Once a tempToken is consumed
+  // (successfully or not), its JTI is blacklisted until it naturally expires.
+  private readonly usedTempTokens = new Map<string, number>();
+  // Replay-protection for TOTP codes: remember the last accepted code per user
+  // for the duration of a TOTP step (30 s) so a sniffed code cannot be reused.
+  private readonly lastTotpByUser = new Map<string, { code: string; at: number }>();
+  private static readonly TOTP_STEP_MS = 30 * 1000;
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
+    private securityNotificationService: SecurityNotificationService,
   ) {
     this.totp = new TOTP({
       crypto: new NobleCryptoPlugin(),
@@ -64,7 +77,7 @@ export class AuthService {
     if (existing) {
       throw new BadRequestException('User already exists');
     }
-    const passwordHash = await bcrypt.hash(pass, 10);
+    const passwordHash = await bcrypt.hash(pass, BCRYPT_ROUNDS);
     const user = await this.usersService.create({ email, passwordHash });
 
     return this.createSession(user, true, context);
@@ -73,6 +86,9 @@ export class AuthService {
   async login(email: string, pass: string, rememberMe = false, context?: SessionContext) {
     const user = await this.usersService.findByEmail(email);
     if (!user) {
+      // Defense against user enumeration: still perform a bcrypt comparison on
+      // a dummy hash so the response time does not leak existence.
+      await bcrypt.compare(pass, '$2a$12$invalidinvalidinvalidinvalidinvalidinvalidinvalidinvalidinvali');
       throw new UnauthorizedException('Invalid credentials');
     }
     const isMatch = await bcrypt.compare(pass, user.passwordHash);
@@ -88,12 +104,37 @@ export class AuthService {
   }
 
   generateTemp2FAToken(user: any) {
-    const payload = { sub: user.id, isTemp2FA: true };
-    return this.jwtService.sign(payload, { expiresIn: '5m' });
+    const jti = crypto.randomUUID();
+    const payload = { sub: user.id, isTemp2FA: true, jti };
+    return this.jwtService.sign(payload, {
+      secret: getAccessTokenSecret(),
+      expiresIn: '5m',
+    });
   }
 
   verifyTempToken(token: string) {
-    return this.jwtService.verify(token);
+    const payload = this.jwtService.verify(token, { secret: getAccessTokenSecret() });
+    if (!payload?.isTemp2FA || !payload.jti) {
+      throw new UnauthorizedException('Invalid token type');
+    }
+    // Single-use enforcement. We GC entries opportunistically.
+    this.gcUsedTempTokens();
+    if (this.usedTempTokens.has(payload.jti)) {
+      throw new UnauthorizedException('Temporary token already used');
+    }
+    return payload;
+  }
+
+  consumeTempToken(jti: string, exp: number | undefined): void {
+    const ttlMs = (exp ? exp * 1000 : Date.now() + 5 * 60 * 1000) - Date.now();
+    this.usedTempTokens.set(jti, Date.now() + Math.max(ttlMs, 0));
+  }
+
+  private gcUsedTempTokens(): void {
+    const now = Date.now();
+    for (const [jti, exp] of this.usedTempTokens) {
+      if (exp <= now) this.usedTempTokens.delete(jti);
+    }
   }
 
   async createSession(user: any, rememberMe = false, context?: SessionContext): Promise<SessionTokens> {
@@ -109,6 +150,13 @@ export class AuthService {
     const accessToken = this.signAccessToken(user, session.id);
     const refreshToken = this.signRefreshToken(user.id, session.id, rememberMe);
     await this.storeRefreshToken(session.id, refreshToken, rememberMe, context);
+
+    // Fire-and-forget: warn the user by email if this (UA, IP /24) combo
+    // has never been seen before. The service handles missing SMTP accounts
+    // silently and never rejects, so login flow is unaffected.
+    if (context) {
+      this.securityNotificationService.notifyIfNewDevice(user, context, session.id);
+    }
 
     return {
       access_token: accessToken,
@@ -136,6 +184,7 @@ export class AuthService {
 
     const matches = await bcrypt.compare(refreshToken, session.refreshTokenHash);
     if (!matches) {
+      // Token reuse on a rotated refresh token ⇒ likely theft, revoke session.
       await this.usersService.revokeAuthSession(session.id);
       throw new UnauthorizedException('Invalid refresh token');
     }
@@ -186,6 +235,7 @@ export class AuthService {
 
   async generateTwoFactorSecret(user: any) {
     const secret = this.totp.generateSecret();
+    const { rpName } = getWebAuthnConfig();
     const otpauthUrl = this.totp.toURI({ issuer: rpName, label: user.email, secret });
     await this.usersService.update(user.id, { twoFactorSecret: secret });
 
@@ -217,7 +267,24 @@ export class AuthService {
       throw new UnauthorizedException('Invalid 2FA code');
     }
 
+    // Replay protection within the same step.
+    this.gcRecentTotpCodes();
+    const last = this.lastTotpByUser.get(userId);
+    if (last && last.code === code && Date.now() - last.at < AuthService.TOTP_STEP_MS) {
+      throw new UnauthorizedException('2FA code already used');
+    }
+    this.lastTotpByUser.set(userId, { code, at: Date.now() });
+
     return true;
+  }
+
+  private gcRecentTotpCodes(): void {
+    const now = Date.now();
+    for (const [user, entry] of this.lastTotpByUser) {
+      if (now - entry.at > AuthService.TOTP_STEP_MS * 2) {
+        this.lastTotpByUser.delete(user);
+      }
+    }
   }
 
   // --- WebAuthn / Passkeys ---
@@ -227,6 +294,7 @@ export class AuthService {
     if (!user) throw new BadRequestException('User not found');
 
     const userPasskeys = await this.usersService.findCredentialsByUser(userId);
+    const { rpName, rpID } = getWebAuthnConfig();
 
     const options = await generateRegistrationOptions({
       rpName,
@@ -257,12 +325,14 @@ export class AuthService {
       throw new BadRequestException('No active challenge');
     }
 
+    const { rpID, origins } = getWebAuthnConfig();
+
     let verification;
     try {
       verification = await verifyRegistrationResponse({
         response: body,
         expectedChallenge: user.currentChallenge,
-        expectedOrigin: origin,
+        expectedOrigin: origins,
         expectedRPID: rpID,
       });
     } catch (error: any) {
@@ -288,6 +358,8 @@ export class AuthService {
   }
 
   async generateWebAuthnLoginOptions(email?: string) {
+    const { rpID } = getWebAuthnConfig();
+
     // Classic flow: an email is provided. We scope the allowCredentials to
     // that user and store the challenge on the user record (legacy passkeys
     // that were registered without resident key still work).
@@ -347,12 +419,14 @@ export class AuthService {
       throw new BadRequestException('Could not find matching passkey');
     }
 
+    const { rpID, origins } = getWebAuthnConfig();
+
     let verification;
     try {
       verification = await verifyAuthenticationResponse({
         response: body,
         expectedChallenge: user.currentChallenge,
-        expectedOrigin: origin,
+        expectedOrigin: origins,
         expectedRPID: rpID,
         credential: {
           id: passkey.id,
@@ -392,13 +466,14 @@ export class AuthService {
     }
 
     const user = passkey.user;
+    const { rpID, origins } = getWebAuthnConfig();
 
     let verification;
     try {
       verification = await verifyAuthenticationResponse({
         response: body,
         expectedChallenge,
-        expectedOrigin: origin,
+        expectedOrigin: origins,
         expectedRPID: rpID,
         credential: {
           id: passkey.id,
@@ -461,7 +536,7 @@ export class AuthService {
   private signAccessToken(user: any, sessionId: string): string {
     const payload = { email: user.email, sub: user.id, sid: sessionId, type: 'access' };
     return this.jwtService.sign(payload, {
-      secret: this.getAccessTokenSecret(),
+      secret: getAccessTokenSecret(),
       expiresIn: AuthService.ACCESS_TOKEN_TTL,
     });
   }
@@ -469,14 +544,14 @@ export class AuthService {
   private signRefreshToken(userId: string, sessionId: string, rememberMe: boolean): string {
     const payload = { sub: userId, sid: sessionId, type: 'refresh', rememberMe };
     return this.jwtService.sign(payload, {
-      secret: this.getRefreshTokenSecret(),
+      secret: getRefreshTokenSecret(),
       expiresIn: `${this.getRefreshTokenTtlMs(rememberMe)}ms`,
     });
   }
 
   private verifyRefreshToken(refreshToken: string): { sub: string; sid: string; type: string; rememberMe?: boolean } {
     const payload = this.jwtService.verify(refreshToken, {
-      secret: this.getRefreshTokenSecret(),
+      secret: getRefreshTokenSecret(),
     }) as { sub: string; sid: string; type: string; rememberMe?: boolean };
 
     if (payload.type !== 'refresh' || !payload.sid) {
@@ -493,7 +568,7 @@ export class AuthService {
     context?: SessionContext,
   ): Promise<void> {
     const payload = this.verifyRefreshToken(refreshToken);
-    const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
+    const refreshTokenHash = await bcrypt.hash(refreshToken, BCRYPT_ROUNDS);
     const expiresAt = new Date(Date.now() + this.getRefreshTokenTtlMs(rememberMe));
 
     await this.usersService.updateAuthSession(sessionId, {
@@ -504,14 +579,6 @@ export class AuthService {
       ...(context?.userAgent ? { userAgent: context.userAgent } : {}),
       ...(context?.ipAddress ? { ipAddress: context.ipAddress } : {}),
     });
-  }
-
-  private getAccessTokenSecret(): string {
-    return process.env.JWT_SECRET || 'fallback-secret-key-for-dev';
-  }
-
-  private getRefreshTokenSecret(): string {
-    return process.env.JWT_REFRESH_SECRET || this.getAccessTokenSecret();
   }
 
   private getRefreshTokenTtlMs(rememberMe: boolean): number {
