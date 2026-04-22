@@ -1,7 +1,11 @@
 @if (email(); as mail) {
   <div class="flex flex-col h-full bg-white dark:bg-gray-900">
-    <!-- Toolbar -->
-    <div class="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
+    <!-- Toolbar.
+         `relative z-30` is required: the toolbar uses backdrop-blur-sm, which
+         creates a stacking context. Without elevating that context, the AI /
+         snooze / label menus (absolute, z-20 *inside* the toolbar) get painted
+         behind later siblings like the translation panel in the scroll area. -->
+    <div class="relative z-30 flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
       <button
         (click)="goBack()"
         class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-800 rounded-lg transition-colors
@@ -15,6 +19,70 @@
       </button>
 
       <div class="flex-1"></div>
+
+      @if (aiEnabled()) {
+        <div class="relative">
+          <button
+            (click)="showAiMenu.set(!showAiMenu())"
+            class="inline-flex items-center gap-2 px-3 py-2 text-sm text-violet-700 hover:text-violet-800 hover:bg-violet-50 dark:text-violet-300 dark:hover:text-violet-200 dark:hover:bg-violet-900/20 rounded-lg transition-colors
+                   focus:outline-none focus:ring-2 focus:ring-violet-400"
+            type="button"
+            aria-label="Outils IA"
+            title="Outils IA"
+            [attr.aria-expanded]="showAiMenu()">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/>
+            </svg>
+            <span class="hidden sm:inline">IA</span>
+          </button>
+          @if (showAiMenu()) {
+            <div class="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-20"
+                 role="menu" aria-label="Actions IA">
+              <button type="button" (click)="summarize()"
+                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                      role="menuitem">
+                Resumer l'e-mail
+              </button>
+              <button type="button" (click)="generateReplies()"
+                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                      role="menuitem">
+                Proposer des reponses
+              </button>
+              <button type="button" (click)="extractActions()"
+                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                      role="menuitem">
+                Extraire les actions
+              </button>
+              <button type="button" (click)="categorize()"
+                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                      role="menuitem">
+                Categoriser ce message
+              </button>
+              <button type="button" (click)="detectPhishing()"
+                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                      role="menuitem">
+                Analyser le risque phishing
+              </button>
+              <div class="border-t border-gray-100 dark:border-gray-700 my-1"></div>
+              <button type="button" (click)="translate('fr')"
+                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                      role="menuitem">
+                Traduire en francais
+              </button>
+              <button type="button" (click)="translate('en')"
+                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                      role="menuitem">
+                Translate to English
+              </button>
+              <button type="button" (click)="translate('es')"
+                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                      role="menuitem">
+                Traducir al espanol
+              </button>
+            </div>
+          }
+        </div>
+      }
 
       <!-- Snooze button -->
       <div class="relative">
@@ -101,70 +169,6 @@
           </div>
         }
       </div>
-
-      @if (aiEnabled()) {
-        <div class="relative">
-          <button
-            (click)="showAiMenu.set(!showAiMenu())"
-            class="inline-flex items-center gap-2 px-3 py-2 text-sm text-violet-700 hover:text-violet-800 hover:bg-violet-50 dark:text-violet-300 dark:hover:text-violet-200 dark:hover:bg-violet-900/20 rounded-lg transition-colors
-                   focus:outline-none focus:ring-2 focus:ring-violet-400"
-            type="button"
-            aria-label="Outils IA"
-            title="Outils IA"
-            [attr.aria-expanded]="showAiMenu()">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/>
-            </svg>
-            <span class="hidden sm:inline">IA</span>
-          </button>
-          @if (showAiMenu()) {
-            <div class="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-20"
-                 role="menu" aria-label="Actions IA">
-              <button type="button" (click)="summarize()"
-                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                      role="menuitem">
-                Resumer l'e-mail
-              </button>
-              <button type="button" (click)="generateReplies()"
-                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                      role="menuitem">
-                Proposer des reponses
-              </button>
-              <button type="button" (click)="extractActions()"
-                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                      role="menuitem">
-                Extraire les actions
-              </button>
-              <button type="button" (click)="categorize()"
-                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                      role="menuitem">
-                Categoriser ce message
-              </button>
-              <button type="button" (click)="detectPhishing()"
-                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                      role="menuitem">
-                Analyser le risque phishing
-              </button>
-              <div class="border-t border-gray-100 dark:border-gray-700 my-1"></div>
-              <button type="button" (click)="translate('fr')"
-                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                      role="menuitem">
-                Traduire en francais
-              </button>
-              <button type="button" (click)="translate('en')"
-                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                      role="menuitem">
-                Translate to English
-              </button>
-              <button type="button" (click)="translate('es')"
-                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                      role="menuitem">
-                Traducir al espanol
-              </button>
-            </div>
-          }
-        </div>
-      }
 
       @if (isSpamEmail()) {
         <button

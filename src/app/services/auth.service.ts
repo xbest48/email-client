@@ -5,6 +5,7 @@ import { environment } from '../environments/environment';
 
 export type ImagePolicy = 'ask' | 'always' | 'never';
 export type AiProvider = 'openai' | 'anthropic' | 'google' | 'mistral' | 'other';
+export type DarkEmailRendering = 'preserve' | 'force-dark';
 
 export interface UserProfile {
   id?: string;
@@ -24,6 +25,7 @@ export interface UserProfile {
   isAiEnabled?: boolean;
   hideAiHints?: boolean;
   desktopNotificationsEnabled?: boolean;
+  darkEmailRendering?: DarkEmailRendering;
 }
 
 export interface LoginCredentials {
@@ -66,6 +68,25 @@ export class AuthService {
 
   constructor() {
     this.initialLoadPromise = this.checkAuthStatus();
+    this.installVisibilityRefresh();
+  }
+
+  /**
+   * Proactively refresh the access token when the tab regains focus after
+   * being hidden or the machine waking from sleep. Without this, the first
+   * few requests after wake-up hit the server with an expired access token
+   * and produce a trail of `401 Unauthorized` noise in the console before
+   * the interceptor's refresh-and-retry kicks in.
+   */
+  private installVisibilityRefresh(): void {
+    if (typeof document === 'undefined') return;
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible') return;
+      // Only refresh if we think we're logged in — otherwise a refresh would
+      // be pointless and might race with an ongoing login flow.
+      if (!this.authenticated() || !this.getToken()) return;
+      void this.refreshAccessToken();
+    });
   }
 
   getInitialLoadPromise(): Promise<void> | null {
@@ -293,6 +314,22 @@ export class AuthService {
       return await this.refreshPromise;
     } finally {
       this.refreshPromise = null;
+    }
+  }
+
+  /**
+   * If a refresh is in flight (e.g. kicked off by visibility-change), resolves
+   * after it settles; otherwise resolves immediately. The interceptor awaits
+   * this before attaching the access token so wake-from-sleep requests use the
+   * newly-minted token instead of racing the old one into a guaranteed 401.
+   */
+  async awaitPendingRefresh(): Promise<void> {
+    if (!this.refreshPromise) return;
+    try {
+      await this.refreshPromise;
+    } catch {
+      // Errors are handled by the initial caller (performRefreshAccessToken
+      // already clears auth state). Here we just want to unblock.
     }
   }
 

@@ -606,7 +606,7 @@
                             <span class="rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 text-[11px] font-medium">Session actuelle</span>
                           }
                         </div>
-                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400 break-words">{{ session.userAgent || 'Navigateur non identifie' }}</p>
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400 wrap-break-word">{{ session.userAgent || 'Navigateur non identifie' }}</p>
                         <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ sessionDetails(session) }}</p>
                         <div class="mt-3 grid gap-1 text-xs text-gray-500 dark:text-gray-400">
                           <span>Ouverte le {{ formatSessionDate(session.createdAt) }}</span>
@@ -767,6 +767,33 @@
                     [class.dark:border-gray-600]="themeMode() !== option.value"
                     [class.hover:bg-gray-50]="themeMode() !== option.value"
                     [class.dark:hover:bg-gray-700]="themeMode() !== option.value">
+                    <span class="text-sm font-semibold text-gray-800 dark:text-gray-100">{{ option.label }}</span>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ option.description }}</span>
+                  </button>
+                }
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Affichage des e-mails en mode sombre</legend>
+              <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                Choisissez comment afficher le contenu des e-mails lorsque l'application est en mode sombre.
+              </p>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                @for (option of darkEmailRenderingOptions; track option.value) {
+                  <button
+                    type="button"
+                    (click)="setDarkEmailRendering(option.value)"
+                    [attr.aria-pressed]="darkEmailRendering() === option.value"
+                    class="flex flex-col items-start gap-1 px-3 py-2 rounded-lg border text-left transition-colors
+                           focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    [class.border-amber-500]="darkEmailRendering() === option.value"
+                    [class.bg-amber-50]="darkEmailRendering() === option.value"
+                    [class.dark:bg-amber-500/10]="darkEmailRendering() === option.value"
+                    [class.border-gray-300]="darkEmailRendering() !== option.value"
+                    [class.dark:border-gray-600]="darkEmailRendering() !== option.value"
+                    [class.hover:bg-gray-50]="darkEmailRendering() !== option.value"
+                    [class.dark:hover:bg-gray-700]="darkEmailRendering() !== option.value">
                     <span class="text-sm font-semibold text-gray-800 dark:text-gray-100">{{ option.label }}</span>
                     <span class="text-xs text-gray-500 dark:text-gray-400">{{ option.description }}</span>
                   </button>

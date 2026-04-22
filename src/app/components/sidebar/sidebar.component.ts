@@ -2,6 +2,7 @@ import { Component, inject, input, output, signal, ChangeDetectionStrategy, comp
 import { FormsModule } from '@angular/forms';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { EmailService } from '../../services/email.service';
+import { KymaLogoComponent } from '../kyma-logo/kyma-logo.component';
 import { AuthService } from '../../services/auth.service';
 import { SettingsService } from '../../services/settings.service';
 import { LabelService } from '../../services/label.service';
@@ -21,7 +22,7 @@ interface NavItem {
 @Component({
   selector: 'app-sidebar',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, RouterLinkActive, FormsModule],
+  imports: [RouterLink, RouterLinkActive, FormsModule, KymaLogoComponent],
   templateUrl: './sidebar.component.html',
   styleUrl: './sidebar.component.css',
 })

@@ -67,6 +67,15 @@ export class User {
   @Column({ default: true })
   desktopNotificationsEnabled: boolean;
 
+  /**
+   * How to render email HTML bodies when the app is in dark mode.
+   * - 'preserve': show emails on a white card with their original colors.
+   * - 'force-dark': override inline colors to force a dark background and
+   *   light text (best for plain-text-ish emails).
+   */
+  @Column({ default: 'force-dark' })
+  darkEmailRendering: 'preserve' | 'force-dark';
+
   @OneToMany(() => Account, account => account.user)
   accounts: Account[];
 

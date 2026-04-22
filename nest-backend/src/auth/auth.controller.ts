@@ -174,6 +174,7 @@ export class AuthController {
       isAiEnabled: user.isAiEnabled,
       hideAiHints: user.hideAiHints,
       desktopNotificationsEnabled: user.desktopNotificationsEnabled ?? true,
+      darkEmailRendering: user.darkEmailRendering ?? 'force-dark',
     };
   }
 
@@ -194,6 +195,7 @@ export class AuthController {
       isAiEnabled,
       hideAiHints,
       desktopNotificationsEnabled,
+      darkEmailRendering,
     } = body;
     const updateData: any = { darkMode, undoSendDelay, blockTrackingPixels };
     if (imagePolicy !== undefined) updateData.imagePolicy = imagePolicy;
@@ -218,6 +220,9 @@ export class AuthController {
     }
     if (hideAiHints !== undefined) updateData.hideAiHints = !!hideAiHints;
     if (desktopNotificationsEnabled !== undefined) updateData.desktopNotificationsEnabled = !!desktopNotificationsEnabled;
+    if (darkEmailRendering === 'preserve' || darkEmailRendering === 'force-dark') {
+      updateData.darkEmailRendering = darkEmailRendering;
+    }
     await this.usersService.update(req.user.id, updateData);
     return { success: true };
   }

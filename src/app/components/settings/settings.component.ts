@@ -5,7 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { SettingsService, EmailAccount, EmailSignature, EmailTemplate } from '../../services/settings.service';
 import { RichEditorComponent } from '../rich-editor/rich-editor.component';
-import { ActiveSession, AiProvider, AuthService } from '../../services/auth.service';
+import { ActiveSession, AiProvider, AuthService, DarkEmailRendering } from '../../services/auth.service';
 import { NotificationService } from '../../services/notification.service';
 import { ToastService } from '../../services/toast.service';
 import { LabelService, Label } from '../../services/label.service';
@@ -50,6 +50,31 @@ export class SettingsComponent {
   setThemeMode(mode: ThemeMode): void {
     this.themeService.setMode(mode);
   }
+
+  readonly darkEmailRendering = computed<DarkEmailRendering>(
+    () => this.authService.user()?.darkEmailRendering ?? 'force-dark',
+  );
+  readonly darkEmailRenderingOptions: ReadonlyArray<{ value: DarkEmailRendering; label: string; description: string }> = [
+    {
+      value: 'preserve',
+      label: 'Conserver la mise en page',
+      description: "Affiche l'e-mail avec ses couleurs d'origine sur un fond blanc. Ideal pour les newsletters.",
+    },
+    {
+      value: 'force-dark',
+      label: 'Forcer le mode sombre',
+      description: "Fond sombre et texte clair meme pour les e-mails qui n'en ont pas. Ideal pour la lecture.",
+    },
+  ];
+
+  async setDarkEmailRendering(mode: DarkEmailRendering): Promise<void> {
+    try {
+      await this.authService.updateSettings({ darkEmailRendering: mode });
+    } catch (e) {
+      console.error('Failed to update darkEmailRendering', e);
+      this.toastService.show('error', "Erreur lors de la mise a jour du reglage.");
+    }
+  }
   readonly activeTab = signal<SettingsTab>('general');
 
   // Security
@@ -81,7 +106,7 @@ export class SettingsComponent {
 
   // General
   readonly pageSize = signal(this.settingsService.pageSize);
-  readonly accentPresetColors = ['#403d84', '#1d4ed8', '#ffd200', '#b6d0f2', '#ffcbba', '#c6ebc5', '#ffbacd'];
+  readonly accentPresetColors = ['#403d84', '#1d4ed8', '#0781f2', '#c34b22', '#0e8f0a', '#ff477b', '#ffd200', '#b6d0f2', '#ffcbba', '#c6ebc5', '#ffbacd'];
   readonly selectedAccentColor = signal(this.settingsService.accentColor);
   readonly aiApiKey = signal('');
   readonly aiProvider = signal<AiProvider>('openai');
@@ -857,11 +882,11 @@ export class SettingsComponent {
       const hasExistingKey = !!(this.authService.user()?.hasAiApiKey);
 
       if (!hasExistingKey && !apiKey) {
-        alert('Ajoutez une clé API avant de sauvegarder.');
+        this.toastService.show('error', 'Ajoutez une cle API avant de sauvegarder.');
         return;
       }
       if (provider === 'other' && !apiUrl) {
-        alert("Une URL d'API est requise pour le fournisseur Autre.");
+        this.toastService.show('error', "Une URL d'API est requise pour le fournisseur Autre.");
         return;
       }
 
@@ -874,17 +899,24 @@ export class SettingsComponent {
         isAiEnabled: apiKey ? true : current.isAiEnabled
       });
       this.aiApiKey.set('');
-      alert('Paramètres IA sauvegardés');
+      this.toastService.show('success', 'Parametres IA sauvegardes.');
     } catch (e) {
       console.error('Failed to save AI settings', e);
-      alert('Erreur lors de la sauvegarde');
+      this.toastService.show('error', 'Erreur lors de la sauvegarde.');
     } finally {
       this.savingAiSettings.set(false);
     }
   }
 
   async deleteOpenAiApiKey(): Promise<void> {
-    if (!confirm('Supprimer votre clé API IA ? Les fonctionnalités IA seront désactivées.')) return;
+    const confirmed = await this.confirmDialog.confirm({
+      title: 'Supprimer la cle API IA',
+      message: 'Supprimer votre cle API IA ? Les fonctionnalites IA seront desactivees.',
+      confirmLabel: 'Supprimer',
+      cancelLabel: 'Annuler',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
     this.savingAiSettings.set(true);
     try {
       const current = this.authService.user() || { email: '' };
@@ -894,7 +926,7 @@ export class SettingsComponent {
         isAiEnabled: false
       });
       this.aiApiKey.set('');
-      alert('Clé API supprimée');
+      this.toastService.show('success', 'Cle API supprimee.');
     } catch (e) {
       console.error('Failed to delete API key', e);
     } finally {

@@ -197,25 +197,12 @@ export class RichEditorComponent implements OnDestroy {
   }
 
   private prepareHtmlForRendering(html: string): string {
-    // Convert <img src="data:..."> to object URLs
-    let result = html.replace(
-      /(<img\b[^>]*?\bsrc\s*=\s*)(["'])(data:image\/[^"']+)\2/gi,
-      (_match, prefix: string, quote: string, dataUrl: string) => {
-        const objectUrl = this.createObjectUrlFromDataImage(dataUrl);
-        return `${prefix}${quote}${objectUrl}${quote}`;
-      },
-    );
-
-    // Also convert CSS url(data:...) to object URLs (covers background-image etc.)
-    result = result.replace(
-      /(url\s*\(\s*)(["']?)(data:image\/[^"')]+)\2(\s*\))/gi,
-      (_match, urlOpen: string, quote: string, dataUrl: string, urlClose: string) => {
-        const objectUrl = this.createObjectUrlFromDataImage(dataUrl);
-        return `${urlOpen}${quote}${objectUrl}${quote}${urlClose}`;
-      },
-    );
-
-    return result;
+    // Data: URLs render natively in every context we care about (<img src>,
+    // CSS url()). We intentionally skip blob-URL conversion: for reasons we
+    // couldn't fully pin down, the conversion broke rendering of the first
+    // large image inside contenteditable / shadow-root paths in settings,
+    // while non-converted data URLs always work.
+    return html;
   }
 
   private restoreEmbeddedDataImageUrls(html: string): string {
@@ -240,27 +227,9 @@ export class RichEditorComponent implements OnDestroy {
     return container.innerText.trim();
   }
 
-  private createObjectUrlFromDataImage(dataUrl: string): string {
-    const cached = Array.from(this.objectUrlMap.entries()).find(([, original]) => original === dataUrl)?.[0];
-    if (cached) return cached;
-
-    const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/i);
-    if (!match) return dataUrl;
-
-    const mimeType = match[1];
-    const base64 = match[2];
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i += 1) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-
-    const objectUrl = URL.createObjectURL(new Blob([bytes], { type: mimeType }));
-    this.objectUrlMap.set(objectUrl, dataUrl);
-    return objectUrl;
-  }
-
   private revokeObjectUrls(): void {
+    // Legacy blob-URL cache is no longer populated (see prepareHtmlForRendering),
+    // but we still sweep any stragglers left on disk from earlier versions.
     for (const objectUrl of this.objectUrlMap.keys()) {
       URL.revokeObjectURL(objectUrl);
     }

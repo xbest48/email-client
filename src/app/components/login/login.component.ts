@@ -6,11 +6,12 @@ import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { startAuthentication } from '@simplewebauthn/browser';
+import { KymaLogoComponent } from '../kyma-logo/kyma-logo.component';
 
 @Component({
   selector: 'app-login',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, KymaLogoComponent],
   templateUrl: './login.component.html',
   styleUrl: './login.component.css',
 })

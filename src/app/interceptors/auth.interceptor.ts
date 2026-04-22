@@ -5,14 +5,23 @@ import { AuthService } from '../services/auth.service';
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const authService = inject(AuthService);
-  const token = authService.getToken();
-  const requestWithToken = token && authService.shouldAttachAccessToken(req.url)
-    ? req.clone({
-        headers: req.headers.set('Authorization', `Bearer ${token}`),
-      })
-    : req;
+  const attachToken = authService.shouldAttachAccessToken(req.url);
 
-  return next(requestWithToken).pipe(
+  // If a token refresh is already in flight (e.g. triggered by the tab
+  // becoming visible again after wake-from-sleep), hold the request until
+  // the refresh settles so we attach the freshly-minted access token rather
+  // than the expired one — eliminating the 401 spray in the console on wake.
+  const prepared$ = from(attachToken ? authService.awaitPendingRefresh() : Promise.resolve()).pipe(
+    switchMap(() => {
+      const token = authService.getToken();
+      const requestWithToken = token && attachToken
+        ? req.clone({ headers: req.headers.set('Authorization', `Bearer ${token}`) })
+        : req;
+      return next(requestWithToken);
+    }),
+  );
+
+  return prepared$.pipe(
     catchError((error: unknown) => {
       if (!(error instanceof HttpErrorResponse) || error.status !== 401 || !authService.shouldAttemptRefresh(req.url)) {
         return throwError(() => error);

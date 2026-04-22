@@ -618,7 +618,7 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
       this.aiSummary.set(summary);
     } catch (e) {
       console.error('Failed to summarize', e);
-      alert('Erreur lors du résumé IA.');
+      this.toastService.show('error', 'Erreur lors du resume IA.');
     } finally {
       this.aiLoading.set(false);
     }
@@ -634,7 +634,7 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
       this.aiReplies.set(replies);
     } catch (e) {
       console.error('Failed to generate replies', e);
-      alert('Erreur lors de la génération des réponses.');
+      this.toastService.show('error', 'Erreur lors de la generation des reponses.');
     } finally {
       this.aiLoading.set(false);
     }
@@ -663,7 +663,7 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
       this.aiActionItems.set(actions);
     } catch (e) {
       console.error('Failed to extract actions', e);
-      alert('Erreur lors de l\'extraction.');
+      this.toastService.show('error', "Erreur lors de l'extraction.");
     } finally {
       this.aiLoading.set(false);
     }
@@ -682,7 +682,7 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     } catch (e) {
       console.error('Failed to detect phishing', e);
       if (!silent) {
-        alert('Erreur lors de l\'analyse.');
+        this.toastService.show('error', "Erreur lors de l'analyse.");
       }
     } finally {
       this.aiLoading.set(false);
@@ -699,7 +699,7 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
       this.aiCategory.set(category);
     } catch (e) {
       console.error('Failed to categorize', e);
-      alert('Erreur lors de la catégorisation.');
+      this.toastService.show('error', 'Erreur lors de la categorisation.');
     } finally {
       this.aiLoading.set(false);
     }
@@ -715,7 +715,7 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
       this.aiTranslation.set(translation);
     } catch (e) {
       console.error('Failed to translate', e);
-      alert('Erreur lors de la traduction.');
+      this.toastService.show('error', 'Erreur lors de la traduction.');
     } finally {
       this.aiLoading.set(false);
     }

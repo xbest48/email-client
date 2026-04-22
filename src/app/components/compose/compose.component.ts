@@ -36,7 +36,9 @@ export class ComposeComponent implements OnInit, OnDestroy {
   readonly htmlBody = signal('');
   readonly showCc = signal(false);
   readonly minimized = signal(false);
-  readonly maximized = signal(false);
+  // Compose opens maximized by default — most users want the extra room, and
+  // users who prefer the compact card can shrink it via the toolbar toggle.
+  readonly maximized = signal(true);
   readonly sending = signal(false);
   readonly showTemplates = signal(false);
   readonly showSchedule = signal(false);
