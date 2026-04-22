@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Headers, Post, Request, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AiService, AiActionItem, AiCategoryResult, AiPhishingResult, EmailTriageInput, EmailTriageResult } from './ai.service';
 
@@ -60,9 +60,19 @@ export class AiController {
   @Post('categorize')
   async categorize(
     @Request() req: any,
-    @Body() body: { emailContent: string },
+    @Headers('x-account-id') accountId: string | undefined,
+    @Body() body: { emailContent: string; messageId?: string; folder?: string; uid?: number },
   ): Promise<{ result: AiCategoryResult }> {
-    const result = await this.aiService.categorize(req.user.id, body.emailContent);
+    const result = await this.aiService.categorize(
+      req.user.id,
+      body.emailContent,
+      {
+        messageId: body.messageId,
+        folder: body.folder,
+        uid: body.uid,
+      },
+      accountId,
+    );
     return { result };
   }
 
@@ -78,9 +88,10 @@ export class AiController {
   @Post('triage')
   async triage(
     @Request() req: any,
+    @Headers('x-account-id') accountId: string | undefined,
     @Body() body: { emails: EmailTriageInput[] },
   ): Promise<{ result: EmailTriageResult[] }> {
-    const result = await this.aiService.triage(req.user.id, body.emails ?? []);
+    const result = await this.aiService.triage(req.user.id, body.emails ?? [], accountId);
     return { result };
   }
 }

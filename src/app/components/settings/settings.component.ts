@@ -148,6 +148,17 @@ export class SettingsComponent {
   readonly filterActionType = signal<FilterRule['actionType']>('move');
   readonly filterActionValue = signal('');
   readonly editingFilterId = signal<string | null>(null);
+  readonly aiCategoryOptions = [
+    'Factures',
+    'Newsletter',
+    'Urgent',
+    'Personnel',
+    'Travail',
+    'Promotion',
+    'Social',
+    'Support',
+    'Autre',
+  ] as const;
 
   // Templates
   readonly templateName = signal('');

@@ -1,28 +1,31 @@
-<!-- Backdrop -->
-<div
-  class="fixed inset-0 bg-black/30 z-40 backdrop-blur-sm"
-  (click)="onClose()"
-  (keydown.escape)="onClose()"
-  role="presentation"
-  aria-hidden="true"></div>
+@if (maximized() && !minimized()) {
+  <!-- Backdrop -->
+  <div
+    class="fixed inset-0 bg-black/30 z-40 backdrop-blur-sm"
+    (click)="onClose()"
+    (keydown.escape)="onClose()"
+    role="presentation"
+    aria-hidden="true"></div>
+}
 
 <!-- Compose dialog -->
 <div
   class="fixed inset-x-0 bottom-0 top-0 z-50 flex flex-col overflow-hidden bg-white shadow-2xl dark:bg-gray-800 md:border md:border-gray-200 md:dark:border-gray-700"
-  [class.md:top-auto]="!maximized()"
-  [class.md:left-auto]="!maximized()"
-  [class.md:right-8]="!maximized()"
-  [class.md:w-full]="!maximized()"
-  [class.md:max-w-lg]="!maximized()"
-  [class.md:max-h-[85vh]]="!maximized()"
-  [class.md:rounded-t-2xl]="!maximized()"
-  [class.md:inset-8]="maximized()"
-  [class.md:rounded-2xl]="maximized()"
+  [class.md:top-auto]="minimized() || !maximized()"
+  [class.md:left-auto]="minimized() || !maximized()"
+  [class.md:right-8]="minimized() || !maximized()"
+  [class.md:bottom-6]="minimized()"
+  [class.md:w-full]="minimized() || !maximized()"
+  [class.md:max-w-lg]="minimized() || !maximized()"
+  [class.md:max-h-[85vh]]="!minimized() && !maximized()"
+  [class.md:rounded-t-2xl]="minimized() || !maximized()"
+  [class.md:inset-8]="maximized() && !minimized()"
+  [class.md:rounded-2xl]="maximized() && !minimized()"
   (dragover)="onDragOver($event)"
   (dragleave)="onDragLeave()"
   (drop)="onDrop($event)"
   role="dialog"
-  aria-modal="true"
+  [attr.aria-modal]="maximized() && !minimized() ? 'true' : 'false'"
   aria-label="Nouveau message">
 
   <!-- Drag overlay -->

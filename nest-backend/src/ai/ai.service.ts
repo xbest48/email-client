@@ -1,6 +1,10 @@
 import { BadGatewayException, BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { createHash } from 'crypto';
+import { IsNull, Repository } from 'typeorm';
 import { UsersService } from '../users/users.service';
 import { decrypt } from '../users/crypto.util';
+import { EmailAiInsight } from './email-ai-insight.entity';
 
 type ConfidenceLevel = 'low' | 'medium' | 'high';
 type PhishingLevel = 'low' | 'medium' | 'high';
@@ -30,6 +34,9 @@ export interface EmailTriageInput {
   from: string;
   subject: string;
   snippet: string;
+  messageId?: string;
+  folder?: string;
+  uid?: number;
 }
 
 export interface EmailTriageResult {
@@ -83,6 +90,12 @@ interface ProviderConfig {
   apiUrl: string | null;
 }
 
+interface EmailInsightIdentity {
+  messageId?: string | null;
+  folder?: string | null;
+  uid?: number | null;
+}
+
 @Injectable()
 export class AiService {
   private static readonly defaultModel = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
@@ -90,7 +103,11 @@ export class AiService {
   private static readonly anthropicModel = process.env.ANTHROPIC_MODEL || 'claude-3-5-haiku-latest';
   private static readonly googleModel = process.env.GOOGLE_MODEL || 'gemini-2.0-flash';
 
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    @InjectRepository(EmailAiInsight)
+    private readonly emailAiInsightRepository: Repository<EmailAiInsight>,
+  ) {}
 
   async compose(
     userId: string,
@@ -196,7 +213,25 @@ export class AiService {
     );
   }
 
-  async categorize(userId: string, emailContent: string): Promise<AiCategoryResult> {
+  async categorize(
+    userId: string,
+    emailContent: string,
+    identity?: EmailInsightIdentity,
+    accountId?: string | null,
+  ): Promise<AiCategoryResult> {
+    const normalizedIdentity = this.normalizeIdentity(identity);
+    const normalizedAccountId = this.normalizeAccountId(accountId);
+    const contentHash = this.hashContent(emailContent);
+    const cached = await this.findCachedInsight(userId, normalizedAccountId, normalizedIdentity);
+
+    if (cached && cached.contentHash === contentHash && cached.category) {
+      return {
+        category: cached.category,
+        confidence: this.normalizeConfidence(cached.confidence),
+        reason: cached.reason || '',
+      };
+    }
+
     const result = await this.requestJson<AiCategoryResult>(
       userId,
       [
@@ -207,11 +242,21 @@ export class AiService {
       emailContent,
     );
 
-    return {
+    const normalizedResult = {
       category: (result.category || 'Autre').trim() || 'Autre',
       confidence: this.normalizeConfidence(result.confidence),
       reason: (result.reason || '').trim(),
     };
+
+    await this.saveInsight(userId, normalizedAccountId, normalizedIdentity, contentHash, {
+      category: normalizedResult.category,
+      confidence: normalizedResult.confidence,
+      reason: normalizedResult.reason,
+      urgency: cached?.contentHash === contentHash ? this.normalizeNullableConfidence(cached?.urgency) : null,
+      phishingLevel: cached?.contentHash === contentHash ? this.normalizeNullablePhishingLevel(cached?.phishingLevel) : null,
+    }, cached);
+
+    return normalizedResult;
   }
 
   async phishing(userId: string, emailContent: string): Promise<AiPhishingResult> {
@@ -235,15 +280,51 @@ export class AiService {
     };
   }
 
-  async triage(userId: string, emails: EmailTriageInput[]): Promise<EmailTriageResult[]> {
+  async triage(
+    userId: string,
+    emails: EmailTriageInput[],
+    accountId?: string | null,
+  ): Promise<EmailTriageResult[]> {
     if (!emails.length) return [];
 
+    const normalizedAccountId = this.normalizeAccountId(accountId);
     const trimmedEmails = emails.slice(0, 20).map((email) => ({
       id: email.id,
       from: email.from,
       subject: email.subject,
       snippet: email.snippet,
+      messageId: email.messageId,
+      folder: email.folder,
+      uid: email.uid,
     }));
+
+    const cachedResults = new Map<string, EmailTriageResult>();
+    const missingEmails: typeof trimmedEmails = [];
+
+    for (const email of trimmedEmails) {
+      const identity = this.normalizeIdentity(email);
+      const contentHash = this.hashContent(email.from, email.subject, email.snippet);
+      const cached = await this.findCachedInsight(userId, normalizedAccountId, identity);
+
+      if (cached && cached.contentHash === contentHash && this.isCompleteTriageInsight(cached)) {
+        cachedResults.set(email.id, {
+          id: email.id,
+          category: cached.category || 'Autre',
+          urgency: this.normalizeConfidence(cached.urgency),
+          confidence: this.normalizeConfidence(cached.confidence),
+          phishingLevel: this.normalizePhishingLevel(cached.phishingLevel),
+          reason: cached.reason || '',
+        });
+      } else {
+        missingEmails.push(email);
+      }
+    }
+
+    if (!missingEmails.length) {
+      return trimmedEmails
+        .map((email) => cachedResults.get(email.id))
+        .filter((item): item is EmailTriageResult => !!item);
+    }
 
     const result = await this.requestJson<{ results?: EmailTriageResult[] }>(
       userId,
@@ -255,10 +336,17 @@ export class AiService {
         'phishingLevel doit etre low, medium ou high.',
         'Retourne uniquement un objet JSON avec une cle "results".',
       ].join(' '),
-      JSON.stringify({ emails: trimmedEmails }),
+      JSON.stringify({
+        emails: missingEmails.map((email) => ({
+          id: email.id,
+          from: email.from,
+          subject: email.subject,
+          snippet: email.snippet,
+        })),
+      }),
     );
 
-    return (result.results ?? [])
+    const freshResults = (result.results ?? [])
       .filter((item) => item && typeof item.id === 'string')
       .map((item) => ({
         id: item.id,
@@ -268,6 +356,131 @@ export class AiService {
         phishingLevel: this.normalizePhishingLevel(item.phishingLevel),
         reason: (item.reason || '').trim(),
       }));
+
+    const freshById = new Map(freshResults.map((item) => [item.id, item]));
+
+    for (const email of missingEmails) {
+      const triageResult = freshById.get(email.id);
+      if (!triageResult) continue;
+
+      await this.saveInsight(
+        userId,
+        normalizedAccountId,
+        this.normalizeIdentity(email),
+        this.hashContent(email.from, email.subject, email.snippet),
+        {
+          category: triageResult.category,
+          urgency: triageResult.urgency,
+          confidence: triageResult.confidence,
+          phishingLevel: triageResult.phishingLevel,
+          reason: triageResult.reason,
+        },
+      );
+      cachedResults.set(email.id, triageResult);
+    }
+
+    return trimmedEmails
+      .map((email) => cachedResults.get(email.id))
+      .filter((item): item is EmailTriageResult => !!item);
+  }
+
+  private normalizeAccountId(accountId?: string | null): string | null {
+    const normalized = accountId?.trim();
+    return normalized ? normalized : null;
+  }
+
+  private normalizeIdentity(identity?: EmailInsightIdentity | null): EmailInsightIdentity {
+    const messageId = identity?.messageId?.trim() || null;
+    const folder = identity?.folder?.trim() || null;
+    const uid = typeof identity?.uid === 'number' ? identity.uid : null;
+    return { messageId, folder, uid };
+  }
+
+  private hashContent(...parts: Array<string | null | undefined>): string {
+    return createHash('sha256')
+      .update(parts.map((part) => (part || '').trim()).join('\n\u241f\n'))
+      .digest('hex');
+  }
+
+  private async findCachedInsight(
+    userId: string,
+    accountId: string | null,
+    identity: EmailInsightIdentity,
+  ): Promise<EmailAiInsight | null> {
+    const accountMatcher = accountId ? accountId : IsNull();
+    const where: Array<Record<string, unknown>> = [];
+
+    if (identity.messageId) {
+      where.push({
+        userId,
+        accountId: accountMatcher,
+        messageId: identity.messageId,
+      });
+    }
+
+    if (identity.folder && identity.uid !== null && identity.uid !== undefined) {
+      where.push({
+        userId,
+        accountId: accountMatcher,
+        folder: identity.folder,
+        uid: identity.uid,
+      });
+    }
+
+    if (!where.length) return null;
+
+    return this.emailAiInsightRepository.findOne({
+      where: where as any,
+      order: { updatedAt: 'DESC' },
+    });
+  }
+
+  private async saveInsight(
+    userId: string,
+    accountId: string | null,
+    identity: EmailInsightIdentity,
+    contentHash: string,
+    values: {
+      category: string;
+      urgency?: ConfidenceLevel | null;
+      confidence?: ConfidenceLevel | null;
+      phishingLevel?: PhishingLevel | null;
+      reason?: string;
+    },
+      existing?: EmailAiInsight | null,
+  ): Promise<EmailAiInsight | null> {
+    if (!identity.messageId && !(identity.folder && identity.uid !== null && identity.uid !== undefined)) {
+      return null;
+    }
+
+    const insight = existing ?? (await this.findCachedInsight(userId, accountId, identity)) ?? this.emailAiInsightRepository.create();
+    insight.userId = userId;
+    insight.user = { id: userId } as any;
+    insight.accountId = accountId;
+    insight.messageId = identity.messageId ?? insight.messageId ?? null;
+    insight.folder = identity.folder ?? insight.folder ?? null;
+    insight.uid = identity.uid ?? insight.uid ?? null;
+    insight.contentHash = contentHash;
+    insight.category = values.category;
+    insight.urgency = this.normalizeNullableConfidence(values.urgency);
+    insight.confidence = this.normalizeNullableConfidence(values.confidence);
+    insight.phishingLevel = this.normalizeNullablePhishingLevel(values.phishingLevel);
+    insight.reason = values.reason?.trim() || '';
+    return this.emailAiInsightRepository.save(insight);
+  }
+
+  private isCompleteTriageInsight(insight: EmailAiInsight): boolean {
+    return !!insight.category && !!insight.urgency && !!insight.confidence && !!insight.phishingLevel;
+  }
+
+  private normalizeNullableConfidence(value: unknown): ConfidenceLevel | null {
+    if (value === null || value === undefined || value === '') return null;
+    return this.normalizeConfidence(value);
+  }
+
+  private normalizeNullablePhishingLevel(value: unknown): PhishingLevel | null {
+    if (value === null || value === undefined || value === '') return null;
+    return this.normalizePhishingLevel(value);
   }
 
   private async requestText(

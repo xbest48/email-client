@@ -26,6 +26,7 @@ import { ContactsModule } from './contacts/contacts.module';
 import { Contact } from './contacts/contact.entity';
 import { PgpModule } from './pgp/pgp.module';
 import { PgpKey, PgpContactKey } from './pgp/pgp-key.entity';
+import { EmailAiInsight } from './ai/email-ai-insight.entity';
 
 const IS_PROD = process.env.NODE_ENV === 'production';
 
@@ -47,6 +48,7 @@ const IS_PROD = process.env.NODE_ENV === 'production';
         Contact,
         PgpKey,
         PgpContactKey,
+        EmailAiInsight,
       ],
       // WARNING: synchronize: true is convenient but DROPS columns when the
       // TypeORM schema diverges from the DB. Opt in explicitly via env.

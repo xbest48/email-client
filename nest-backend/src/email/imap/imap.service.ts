@@ -800,6 +800,7 @@ export class ImapService implements OnModuleDestroy {
       hasAttachments,
       size: msg.size,
       snippet: '',
+      messageId: msg.envelope.messageId || '',
     };
   }
 

@@ -11,7 +11,22 @@
           class="rounded border-gray-300 text-amber-500 focus:ring-amber-400"
           aria-label="Tout selectionner">
       </label>
-      <h2 class="text-lg font-semibold text-gray-800 dark:text-white truncate">{{ title() }}</h2>
+      <div class="flex items-center gap-2 min-w-0">
+        <h2 class="text-lg font-semibold text-gray-800 dark:text-white truncate">{{ title() }}</h2>
+        @if (activeAiTagLabel(); as label) {
+          <button
+            type="button"
+            (click)="clearAiTagFilter()"
+            class="inline-flex items-center gap-1 rounded-full bg-violet-100 dark:bg-violet-900/40 px-2.5 py-1 text-xs font-medium text-violet-800 dark:text-violet-200 transition-colors hover:bg-violet-200 dark:hover:bg-violet-900/60 focus:outline-none focus:ring-2 focus:ring-violet-400"
+            aria-label="Retirer le filtre IA"
+            title="Retirer le filtre">
+            <span>{{ label }}</span>
+            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        }
+      </div>
     </div>
     <div class="flex items-center gap-2">
       @if (aiEnabled() && (taskService.tasks().length > 0 || showTaskPanel())) {
@@ -261,26 +276,32 @@
   }
 
   <!-- Loading bar -->
-  @if (emailService.loading() && emails().length > 0) {
+  @if (emailService.loading() && visibleEmails().length > 0 && !isAiFilterLoadingMore()) {
     <div class="h-0.5 w-full bg-amber-400 animate-pulse shrink-0" role="status" aria-label="Chargement en cours"></div>
   }
 
   <!-- Email list -->
   <div #scrollContainer class="flex-1 overflow-y-auto" role="list" aria-label="Liste des emails">
-    @if (emailService.loading() && emails().length === 0) {
+    @if (emailService.loading() && visibleEmails().length === 0 && !activeAiTagFilter()) {
       <div class="flex flex-col items-center justify-center py-16" role="status" aria-label="Chargement">
         <div class="w-8 h-8 border-3 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
         <p class="mt-3 text-sm text-gray-500 dark:text-gray-400">Chargement des emails...</p>
       </div>
-    } @else if (emails().length === 0) {
+    } @else if (visibleEmails().length === 0) {
       <div class="flex flex-col items-center justify-center py-16 text-gray-400 dark:text-gray-500">
         <svg class="w-16 h-16 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
         </svg>
-        <p class="text-sm">Aucun email dans ce dossier</p>
+        <p class="text-sm">
+          @if (activeAiTagFilter()) {
+            Aucun email pour ce filtre IA
+          } @else {
+            Aucun email dans ce dossier
+          }
+        </p>
       </div>
     } @else {
-      @for (email of emails(); track emailKey(email); let i = $index) {
+      @for (email of visibleEmails(); track emailKey(email); let i = $index) {
         <div
           appSwipe
           (swipeLeft)="onSwipeLeft(email)"
@@ -382,26 +403,67 @@
             </div>
             @if (triageFor(email); as insight) {
               <div class="flex items-center gap-1 flex-wrap">
-                <span class="inline-flex items-center rounded-full bg-violet-100 dark:bg-violet-900/40 px-2 py-0.5 text-[10px] font-medium text-violet-800 dark:text-violet-200">
+                <button
+                  type="button"
+                  (click)="$event.stopPropagation(); toggleCategoryFilter(insight.category)"
+                  class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-violet-400"
+                  [class.bg-violet-200]="isCategoryFilterActive(insight.category)"
+                  [class.text-violet-900]="isCategoryFilterActive(insight.category)"
+                  [class.dark:bg-violet-800]="isCategoryFilterActive(insight.category)"
+                  [class.dark:text-violet-100]="isCategoryFilterActive(insight.category)"
+                  [class.bg-violet-100]="!isCategoryFilterActive(insight.category)"
+                  [class.text-violet-800]="!isCategoryFilterActive(insight.category)"
+                  [class.dark:bg-violet-900/40]="!isCategoryFilterActive(insight.category)"
+                  [class.dark:text-violet-200]="!isCategoryFilterActive(insight.category)"
+                  [attr.aria-pressed]="isCategoryFilterActive(insight.category)"
+                  [title]="'Filtrer par ' + insight.category">
                   {{ insight.category }}
-                </span>
+                </button>
                 @if (insight.urgency === 'high') {
-                  <span class="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/40 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:text-amber-200">
+                  <button
+                    type="button"
+                    (click)="$event.stopPropagation(); toggleUrgencyFilter('high', 'Urgent')"
+                    class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    [class.bg-amber-200]="isUrgencyFilterActive('high')"
+                    [class.text-amber-900]="isUrgencyFilterActive('high')"
+                    [class.dark:bg-amber-800]="isUrgencyFilterActive('high')"
+                    [class.dark:text-amber-100]="isUrgencyFilterActive('high')"
+                    [class.bg-amber-100]="!isUrgencyFilterActive('high')"
+                    [class.text-amber-800]="!isUrgencyFilterActive('high')"
+                    [class.dark:bg-amber-900/40]="!isUrgencyFilterActive('high')"
+                    [class.dark:text-amber-200]="!isUrgencyFilterActive('high')"
+                    [attr.aria-pressed]="isUrgencyFilterActive('high')"
+                    title="Filtrer par urgent">
                     Urgent
-                  </span>
+                  </button>
                 }
                 @if (insight.phishingLevel !== 'low') {
-                  <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium"
-                        [class.bg-orange-100]="insight.phishingLevel === 'medium'"
-                        [class.text-orange-800]="insight.phishingLevel === 'medium'"
-                        [class.dark:bg-orange-900/40]="insight.phishingLevel === 'medium'"
-                        [class.dark:text-orange-200]="insight.phishingLevel === 'medium'"
-                        [class.bg-red-100]="insight.phishingLevel === 'high'"
-                        [class.text-red-800]="insight.phishingLevel === 'high'"
-                        [class.dark:bg-red-900/40]="insight.phishingLevel === 'high'"
-                        [class.dark:text-red-200]="insight.phishingLevel === 'high'">
+                  <button
+                    type="button"
+                    (click)="$event.stopPropagation(); togglePhishingFilter(insight.phishingLevel, insight.phishingLevel === 'high' ? 'Phishing' : 'Vigilance')"
+                    class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors focus:outline-none focus:ring-2"
+                        [class.bg-orange-200]="insight.phishingLevel === 'medium' && isPhishingFilterActive('medium')"
+                        [class.text-orange-900]="insight.phishingLevel === 'medium' && isPhishingFilterActive('medium')"
+                        [class.dark:bg-orange-800]="insight.phishingLevel === 'medium' && isPhishingFilterActive('medium')"
+                        [class.dark:text-orange-100]="insight.phishingLevel === 'medium' && isPhishingFilterActive('medium')"
+                        [class.bg-orange-100]="insight.phishingLevel === 'medium' && !isPhishingFilterActive('medium')"
+                        [class.text-orange-800]="insight.phishingLevel === 'medium' && !isPhishingFilterActive('medium')"
+                        [class.dark:bg-orange-900/40]="insight.phishingLevel === 'medium' && !isPhishingFilterActive('medium')"
+                        [class.dark:text-orange-200]="insight.phishingLevel === 'medium' && !isPhishingFilterActive('medium')"
+                        [class.bg-red-200]="insight.phishingLevel === 'high' && isPhishingFilterActive('high')"
+                        [class.text-red-900]="insight.phishingLevel === 'high' && isPhishingFilterActive('high')"
+                        [class.dark:bg-red-800]="insight.phishingLevel === 'high' && isPhishingFilterActive('high')"
+                        [class.dark:text-red-100]="insight.phishingLevel === 'high' && isPhishingFilterActive('high')"
+                        [class.bg-red-100]="insight.phishingLevel === 'high' && !isPhishingFilterActive('high')"
+                        [class.text-red-800]="insight.phishingLevel === 'high' && !isPhishingFilterActive('high')"
+                        [class.dark:bg-red-900/40]="insight.phishingLevel === 'high' && !isPhishingFilterActive('high')"
+                        [class.dark:text-red-200]="insight.phishingLevel === 'high' && !isPhishingFilterActive('high')"
+                        [class.focus:ring-orange-400]="insight.phishingLevel === 'medium'"
+                        [class.focus:ring-red-400]="insight.phishingLevel === 'high'"
+                        [attr.aria-pressed]="insight.phishingLevel === 'high' ? isPhishingFilterActive('high') : isPhishingFilterActive('medium')"
+                        [title]="insight.phishingLevel === 'high' ? 'Filtrer par phishing' : 'Filtrer par vigilance'">
                     {{ insight.phishingLevel === 'high' ? 'Phishing' : 'Vigilance' }}
-                  </span>
+                  </button>
                 }
               </div>
             }
@@ -425,26 +487,67 @@
             }
             @if (triageFor(email); as insight) {
               <div class="sm:hidden flex items-center gap-1 flex-wrap mb-1">
-                <span class="inline-flex items-center rounded-full bg-violet-100 dark:bg-violet-900/40 px-2 py-0.5 text-[10px] font-medium text-violet-800 dark:text-violet-200">
+                <button
+                  type="button"
+                  (click)="$event.stopPropagation(); toggleCategoryFilter(insight.category)"
+                  class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-violet-400"
+                  [class.bg-violet-200]="isCategoryFilterActive(insight.category)"
+                  [class.text-violet-900]="isCategoryFilterActive(insight.category)"
+                  [class.dark:bg-violet-800]="isCategoryFilterActive(insight.category)"
+                  [class.dark:text-violet-100]="isCategoryFilterActive(insight.category)"
+                  [class.bg-violet-100]="!isCategoryFilterActive(insight.category)"
+                  [class.text-violet-800]="!isCategoryFilterActive(insight.category)"
+                  [class.dark:bg-violet-900/40]="!isCategoryFilterActive(insight.category)"
+                  [class.dark:text-violet-200]="!isCategoryFilterActive(insight.category)"
+                  [attr.aria-pressed]="isCategoryFilterActive(insight.category)"
+                  [title]="'Filtrer par ' + insight.category">
                   {{ insight.category }}
-                </span>
+                </button>
                 @if (insight.urgency === 'high') {
-                  <span class="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/40 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:text-amber-200">
+                  <button
+                    type="button"
+                    (click)="$event.stopPropagation(); toggleUrgencyFilter('high', 'Urgent')"
+                    class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    [class.bg-amber-200]="isUrgencyFilterActive('high')"
+                    [class.text-amber-900]="isUrgencyFilterActive('high')"
+                    [class.dark:bg-amber-800]="isUrgencyFilterActive('high')"
+                    [class.dark:text-amber-100]="isUrgencyFilterActive('high')"
+                    [class.bg-amber-100]="!isUrgencyFilterActive('high')"
+                    [class.text-amber-800]="!isUrgencyFilterActive('high')"
+                    [class.dark:bg-amber-900/40]="!isUrgencyFilterActive('high')"
+                    [class.dark:text-amber-200]="!isUrgencyFilterActive('high')"
+                    [attr.aria-pressed]="isUrgencyFilterActive('high')"
+                    title="Filtrer par urgent">
                     Urgent
-                  </span>
+                  </button>
                 }
                 @if (insight.phishingLevel !== 'low') {
-                  <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium"
-                        [class.bg-orange-100]="insight.phishingLevel === 'medium'"
-                        [class.text-orange-800]="insight.phishingLevel === 'medium'"
-                        [class.dark:bg-orange-900/40]="insight.phishingLevel === 'medium'"
-                        [class.dark:text-orange-200]="insight.phishingLevel === 'medium'"
-                        [class.bg-red-100]="insight.phishingLevel === 'high'"
-                        [class.text-red-800]="insight.phishingLevel === 'high'"
-                        [class.dark:bg-red-900/40]="insight.phishingLevel === 'high'"
-                        [class.dark:text-red-200]="insight.phishingLevel === 'high'">
+                  <button
+                    type="button"
+                    (click)="$event.stopPropagation(); togglePhishingFilter(insight.phishingLevel, insight.phishingLevel === 'high' ? 'Phishing' : 'Vigilance')"
+                    class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors focus:outline-none focus:ring-2"
+                        [class.bg-orange-200]="insight.phishingLevel === 'medium' && isPhishingFilterActive('medium')"
+                        [class.text-orange-900]="insight.phishingLevel === 'medium' && isPhishingFilterActive('medium')"
+                        [class.dark:bg-orange-800]="insight.phishingLevel === 'medium' && isPhishingFilterActive('medium')"
+                        [class.dark:text-orange-100]="insight.phishingLevel === 'medium' && isPhishingFilterActive('medium')"
+                        [class.bg-orange-100]="insight.phishingLevel === 'medium' && !isPhishingFilterActive('medium')"
+                        [class.text-orange-800]="insight.phishingLevel === 'medium' && !isPhishingFilterActive('medium')"
+                        [class.dark:bg-orange-900/40]="insight.phishingLevel === 'medium' && !isPhishingFilterActive('medium')"
+                        [class.dark:text-orange-200]="insight.phishingLevel === 'medium' && !isPhishingFilterActive('medium')"
+                        [class.bg-red-200]="insight.phishingLevel === 'high' && isPhishingFilterActive('high')"
+                        [class.text-red-900]="insight.phishingLevel === 'high' && isPhishingFilterActive('high')"
+                        [class.dark:bg-red-800]="insight.phishingLevel === 'high' && isPhishingFilterActive('high')"
+                        [class.dark:text-red-100]="insight.phishingLevel === 'high' && isPhishingFilterActive('high')"
+                        [class.bg-red-100]="insight.phishingLevel === 'high' && !isPhishingFilterActive('high')"
+                        [class.text-red-800]="insight.phishingLevel === 'high' && !isPhishingFilterActive('high')"
+                        [class.dark:bg-red-900/40]="insight.phishingLevel === 'high' && !isPhishingFilterActive('high')"
+                        [class.dark:text-red-200]="insight.phishingLevel === 'high' && !isPhishingFilterActive('high')"
+                        [class.focus:ring-orange-400]="insight.phishingLevel === 'medium'"
+                        [class.focus:ring-red-400]="insight.phishingLevel === 'high'"
+                        [attr.aria-pressed]="insight.phishingLevel === 'high' ? isPhishingFilterActive('high') : isPhishingFilterActive('medium')"
+                        [title]="insight.phishingLevel === 'high' ? 'Filtrer par phishing' : 'Filtrer par vigilance'">
                     {{ insight.phishingLevel === 'high' ? 'Phishing' : 'Vigilance' }}
-                  </span>
+                  </button>
                 }
               </div>
             }
@@ -510,27 +613,28 @@
         </div>
       }
 
-      <!-- Load more -->
-      @if (hasMore()) {
-        <div class="flex justify-center py-4">
-          <button
-            (click)="loadMore()"
-            class="px-4 py-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-900/50
-                   rounded-lg transition-colors font-medium
-                   focus:outline-none focus:ring-2 focus:ring-amber-400"
-            type="button"
-            [disabled]="emailService.loading()">
-            @if (emailService.loading()) {
-              <span class="inline-flex items-center gap-2">
-                <span class="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin"></span>
-                Chargement...
-              </span>
-            } @else {
-              Charger plus
-            }
-          </button>
-        </div>
-      }
+    }
+
+    <!-- Load more -->
+    @if (showLoadMoreControl()) {
+      <div class="flex justify-center py-4">
+        <button
+          (click)="loadMore()"
+          class="px-4 py-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-900/50
+                 rounded-lg transition-colors font-medium
+                 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          type="button"
+          [disabled]="emailService.loading()">
+          @if (emailService.loading()) {
+            <span class="inline-flex items-center gap-2">
+              <span class="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin"></span>
+              Chargement...
+            </span>
+          } @else {
+            Charger plus
+          }
+        </button>
+      </div>
     }
   </div>
 

@@ -7,7 +7,7 @@ import { SettingsService } from './settings.service';
 export interface FilterRule {
   id: string;
   name: string;
-  conditionField: 'from' | 'to' | 'subject' | 'hasAttachment';
+  conditionField: 'from' | 'to' | 'subject' | 'hasAttachment' | 'category';
   conditionOperator: 'contains' | 'equals' | 'startsWith';
   conditionValue: string;
   actionType: 'move' | 'label' | 'star' | 'markRead';

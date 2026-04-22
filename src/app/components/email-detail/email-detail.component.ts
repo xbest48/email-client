@@ -692,10 +692,15 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
   async categorize(): Promise<void> {
     this.showAiMenu.set(false);
     const content = this.getEmailText();
+    const mail = this.email();
     if (!content) return;
     this.aiLoading.set(true);
     try {
-      const category = await this.aiService.categorize(content);
+      const category = await this.aiService.categorize(content, {
+        messageId: mail?.messageId,
+        folder: mail?.folder,
+        uid: mail?.uid,
+      });
       this.aiCategory.set(category);
     } catch (e) {
       console.error('Failed to categorize', e);

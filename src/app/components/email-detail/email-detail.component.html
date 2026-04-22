@@ -355,12 +355,12 @@
               } @else {
                 <div class="flex items-start gap-1">
                   <div class="min-w-0 flex-1">
-                    <div class="break-words">
+                    <div class="wrap-break-word">
                       <span class="font-medium text-gray-600 dark:text-gray-300">A :</span>
                       <span> {{ formatRecipients(mail.to) }}</span>
                     </div>
                     @if (mail.cc.length) {
-                      <div class="mt-0.5 break-words">
+                      <div class="mt-0.5 wrap-break-word">
                         <span class="font-medium text-gray-600 dark:text-gray-300">Cc :</span>
                         <span> {{ formatRecipients(mail.cc) }}</span>
                       </div>

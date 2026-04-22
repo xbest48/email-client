@@ -19,6 +19,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FilterRule } from './filter-rule.entity';
 import { ImapService, EmailCredentials } from '../email/imap/imap.service';
 import { AccountsService } from '../accounts/accounts.service';
+import { AiService } from '../ai/ai.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('api/filters')
@@ -29,6 +30,7 @@ export class FiltersController {
     private readonly imapService: ImapService,
     @Inject(forwardRef(() => AccountsService))
     private readonly accountsService: AccountsService,
+    private readonly aiService: AiService,
   ) {}
 
   private async getCredentials(req: any, headers: any): Promise<EmailCredentials> {
@@ -106,6 +108,27 @@ export class FiltersController {
         case 'hasAttachment':
           fieldValue = email.hasAttachments ? 'true' : 'false';
           break;
+        case 'category': {
+          const content = [
+            email.subject || '',
+            email.snippet || '',
+            email.from?.email || email.from?.name || '',
+          ]
+            .filter(Boolean)
+            .join('\n\n');
+          const category = await this.aiService.categorize(
+            req.user.id,
+            content,
+            {
+              messageId: email.messageId,
+              folder: email.folder,
+              uid: email.uid,
+            },
+            headers['x-account-id'],
+          );
+          fieldValue = category.category || 'Autre';
+          break;
+        }
       }
 
       switch (rule.conditionOperator) {

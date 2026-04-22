@@ -1001,6 +1001,7 @@
                 <option value="to">A</option>
                 <option value="subject">Objet</option>
                 <option value="hasAttachment">Piece jointe</option>
+                <option value="category">Categorie IA</option>
               </select>
             </div>
             <div>
@@ -1015,10 +1016,21 @@
             </div>
             <div>
               <label for="filter-value" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Valeur</label>
-              <input id="filter-value" type="text" [(ngModel)]="filterConditionValue" name="filterConditionValue"
-                     class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg
-                            focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white dark:bg-gray-700 dark:text-white"
-                     placeholder="Valeur">
+              @if (filterConditionField() === 'category') {
+                <select id="filter-value" [(ngModel)]="filterConditionValue" name="filterConditionValue"
+                        class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg
+                               focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white dark:bg-gray-700 dark:text-white">
+                  <option value="">Choisir une categorie</option>
+                  @for (category of aiCategoryOptions; track category) {
+                    <option [value]="category">{{ category }}</option>
+                  }
+                </select>
+              } @else {
+                <input id="filter-value" type="text" [(ngModel)]="filterConditionValue" name="filterConditionValue"
+                       class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg
+                              focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white dark:bg-gray-700 dark:text-white"
+                       placeholder="Valeur">
+              }
             </div>
           </div>
           <div class="grid grid-cols-2 gap-2">

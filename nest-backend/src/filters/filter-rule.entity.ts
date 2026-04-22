@@ -13,7 +13,7 @@ export class FilterRule {
   name: string;
 
   @Column()
-  conditionField: 'from' | 'to' | 'subject' | 'hasAttachment';
+  conditionField: 'from' | 'to' | 'subject' | 'hasAttachment' | 'category';
 
   @Column()
   conditionOperator: 'contains' | 'equals' | 'startsWith';

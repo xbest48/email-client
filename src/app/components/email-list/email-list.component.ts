@@ -49,9 +49,13 @@ export class EmailListComponent implements OnInit, OnDestroy {
   private currentFolder = 'INBOX';
   private currentQuery = '';
   private readonly triageInFlight = new Set<string>();
+  readonly triagePendingCount = signal(0);
 
   readonly emails = computed(() => this.emailService.currentEmails());
   readonly title = signal('Boite de reception');
+  readonly activeAiTagFilter = signal<string | null>(null);
+  readonly activeAiTagLabel = signal<string | null>(null);
+  readonly aiTagFilterTargetCount = signal<number | null>(null);
   readonly isSentFolder = signal(false);
   readonly isTrashFolder = signal(false);
   readonly isSpamFolder = signal(false);
@@ -82,13 +86,45 @@ export class EmailListComponent implements OnInit, OnDestroy {
   private readonly contextMenuEl = viewChild<ElementRef<HTMLDivElement>>('contextMenuEl');
 
   readonly allSelected = computed(() => {
-    const emails = this.emails();
+    const emails = this.visibleEmails();
     const selected = this.selectedIds();
     return emails.length > 0 && emails.every((e) => selected.has(this.emailKey(e)));
   });
 
+  readonly visibleEmails = computed(() => {
+    const activeTag = this.activeAiTagFilter();
+    const emails = this.emails();
+    if (!activeTag) return emails;
+
+    const [kind, value] = activeTag.split(':', 2);
+    return emails.filter((email) => {
+      const insight = this.triageFor(email);
+      if (!insight) return false;
+
+      switch (kind) {
+        case 'category':
+          return this.normalizeCategory(insight.category) === value;
+        case 'urgency':
+          return insight.urgency === value;
+        case 'phishing':
+          return insight.phishingLevel === value;
+        default:
+          return false;
+      }
+    });
+  });
+
   readonly useStrongerDarkUnreadAccent = computed(() =>
     this.getRelativeLuminance(this.settingsService.accentColor) < 0.12
+  );
+  readonly isAiFilterLoadingMore = computed(() => {
+    const activeTag = this.activeAiTagFilter();
+    const targetCount = this.aiTagFilterTargetCount();
+    if (!activeTag || !targetCount) return false;
+    return this.emailService.loading() && this.visibleEmails().length < targetCount;
+  });
+  readonly showLoadMoreControl = computed(() =>
+    this.emailService.hasMoreEmails() || this.isAiFilterLoadingMore()
   );
 
   private shortcutSub?: Subscription;
@@ -103,6 +139,7 @@ export class EmailListComponent implements OnInit, OnDestroy {
       if (!this.aiEnabled()) {
         this.aiInsights.set(new Map());
         this.triageInFlight.clear();
+        this.triagePendingCount.set(0);
         this.showTaskPanel.set(false);
         return;
       }
@@ -124,8 +161,28 @@ export class EmailListComponent implements OnInit, OnDestroy {
       for (const email of pendingEmails) {
         this.triageInFlight.add(this.emailKey(email));
       }
+      this.triagePendingCount.set(this.triageInFlight.size);
 
       void this.loadAiInsights(pendingEmails);
+    });
+
+    effect(() => {
+      const activeTag = this.activeAiTagFilter();
+      const targetCount = this.aiTagFilterTargetCount();
+      const visibleCount = this.visibleEmails().length;
+      const pendingTriage = this.triagePendingCount();
+      const insights = this.aiInsights();
+      const hasUnclassifiedLoadedEmails = this.emails().some(
+        (email) => !insights.has(this.emailKey(email)) && !this.triageInFlight.has(this.emailKey(email))
+      );
+      const hasMoreEmails = this.emailService.hasMoreEmails();
+      const loading = this.emailService.loading();
+
+      if (!activeTag || !targetCount || visibleCount >= targetCount) return;
+      if (pendingTriage > 0 || hasUnclassifiedLoadedEmails || loading || !hasMoreEmails) return;
+
+      const nextPage = this.emailService.currentPage() + 1;
+      void this.emailService.fetchEmails(this.currentFolder, this.currentQuery, nextPage);
     });
   }
 
@@ -153,6 +210,9 @@ export class EmailListComponent implements OnInit, OnDestroy {
       }
 
       this.selectedIds.set(new Set());
+      this.activeAiTagFilter.set(null);
+      this.activeAiTagLabel.set(null);
+      this.aiTagFilterTargetCount.set(null);
       this.mobileSelectionMode.set(false);
       this.mobileActionMenu.set(null);
       this.focusedIndex.set(-1);
@@ -296,14 +356,21 @@ export class EmailListComponent implements OnInit, OnDestroy {
     if (this.allSelected()) {
       this.selectedIds.set(new Set());
     } else {
-      this.selectedIds.set(new Set(this.emails().map((e) => this.emailKey(e))));
+      this.selectedIds.set(new Set(this.visibleEmails().map((e) => this.emailKey(e))));
     }
   }
 
   loadMore(): void {
+    if (this.activeAiTagFilter()) {
+      this.aiTagFilterTargetCount.update((current) =>
+        (current ?? this.visibleEmails().length) + this.emailService.currentPageSize
+      );
+      return;
+    }
+
     if (this.emailService.hasMoreEmails()) {
       const nextPage = this.emailService.currentPage() + 1;
-      this.emailService.fetchEmails(this.currentFolder, this.currentQuery, nextPage);
+      void this.emailService.fetchEmails(this.currentFolder, this.currentQuery, nextPage);
     }
   }
 
@@ -313,7 +380,7 @@ export class EmailListComponent implements OnInit, OnDestroy {
 
   async bulkTrash(): Promise<void> {
     const ids = this.selectedIds();
-    const emailsToTrash = this.emails().filter((e) => ids.has(this.emailKey(e)));
+    const emailsToTrash = this.visibleEmails().filter((e) => ids.has(this.emailKey(e)));
     this.emailService.bulkTrashInBackground(emailsToTrash);
     this.selectedIds.set(new Set());
     await this.refillVisibleEmails();
@@ -321,7 +388,7 @@ export class EmailListComponent implements OnInit, OnDestroy {
 
   async bulkSpam(): Promise<void> {
     const ids = this.selectedIds();
-    const emailsToSpam = this.emails().filter((e) => ids.has(this.emailKey(e)));
+    const emailsToSpam = this.visibleEmails().filter((e) => ids.has(this.emailKey(e)));
     this.emailService.bulkSpamInBackground(emailsToSpam);
     this.selectedIds.set(new Set());
     await this.refillVisibleEmails();
@@ -329,7 +396,7 @@ export class EmailListComponent implements OnInit, OnDestroy {
 
   async bulkNotSpam(): Promise<void> {
     const ids = this.selectedIds();
-    const emailsToRestore = this.emails().filter((e) => ids.has(this.emailKey(e)));
+    const emailsToRestore = this.visibleEmails().filter((e) => ids.has(this.emailKey(e)));
     this.emailService.bulkNotSpamInBackground(emailsToRestore);
     this.selectedIds.set(new Set());
     await this.refillVisibleEmails();
@@ -337,14 +404,14 @@ export class EmailListComponent implements OnInit, OnDestroy {
 
   async bulkToggleStar(): Promise<void> {
     const ids = this.selectedIds();
-    for (const email of this.emails().filter((e) => ids.has(this.emailKey(e)))) {
+    for (const email of this.visibleEmails().filter((e) => ids.has(this.emailKey(e)))) {
       await this.emailService.toggleStar(email);
     }
   }
 
   async bulkMarkRead(): Promise<void> {
     const ids = this.selectedIds();
-    for (const email of this.emails().filter((e) => ids.has(this.emailKey(e)))) {
+    for (const email of this.visibleEmails().filter((e) => ids.has(this.emailKey(e)))) {
       await this.emailService.markAsRead(email);
     }
     this.selectedIds.set(new Set());
@@ -662,6 +729,48 @@ export class EmailListComponent implements OnInit, OnDestroy {
     return this.aiInsights().get(this.emailKey(email)) ?? null;
   }
 
+  toggleCategoryFilter(category: string): void {
+    this.toggleAiTagFilter(`category:${this.normalizeCategory(category)}`, category);
+  }
+
+  toggleUrgencyFilter(level: 'low' | 'medium' | 'high', label: string): void {
+    this.toggleAiTagFilter(`urgency:${level}`, label);
+  }
+
+  togglePhishingFilter(level: 'low' | 'medium' | 'high', label: string): void {
+    if (level === 'low') return;
+    this.toggleAiTagFilter(`phishing:${level}`, label);
+  }
+
+  private toggleAiTagFilter(key: string, label: string): void {
+    const nextKey = this.activeAiTagFilter() === key ? null : key;
+    this.activeAiTagFilter.set(nextKey);
+    this.activeAiTagLabel.set(nextKey ? label : null);
+    this.aiTagFilterTargetCount.set(
+      nextKey ? Math.max(this.emails().length, this.emailService.currentPageSize) : null
+    );
+    this.selectedIds.set(new Set());
+    this.mobileSelectionMode.set(false);
+  }
+
+  clearAiTagFilter(): void {
+    this.activeAiTagFilter.set(null);
+    this.activeAiTagLabel.set(null);
+    this.aiTagFilterTargetCount.set(null);
+  }
+
+  isCategoryFilterActive(category: string): boolean {
+    return this.activeAiTagFilter() === `category:${this.normalizeCategory(category)}`;
+  }
+
+  isUrgencyFilterActive(level: 'low' | 'medium' | 'high'): boolean {
+    return this.activeAiTagFilter() === `urgency:${level}`;
+  }
+
+  isPhishingFilterActive(level: 'medium' | 'high'): boolean {
+    return this.activeAiTagFilter() === `phishing:${level}`;
+  }
+
   formatTaskDate(value: string | null): string {
     if (!value) return 'Sans date';
     const date = new Date(value);
@@ -709,6 +818,9 @@ export class EmailListComponent implements OnInit, OnDestroy {
           from: email.from.email || email.from.name,
           subject: email.subject,
           snippet: email.snippet,
+          messageId: email.messageId,
+          folder: email.folder,
+          uid: email.uid,
         })),
       );
 
@@ -725,6 +837,7 @@ export class EmailListComponent implements OnInit, OnDestroy {
       for (const email of emails) {
         this.triageInFlight.delete(this.emailKey(email));
       }
+      this.triagePendingCount.set(this.triageInFlight.size);
     }
   }
 
@@ -750,5 +863,9 @@ export class EmailListComponent implements OnInit, OnDestroy {
       return this.labelService.labels().find((label) => label.id === labelId)?.name ?? 'Libelle';
     }
     return folder;
+  }
+
+  private normalizeCategory(category: string): string {
+    return category.trim().toLowerCase();
   }
 }
