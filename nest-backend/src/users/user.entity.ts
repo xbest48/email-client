@@ -19,7 +19,7 @@ export class User {
   @Column({ default: false })
   isTwoFactorEnabled: boolean;
 
-  @Column({ nullable: true })
+  @Column({ type: 'text', nullable: true })
   currentChallenge?: string | null; // Used for WebAuthn
 
   @Column({ nullable: true })
