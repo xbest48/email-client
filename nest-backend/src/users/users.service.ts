@@ -30,7 +30,11 @@ export class UsersService {
   }
 
   async update(id: string, partial: Partial<User>): Promise<void> {
-    await this.usersRepository.update(id, partial);
+    const entries = Object.entries(partial).filter(([, value]) => value !== undefined);
+    if (entries.length === 0) {
+      return;
+    }
+    await this.usersRepository.update(id, Object.fromEntries(entries));
   }
 
   async saveCredential(credential: Partial<WebAuthnCredential>): Promise<WebAuthnCredential> {

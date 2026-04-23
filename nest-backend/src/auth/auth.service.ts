@@ -350,7 +350,7 @@ export class AuthService {
         user,
       });
 
-      await this.usersService.update(userId, { currentChallenge: undefined });
+      await this.usersService.update(userId, { currentChallenge: null });
       return { verified: true };
     }
 
@@ -442,7 +442,7 @@ export class AuthService {
     if (verification.verified && verification.authenticationInfo) {
       const { newCounter } = verification.authenticationInfo;
       await this.usersService.updateCredentialCounter(passkey.id, newCounter);
-      await this.usersService.update(user.id, { currentChallenge: undefined });
+      await this.usersService.update(user.id, { currentChallenge: null });
 
       if (user.isTwoFactorEnabled) {
         return { isTwoFactorRequired: true, temp_token: this.generateTemp2FAToken(user) };

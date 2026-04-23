@@ -20,7 +20,7 @@ export class User {
   isTwoFactorEnabled: boolean;
 
   @Column({ nullable: true })
-  currentChallenge?: string; // Used for WebAuthn
+  currentChallenge?: string | null; // Used for WebAuthn
 
   @Column({ nullable: true })
   refreshTokenHash?: string;
