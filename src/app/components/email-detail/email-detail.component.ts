@@ -171,6 +171,12 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.route.params.subscribe(async (params) => {
+      // Same guard as LayoutComponent / EmailListComponent: wait for the initial
+      // auth check to settle before making API calls so we don't spray 401s in
+      // the console when the browser restores a discarded tab after sleep.
+      await (this.authService.getInitialLoadPromise() ?? Promise.resolve());
+      if (!this.authService.isAuthenticated()) return;
+
       const folder = params['folder'];
       const uid = params['uid'];
 
@@ -756,13 +762,13 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     const escape = (value: string) => value.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
     const uid = typeof crypto !== 'undefined' && 'randomUUID' in crypto
       ? crypto.randomUUID()
-      : `mailflow-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      : `kyma-mail-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
     const mail = this.email();
     const ics = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
-      'PRODID:-//MailFlow//AI Action Items//FR',
+      'PRODID:-//KYMA Mail//AI Action Items//FR',
       'BEGIN:VEVENT',
       `UID:${uid}`,
       `DTSTAMP:${formatIcsDate(new Date())}`,

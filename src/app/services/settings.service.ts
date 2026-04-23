@@ -1,6 +1,7 @@
 import { Injectable, signal, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
+import { AuthService } from './auth.service';
 
 export interface EmailAccount {
   id: string;
@@ -62,12 +63,16 @@ const DEFAULT_SETTINGS: AppSettings = {
 @Injectable({ providedIn: 'root' })
 export class SettingsService {
   private readonly http = inject(HttpClient);
+  private readonly auth = inject(AuthService);
   readonly settings = signal<AppSettings>({ ...DEFAULT_SETTINGS });
 
   readonly loadPromise: Promise<void>;
+  private syncTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingServerSyncSettings: AppSettings | null = null;
 
   constructor() {
     this.applyAccentTheme(DEFAULT_SETTINGS.accentColor);
+    this.installSyncLifecycleHooks();
     this.loadPromise = this.load();
   }
 
@@ -101,7 +106,7 @@ export class SettingsService {
   update(partial: Partial<AppSettings>): void {
     this.settings.update((s) => {
       const updated = { ...s, ...partial };
-      this.save(updated);
+      this.saveAndSync(updated);
       return updated;
     });
   }
@@ -181,22 +186,25 @@ export class SettingsService {
 
   // --- Signatures ---
 
-  addSignature(signature: Omit<EmailSignature, 'id'>): void {
+  async addSignature(signature: Omit<EmailSignature, 'id'>): Promise<void> {
     const id = crypto.randomUUID();
-    const normalizedSignature = { ...signature, html: this.normalizeSignatureHtml(signature.html) };
+    const normalizedSignature = {
+      ...signature,
+      html: await this.prepareSignatureHtml(signature.html),
+    };
     this.settings.update((s) => {
       const sigs = normalizedSignature.isDefault
         ? s.signatures.map((sig) => ({ ...sig, isDefault: false }))
         : [...s.signatures];
       const updated = { ...s, signatures: [...sigs, { ...normalizedSignature, id }] };
-      this.save(updated);
+      this.saveAndSync(updated);
       return updated;
     });
   }
 
-  updateSignature(id: string, partial: Partial<EmailSignature>): void {
+  async updateSignature(id: string, partial: Partial<EmailSignature>): Promise<void> {
     const normalizedPartial = partial.html !== undefined
-      ? { ...partial, html: this.normalizeSignatureHtml(partial.html) }
+      ? { ...partial, html: await this.prepareSignatureHtml(partial.html) }
       : partial;
 
     this.settings.update((s) => {
@@ -205,7 +213,7 @@ export class SettingsService {
         sigs = sigs.map((sig) => ({ ...sig, isDefault: sig.id === id }));
       }
       const updated = { ...s, signatures: sigs };
-      this.save(updated);
+      this.saveAndSync(updated);
       return updated;
     });
   }
@@ -213,7 +221,7 @@ export class SettingsService {
   removeSignature(id: string): void {
     this.settings.update((s) => {
       const updated = { ...s, signatures: s.signatures.filter((sig) => sig.id !== id) };
-      this.save(updated);
+      this.saveAndSync(updated);
       return updated;
     });
   }
@@ -238,7 +246,7 @@ export class SettingsService {
     const id = crypto.randomUUID();
     this.settings.update((s) => {
       const updated = { ...s, templates: [...s.templates, { ...template, id }] };
-      this.save(updated);
+      this.saveAndSync(updated);
       return updated;
     });
   }
@@ -247,7 +255,7 @@ export class SettingsService {
     this.settings.update((s) => {
       const templates = s.templates.map((t) => (t.id === id ? { ...t, ...partial } : t));
       const updated = { ...s, templates };
-      this.save(updated);
+      this.saveAndSync(updated);
       return updated;
     });
   }
@@ -255,7 +263,7 @@ export class SettingsService {
   removeTemplate(id: string): void {
     this.settings.update((s) => {
       const updated = { ...s, templates: s.templates.filter((t) => t.id !== id) };
-      this.save(updated);
+      this.saveAndSync(updated);
       return updated;
     });
   }
@@ -283,39 +291,211 @@ export class SettingsService {
 
   private async load(): Promise<void> {
     let settings = { ...DEFAULT_SETTINGS };
+
+    // 1. Seed from localStorage so the UI has something to show immediately.
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        settings = { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
+        const parsed = JSON.parse(stored);
+        settings = { ...DEFAULT_SETTINGS, ...parsed };
         settings.signatures = (settings.signatures ?? []).map((sig) => ({
           ...sig,
           html: typeof sig.html === 'string' ? sig.html : '',
         }));
       }
-    } catch {
-      // ignore
+    } catch { /* ignore */ }
+
+    // 2. Wait for auth startup to settle before we hit protected endpoints.
+    // This avoids transient bootstrap races with token refresh.
+    await this.auth.getInitialLoadPromise();
+
+    if (!this.auth.getToken()) {
+      settings.signatures = await Promise.all(
+        (settings.signatures ?? []).map(async (sig) => ({
+          ...sig,
+          html: await this.prepareSignatureHtml(sig.html),
+        }))
+      );
+
+      this.settings.set(settings);
+      this.applyAccentTheme(settings.accentColor);
+      this.save(settings);
+      return;
     }
 
-    try {
-      const accounts = await firstValueFrom(this.http.get<EmailAccount[]>('/api/accounts'));
-      settings.accounts = accounts;
-    } catch (err) {
-      console.error('Failed to load accounts', err);
+    // 3. Fetch accounts and server-side app settings in parallel.
+    const [accountsResult, serverSettingsResult] = await Promise.allSettled([
+      this.loadAccountsWithRetry(),
+      firstValueFrom(this.http.get<Partial<AppSettings>>('/api/auth/app-settings')),
+    ]);
+
+    // Apply accounts (always authoritative on the server).
+    if (accountsResult.status === 'fulfilled') {
+      settings.accounts = accountsResult.value;
+    } else {
+      console.error('Failed to load accounts', accountsResult.reason);
       settings.accounts = [];
     }
 
+    // 4. Server app-settings override localStorage so changes made on any
+    //    browser are visible everywhere after the next login.
+    if (serverSettingsResult.status === 'fulfilled') {
+      const s = serverSettingsResult.value;
+      if (s && typeof s === 'object') {
+        if (Array.isArray(s.signatures)) settings.signatures = s.signatures;
+        if (Array.isArray(s.templates)) settings.templates = s.templates;
+        if (typeof s.accentColor === 'string' && s.accentColor) settings.accentColor = s.accentColor;
+        if (typeof s.pageSize === 'number' && s.pageSize > 0) settings.pageSize = s.pageSize;
+        if (typeof s.showFolders === 'boolean') settings.showFolders = s.showFolders;
+        if (typeof s.showLabelsSection === 'boolean') settings.showLabelsSection = s.showLabelsSection;
+      }
+    }
+
+    // 5. Normalise signature HTML (decode entities, compress images).
+    settings.signatures = await Promise.all(
+      (settings.signatures ?? []).map(async (sig) => ({
+        ...sig,
+        html: await this.prepareSignatureHtml(sig.html),
+      }))
+    );
+
     this.settings.set(settings);
     this.applyAccentTheme(settings.accentColor);
+
+    // 6. Persist to localStorage as a fast local cache.
+    this.save(settings);
+
+    // 7. If the server has no data yet (fresh account or first run with this
+    //    feature), migrate whatever is in localStorage up to the server so it
+    //    becomes available on the next login from any browser.
+    const serverHasData =
+      serverSettingsResult.status === 'fulfilled' &&
+      serverSettingsResult.value != null &&
+      (Array.isArray((serverSettingsResult.value as any).signatures) ||
+        Array.isArray((serverSettingsResult.value as any).templates));
+
+    const localHasData = this.hasServerSyncableSettings(settings);
+
+    if (!serverHasData && localHasData) {
+      this.scheduleSyncToServer(settings);
+    }
   }
 
+  /**
+   * Writes to localStorage only (fast, synchronous). Use this for the initial
+   * load where we don't want to echo data back to the server.
+   */
   private save(settings: AppSettings): void {
     try {
-      // We no longer save accounts to local storage
       const { accounts, ...settingsToSave } = settings;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(settingsToSave));
-    } catch {
-      // ignore
+    } catch { /* ignore */ }
+  }
+
+  private async loadAccountsWithRetry(): Promise<EmailAccount[]> {
+    try {
+      return await firstValueFrom(this.http.get<EmailAccount[]>('/api/accounts'));
+    } catch (error) {
+      if (!this.shouldRetryAccountsLoad(error)) {
+        throw error;
+      }
+
+      const refreshed = await this.auth.refreshAccessToken();
+      if (!refreshed) {
+        throw error;
+      }
+
+      return firstValueFrom(this.http.get<EmailAccount[]>('/api/accounts'));
     }
+  }
+
+  private shouldRetryAccountsLoad(error: unknown): boolean {
+    if (!(error instanceof HttpErrorResponse)) {
+      return false;
+    }
+
+    return error.status === 401 || error.status === 403 || error.status === 500;
+  }
+
+  /**
+   * Writes to localStorage AND schedules a debounced sync to the server so
+   * all browsers see the latest settings after a page reload. Call this from
+   * every user-initiated mutation (signature, template, UI preference change).
+   */
+  private saveAndSync(settings: AppSettings): void {
+    this.save(settings);
+    this.scheduleSyncToServer(settings);
+  }
+
+  private scheduleSyncToServer(settings: AppSettings): void {
+    this.pendingServerSyncSettings = { ...settings, accounts: [...settings.accounts] };
+    if (this.syncTimer !== null) clearTimeout(this.syncTimer);
+    this.syncTimer = setTimeout(() => {
+      this.syncTimer = null;
+      void this.flushPendingSync();
+    }, 400);
+  }
+
+  private async flushPendingSync(): Promise<void> {
+    const settings = this.pendingServerSyncSettings;
+    if (!settings || !this.auth.getToken()) return;
+
+    this.pendingServerSyncSettings = null;
+    const { accounts, ...settingsToSave } = settings;
+
+    try {
+      await firstValueFrom(
+        this.http.put<{ success: boolean }>('/api/auth/app-settings', settingsToSave),
+      );
+    } catch (error) {
+      console.error('Failed to sync app settings to server', error);
+      this.pendingServerSyncSettings = settings;
+    }
+  }
+
+  private installSyncLifecycleHooks(): void {
+    if (typeof document === 'undefined' || typeof window === 'undefined') return;
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        this.flushPendingSyncWithKeepalive();
+      }
+    });
+
+    window.addEventListener('beforeunload', () => {
+      this.flushPendingSyncWithKeepalive();
+    });
+  }
+
+  private flushPendingSyncWithKeepalive(): void {
+    const settings = this.pendingServerSyncSettings;
+    const token = this.auth.getToken();
+    if (!settings || !token) return;
+
+    const { accounts, ...settingsToSave } = settings;
+    this.pendingServerSyncSettings = null;
+
+    void fetch('/api/auth/app-settings', {
+      method: 'PUT',
+      keepalive: true,
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(settingsToSave),
+    }).catch(() => {
+      this.pendingServerSyncSettings = settings;
+    });
+  }
+
+  private hasServerSyncableSettings(settings: AppSettings): boolean {
+    return settings.pageSize !== DEFAULT_SETTINGS.pageSize
+      || settings.showFolders !== DEFAULT_SETTINGS.showFolders
+      || settings.showLabelsSection !== DEFAULT_SETTINGS.showLabelsSection
+      || settings.accentColor !== DEFAULT_SETTINGS.accentColor
+      || settings.signatures.length > 0
+      || settings.templates.length > 0;
   }
 
   private normalizeEmbeddedDataImageUrls(html: string): string {
@@ -342,6 +522,97 @@ export class SettingsService {
 
   private normalizeSignatureHtml(html: string): string {
     return this.normalizeEmbeddedDataImageUrls(this.decodeEscapedHtmlIfNeeded(html));
+  }
+
+  private async prepareSignatureHtml(html: string): Promise<string> {
+    const normalizedHtml = this.normalizeSignatureHtml(html);
+    return this.optimizeEmbeddedSignatureImages(normalizedHtml);
+  }
+
+  private async optimizeEmbeddedSignatureImages(html: string): Promise<string> {
+    if (!html || !/data:image\//i.test(html)) return html;
+
+    const template = document.createElement('template');
+    template.innerHTML = html;
+
+    const images = Array.from(template.content.querySelectorAll<HTMLImageElement>('img[src^="data:image/"]'));
+    for (const image of images) {
+      const optimizedSrc = await this.optimizeEmbeddedSignatureImage(image);
+      if (optimizedSrc) {
+        image.setAttribute('src', optimizedSrc);
+      }
+    }
+
+    return template.innerHTML;
+  }
+
+  private async optimizeEmbeddedSignatureImage(image: HTMLImageElement): Promise<string | null> {
+    const src = image.getAttribute('src')?.trim();
+    if (!src) return null;
+    if (!/^data:image\/[^;]+;base64,/i.test(src)) return null;
+    if (src.length < 100_000) return null;
+
+    try {
+      const loadedImage = await this.loadDataUrlImage(src);
+      const naturalWidth = loadedImage.naturalWidth || loadedImage.width;
+      const naturalHeight = loadedImage.naturalHeight || loadedImage.height;
+      if (!naturalWidth || !naturalHeight) return null;
+
+      const declaredWidth = this.extractDeclaredImageWidth(image);
+      const maxWidth = declaredWidth
+        ? Math.max(Math.round(declaredWidth * 2), declaredWidth)
+        : 1200;
+      const targetWidth = Math.min(naturalWidth, Math.max(600, maxWidth));
+      if (naturalWidth <= targetWidth && src.length < 180_000) return null;
+
+      const scale = targetWidth / naturalWidth;
+      const targetHeight = Math.max(1, Math.round(naturalHeight * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+
+      const context = canvas.getContext('2d');
+      if (!context) return null;
+
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = 'high';
+      context.drawImage(loadedImage, 0, 0, targetWidth, targetHeight);
+
+      const mimeMatch = src.match(/^data:(image\/[^;]+);base64,/i);
+      const mimeType = mimeMatch?.[1]?.toLowerCase() ?? 'image/png';
+      const optimizedSrc = canvas.toDataURL(mimeType);
+      return optimizedSrc.length < src.length ? optimizedSrc : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private extractDeclaredImageWidth(image: HTMLImageElement): number | null {
+    const widthAttr = image.getAttribute('width');
+    const numericAttrWidth = widthAttr ? Number.parseInt(widthAttr, 10) : Number.NaN;
+    if (Number.isFinite(numericAttrWidth) && numericAttrWidth > 0) {
+      return numericAttrWidth;
+    }
+
+    const styleValue = image.style.width || image.style.maxWidth;
+    const styleMatch = styleValue.match(/(\d+(?:\.\d+)?)px/i);
+    if (styleMatch) {
+      const parsed = Number.parseFloat(styleMatch[1]);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed;
+      }
+    }
+
+    return null;
+  }
+
+  private loadDataUrlImage(src: string): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error('Image load failed'));
+      image.src = src;
+    });
   }
 
   private decodeEscapedHtmlIfNeeded(html: string): string {

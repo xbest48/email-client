@@ -1,6 +1,6 @@
 {
-  "name": "MailFlow - Client Email",
-  "short_name": "MailFlow",
+  "name": "KYMA Mail - Client Email",
+  "short_name": "KYMA Mail",
   "description": "Client email rapide et moderne avec filtrage avance",
   "start_url": "/",
   "display": "standalone",

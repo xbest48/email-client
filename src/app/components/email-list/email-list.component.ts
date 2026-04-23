@@ -188,6 +188,12 @@ export class EmailListComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.route.params.subscribe(async (params) => {
+      // Wait for the initial auth check (including any token refresh) to settle
+      // before firing API calls — prevents 401 noise on tab-discard restore, the
+      // same guard applied in LayoutComponent.ngOnInit().
+      await (this.authService.getInitialLoadPromise() ?? Promise.resolve());
+      if (!this.authService.isAuthenticated()) return;
+
       const label = params['label'] ?? 'inbox';
       const folderParam = params['folder'];
 
@@ -381,7 +387,7 @@ export class EmailListComponent implements OnInit, OnDestroy {
   async bulkTrash(): Promise<void> {
     const ids = this.selectedIds();
     const emailsToTrash = this.visibleEmails().filter((e) => ids.has(this.emailKey(e)));
-    this.emailService.bulkTrashInBackground(emailsToTrash);
+    await this.emailService.bulkTrashInBackground(emailsToTrash);
     this.selectedIds.set(new Set());
     await this.refillVisibleEmails();
   }
@@ -389,7 +395,7 @@ export class EmailListComponent implements OnInit, OnDestroy {
   async bulkSpam(): Promise<void> {
     const ids = this.selectedIds();
     const emailsToSpam = this.visibleEmails().filter((e) => ids.has(this.emailKey(e)));
-    this.emailService.bulkSpamInBackground(emailsToSpam);
+    await this.emailService.bulkSpamInBackground(emailsToSpam);
     this.selectedIds.set(new Set());
     await this.refillVisibleEmails();
   }
@@ -397,7 +403,7 @@ export class EmailListComponent implements OnInit, OnDestroy {
   async bulkNotSpam(): Promise<void> {
     const ids = this.selectedIds();
     const emailsToRestore = this.visibleEmails().filter((e) => ids.has(this.emailKey(e)));
-    this.emailService.bulkNotSpamInBackground(emailsToRestore);
+    await this.emailService.bulkNotSpamInBackground(emailsToRestore);
     this.selectedIds.set(new Set());
     await this.refillVisibleEmails();
   }

@@ -9,6 +9,10 @@ import {
   OnDestroy,
   effect,
 } from '@angular/core';
+import {
+  restoreTokenizedEmbeddedDataImageHtml,
+  tokenizeEmbeddedDataImageHtml,
+} from '../../utils/embedded-data-image-html';
 
 export type EditorToolbarPosition = 'top' | 'bottom';
 
@@ -177,7 +181,11 @@ export class RichEditorComponent implements OnDestroy {
 
   private renderEditorContent(editor: HTMLDivElement, bodyHtml: string): void {
     const preparedBodyHtml = this.prepareHtmlForRendering(bodyHtml).trim();
-    editor.innerHTML = preparedBodyHtml || '<div><br></div>';
+    editor.replaceChildren();
+
+    const tokenizedBody = tokenizeEmbeddedDataImageHtml(preparedBodyHtml || '<div><br></div>');
+    editor.innerHTML = tokenizedBody.html;
+    restoreTokenizedEmbeddedDataImageHtml(editor, tokenizedBody.tokens);
 
     const footerHtml = this.footerHtml();
     if (!footerHtml) return;
@@ -192,8 +200,15 @@ export class RichEditorComponent implements OnDestroy {
     editor.appendChild(footerRoot);
 
     const shadowRoot = footerHost.attachShadow({ mode: 'open' });
-    shadowRoot.innerHTML =
-      `<div style="width:100%;overflow-x:auto;overflow-wrap:break-word">${this.prepareHtmlForRendering(footerHtml)}</div>`;
+    const footerContainer = document.createElement('div');
+    footerContainer.style.width = '100%';
+    footerContainer.style.overflowX = 'auto';
+    footerContainer.style.overflowWrap = 'break-word';
+
+    const tokenizedFooter = tokenizeEmbeddedDataImageHtml(this.prepareHtmlForRendering(footerHtml));
+    footerContainer.innerHTML = tokenizedFooter.html;
+    restoreTokenizedEmbeddedDataImageHtml(footerContainer, tokenizedFooter.tokens);
+    shadowRoot.replaceChildren(footerContainer);
   }
 
   private prepareHtmlForRendering(html: string): string {

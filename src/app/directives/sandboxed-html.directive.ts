@@ -1,6 +1,10 @@
 import { Directive, ElementRef, inject, input, effect } from '@angular/core';
 import { AuthService } from '../services/auth.service';
 import { ThemeService } from '../services/theme.service';
+import {
+  restoreTokenizedEmbeddedDataImageHtml,
+  tokenizeEmbeddedDataImageHtml,
+} from '../utils/embedded-data-image-html';
 
 @Directive({
   selector: '[appSandboxedHtml]',
@@ -26,10 +30,17 @@ export class SandboxedHtmlDirective {
       const dark = this.theme.isDark();
       const mode = this.auth.user()?.darkEmailRendering ?? 'force-dark';
       if (html) {
-        this.shadowRoot.innerHTML = `
-          <style>${this.baseStyles(dark, mode)}</style>
-          <div class="email-body">${this.prepareHtmlForRendering(html)}</div>
-        `;
+        const style = document.createElement('style');
+        style.textContent = this.baseStyles(dark, mode);
+
+        const container = document.createElement('div');
+        container.className = 'email-body';
+        const rendered = this.prepareHtmlForRendering(html);
+        const tokenized = tokenizeEmbeddedDataImageHtml(rendered);
+        container.innerHTML = tokenized.html;
+        restoreTokenizedEmbeddedDataImageHtml(container, tokenized.tokens);
+
+        this.shadowRoot.replaceChildren(style, container);
       } else {
         this.shadowRoot.innerHTML = '';
       }

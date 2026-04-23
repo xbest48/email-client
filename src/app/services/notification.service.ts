@@ -21,7 +21,7 @@ export interface NotifyOptions {
  * Thin wrapper around the Web Notification API.
  *
  * Why not Push API? Push requires a VAPID-keyed backend push server and a
- * service worker subscription per user. MailFlow has no event bus yet, so the
+ * service worker subscription per user. KYMA Mail has no event bus yet, so the
  * incremental gain doesn't justify the complexity. The plain Notification API
  * works great as long as the tab is open, which is the common case for a web
  * mail client running in a pinned tab.
@@ -147,10 +147,10 @@ export class NotificationService {
       };
     }
     try {
-      const n = new Notification('MailFlow — Notification de test', {
+      const n = new Notification('KYMA Mail — Notification de test', {
         body: 'Vous êtes bien configuré : les notifications bureau fonctionnent.',
         icon: NotificationService.DEFAULT_ICON,
-        tag: 'mailflow-test',
+        tag: 'kyma-mail-test',
       });
       n.onclick = () => {
         try { window.focus(); } catch { /* noop */ }

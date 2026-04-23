@@ -52,7 +52,16 @@ export class LayoutComponent implements OnInit, OnDestroy {
     });
   }
 
-  ngOnInit(): void {
+  async ngOnInit(): Promise<void> {
+    // Wait for the initial auth check to settle before firing any API calls.
+    // Without this, fetchFolders / fetchLabels / etc. race with an in-flight
+    // token refresh (triggered when the tab is restored after sleep or a
+    // browser tab-discard cycle), hit the server with an expired access token,
+    // and produce a flood of 401 errors in the console — even though the
+    // interceptor would have retried them successfully after the refresh.
+    await (this.auth.getInitialLoadPromise() ?? Promise.resolve());
+    if (!this.auth.isAuthenticated()) return;
+
     this.emailService.fetchFolders();
     this.labelService.fetchLabels();
     this.snoozeService.fetchCount();

@@ -1,16 +1,18 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { HttpClient, HttpParams, HttpHeaders, HttpEventType, HttpResponse } from '@angular/common/http';
+import { HttpClient, HttpParams, HttpHeaders, HttpEventType, HttpResponse, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom, timeout } from 'rxjs';
 import { environment } from '../environments/environment';
 import { Email, ImapFolder, FolderStatus, EmailListResponse } from '../models/email.model';
 import { SettingsService } from './settings.service';
 import { OfflineService } from './offline.service';
+import { ToastService } from './toast.service';
 
 @Injectable({ providedIn: 'root' })
 export class EmailService {
   private readonly http = inject(HttpClient);
   private readonly settingsService = inject(SettingsService);
   private readonly offlineService = inject(OfflineService);
+  private readonly toastService = inject(ToastService);
   private readonly apiUrl = environment.apiUrl;
 
   readonly loading = signal(false);
@@ -22,6 +24,7 @@ export class EmailService {
   readonly currentPage = signal(1);
   readonly savedScrollState = signal<{ folder: string; scrollTop: number } | null>(null);
   readonly savedListState = signal<{ folder: string; query: string; page: number } | null>(null);
+  readonly blockedMailboxAccountId = signal<string | null>(null);
   /**
    * One-shot hint used to pre-fill the compose modal (currently only the
    * recipient). Setting it opens the modal via an effect in LayoutComponent,
@@ -33,6 +36,11 @@ export class EmailService {
 
   private trashFolder = '';
   private fetchRequestId = 0;
+  // Guard: only one status-fetch batch can run at a time. Concurrent callers
+  // (e.g. LayoutComponent + EmailListComponent both calling fetchFolders on
+  // init) reuse the same promise instead of spawning duplicate request storms
+  // that trip the backend's rate limiter.
+  private statusFetchPromise: Promise<void> | null = null;
 
   private getSpecialFolderPath(specialUse: string): string | null {
     return this.folders().find((folder) => folder.specialUse === specialUse)?.path ?? null;
@@ -58,13 +66,26 @@ export class EmailService {
   }
 
 
+  private folderFetchPromise: Promise<void> | null = null;
+
   async fetchFolders(): Promise<void> {
+    // Deduplicate: layout and email-list both call this on init; we should
+    // only hit the server once.
+    if (this.folderFetchPromise) return this.folderFetchPromise;
+    this.folderFetchPromise = this.doFetchFolders().finally(() => {
+      this.folderFetchPromise = null;
+    });
+    return this.folderFetchPromise;
+  }
+
+  private async doFetchFolders(): Promise<void> {
     await this.settingsService.loadPromise;
-    if (!this.settingsService.activeAccountId()) return;
+    if (!this.getActiveUsableAccountId()) return;
     try {
       const folders = await firstValueFrom(
         this.http.get<ImapFolder[]>(`${this.apiUrl}/folders`, { headers: this.getHeaders(), withCredentials: true })
       );
+      this.clearMailboxCredentialError(this.settingsService.activeAccountId());
       this.folders.set(folders);
       this.offlineService.cacheFolders(folders);
 
@@ -74,19 +95,44 @@ export class EmailService {
       );
       if (trash) this.trashFolder = trash.path;
 
-      // Fetch statuses for important folders
+      // Fetch statuses for important folders only (avoids 429s)
       this.fetchFolderStatuses(folders);
     } catch (err) {
-      console.error('Failed to fetch folders', err);
+      if (!this.handleUnreadableMailboxPassword(err)) {
+        console.error('Failed to fetch folders', err);
+      }
       // Fallback to cached folders
       const cached = await this.offlineService.getCachedFolders();
       if (cached.length) this.folders.set(cached);
     }
   }
 
-  private async fetchFolderStatuses(folders: ImapFolder[]): Promise<void> {
-    const statusMap = new Map<string, FolderStatus>();
-    for (const folder of folders) {
+  private fetchFolderStatuses(folders: ImapFolder[]): void {
+    // Deduplicate: if a batch is already running, skip. Two callers (layout +
+    // email-list) often race on startup and together would fire N×2 requests.
+    if (this.statusFetchPromise) return;
+    this.statusFetchPromise = this.doFetchFolderStatuses(folders).finally(() => {
+      this.statusFetchPromise = null;
+    });
+  }
+
+  private async doFetchFolderStatuses(folders: ImapFolder[]): Promise<void> {
+    if (!this.getActiveUsableAccountId()) return;
+    // Only fetch statuses for the folders that the sidebar actually shows an
+    // unread badge for (system / special-use folders). Fetching every folder
+    // (potentially 30+) in a tight sequential loop reliably triggers the
+    // backend rate-limiter (429) and the IMAP server's own connection limits.
+    const SPECIAL_USE_PRIORITY = new Set([
+      '\\Inbox', '\\Drafts', '\\Sent', '\\Trash', '\\Junk',
+    ]);
+    const important = folders.filter(
+      (f) =>
+        (f.specialUse && SPECIAL_USE_PRIORITY.has(f.specialUse)) ||
+        f.path.toLowerCase() === 'inbox',
+    );
+
+    const statusMap = new Map(this.folderStatuses());
+    for (const folder of important) {
       try {
         const status = await firstValueFrom(
           this.http.get<FolderStatus>(
@@ -95,8 +141,11 @@ export class EmailService {
           )
         );
         statusMap.set(folder.path, status);
-      } catch {
-        // skip
+      } catch (err) {
+        if (this.handleUnreadableMailboxPassword(err)) {
+          return;
+        }
+        // skip — a missing status just means no badge for that folder
       }
     }
     this.folderStatuses.set(statusMap);
@@ -104,7 +153,7 @@ export class EmailService {
 
   async fetchEmails(folder: string, query = '', page = 1): Promise<void> {
     await this.settingsService.loadPromise;
-    if (!this.settingsService.activeAccountId()) {
+    if (!this.getActiveUsableAccountId()) {
       this.currentEmails.set([]);
       this.currentTotal.set(0);
       this.loading.set(false);
@@ -127,6 +176,7 @@ export class EmailService {
       );
 
       if (requestId !== this.fetchRequestId) return;
+      this.clearMailboxCredentialError(this.settingsService.activeAccountId());
 
       if (page > 1) {
         this.currentEmails.update((prev) => {
@@ -141,7 +191,9 @@ export class EmailService {
       this.currentPage.set(page);
       this.offlineService.cacheEmails(folder, res.emails);
     } catch (err) {
-      console.error('Failed to fetch emails', err);
+      if (!this.handleUnreadableMailboxPassword(err)) {
+        console.error('Failed to fetch emails', err);
+      }
       if (requestId !== this.fetchRequestId) return;
       if (page === 1) {
         const cached = await this.offlineService.getCachedEmails(folder);
@@ -161,7 +213,7 @@ export class EmailService {
   }
 
   async fetchEmail(folder: string, uid: number): Promise<Email | null> {
-    if (!this.settingsService.activeAccountId()) return null;
+    if (!this.getActiveUsableAccountId()) return null;
     try {
       const email = await firstValueFrom(
         this.http.get<Email>(
@@ -169,10 +221,13 @@ export class EmailService {
           { headers: this.getHeaders(), withCredentials: true }
         )
       );
+      this.clearMailboxCredentialError(this.settingsService.activeAccountId());
       if (email) this.offlineService.cacheEmail(email);
       return email;
     } catch (err) {
-      console.error('Failed to fetch email', err);
+      if (!this.handleUnreadableMailboxPassword(err)) {
+        console.error('Failed to fetch email', err);
+      }
       return this.offlineService.getCachedEmail(folder, uid);
     }
   }
@@ -266,7 +321,7 @@ export class EmailService {
     }
   }
 
-  bulkTrashInBackground(emails: Email[]): void {
+  async bulkTrashInBackground(emails: Email[]): Promise<void> {
     const keys = new Set(emails.map(e => `${e.folder}:${e.uid}`));
     this.currentEmails.update(list => list.filter(e => !keys.has(`${e.folder}:${e.uid}`)));
     this.currentTotal.update((total) => Math.max(0, total - keys.size));
@@ -274,8 +329,9 @@ export class EmailService {
       this.selectedEmail.set(null);
     }
     this.adjustFolderStatusesForBulkMove(emails, this.trashFolder || null);
-    for (const email of emails) {
-      const promise = this.trashFolder
+    await this.runBulkRequests(
+      emails,
+      (email) => this.trashFolder
         ? firstValueFrom(
             this.http.post(
               `${this.apiUrl}/email/${encodeURIComponent(email.folder)}/${email.uid}/move`,
@@ -288,16 +344,16 @@ export class EmailService {
               `${this.apiUrl}/email/${encodeURIComponent(email.folder)}/${email.uid}`,
               { headers: this.getHeaders(), withCredentials: true }
             )
-          );
-      promise.catch(err => console.error('Background trash failed', err));
-    }
+          ),
+      'Background trash failed',
+    );
   }
 
-  bulkSpamInBackground(emails: Email[]): void {
+  async bulkSpamInBackground(emails: Email[]): Promise<void> {
     const junkFolder = this.getSpecialFolderPath('\\Junk');
     if (!junkFolder) {
       console.error('Background spam failed', new Error('Dossier Spam introuvable'));
-      return;
+      return Promise.resolve();
     }
     const keys = new Set(emails.map(e => `${e.folder}:${e.uid}`));
     this.currentEmails.update(list => list.filter(e => !keys.has(`${e.folder}:${e.uid}`)));
@@ -306,18 +362,20 @@ export class EmailService {
       this.selectedEmail.set(null);
     }
     this.adjustFolderStatusesForBulkMove(emails, junkFolder);
-    for (const email of emails) {
-      firstValueFrom(
+    await this.runBulkRequests(
+      emails,
+      (email) => firstValueFrom(
         this.http.post(
           `${this.apiUrl}/email/${encodeURIComponent(email.folder)}/${email.uid}/move`,
           { destination: junkFolder },
           { headers: this.getHeaders(), withCredentials: true }
         )
-      ).catch(err => console.error('Background spam failed', err));
-    }
+      ),
+      'Background spam failed',
+    );
   }
 
-  bulkNotSpamInBackground(emails: Email[]): void {
+  async bulkNotSpamInBackground(emails: Email[]): Promise<void> {
     const inboxFolder = this.getInboxFolderPath();
     const keys = new Set(emails.map(e => `${e.folder}:${e.uid}`));
     this.currentEmails.update(list => list.filter(e => !keys.has(`${e.folder}:${e.uid}`)));
@@ -326,15 +384,17 @@ export class EmailService {
       this.selectedEmail.set(null);
     }
     this.adjustFolderStatusesForBulkMove(emails, inboxFolder);
-    for (const email of emails) {
-      firstValueFrom(
+    await this.runBulkRequests(
+      emails,
+      (email) => firstValueFrom(
         this.http.post(
           `${this.apiUrl}/email/${encodeURIComponent(email.folder)}/${email.uid}/move`,
           { destination: inboxFolder },
           { headers: this.getHeaders(), withCredentials: true }
         )
-      ).catch(err => console.error('Background not-spam failed', err));
-    }
+      ),
+      'Background not-spam failed',
+    );
   }
 
   readonly pendingSends = signal<{ id: string; to: string; subject: string; timeoutId: any; cancel: () => void }[]>([]);
@@ -547,15 +607,27 @@ export class EmailService {
   }
 
   async fetchThread(folder: string, uid: number): Promise<Email[]> {
+    if (!this.getActiveUsableAccountId()) return [];
     try {
-      return await firstValueFrom(
+      const thread = await firstValueFrom(
         this.http.get<Email[]>(
           `${this.apiUrl}/email/${encodeURIComponent(folder)}/${uid}/thread`,
           { headers: this.getHeaders(), withCredentials: true }
         )
       );
-    } catch {
+      this.clearMailboxCredentialError(this.settingsService.activeAccountId());
+      return thread;
+    } catch (err) {
+      this.handleUnreadableMailboxPassword(err);
       return [];
+    }
+  }
+
+  clearMailboxCredentialError(accountId?: string | null): void {
+    const blockedAccountId = this.blockedMailboxAccountId();
+    if (!blockedAccountId) return;
+    if (!accountId || blockedAccountId === accountId) {
+      this.blockedMailboxAccountId.set(null);
     }
   }
 
@@ -639,5 +711,66 @@ export class EmailService {
       });
       return next;
     });
+  }
+
+  private async runBulkRequests(
+    emails: Email[],
+    task: (email: Email) => Promise<unknown>,
+    errorLabel: string,
+  ): Promise<void> {
+    const concurrency = 4;
+    let index = 0;
+
+    const worker = async () => {
+      while (index < emails.length) {
+        const currentIndex = index;
+        index += 1;
+        const email = emails[currentIndex];
+        try {
+          await task(email);
+        } catch (err) {
+          console.error(errorLabel, err);
+        }
+      }
+    };
+
+    const workerCount = Math.min(concurrency, emails.length);
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  }
+
+  private getActiveUsableAccountId(): string | null {
+    const accountId = this.settingsService.activeAccountId();
+    if (!accountId) return null;
+    if (this.blockedMailboxAccountId() === accountId) return null;
+    return accountId;
+  }
+
+  private handleUnreadableMailboxPassword(err: unknown): boolean {
+    if (!this.isUnreadableMailboxPasswordError(err)) return false;
+
+    const accountId = this.settingsService.activeAccountId();
+    if (accountId && this.blockedMailboxAccountId() !== accountId) {
+      this.blockedMailboxAccountId.set(accountId);
+      this.toastService.show(
+        'error',
+        'Le mot de passe de ce compte email doit etre saisi a nouveau dans Parametres > Comptes.',
+      );
+    }
+    return true;
+  }
+
+  private isUnreadableMailboxPasswordError(err: unknown): err is HttpErrorResponse {
+    if (!(err instanceof HttpErrorResponse) || err.status !== 401) return false;
+
+    const backendMessage = typeof err.error === 'string'
+      ? err.error
+      : typeof err.error?.message === 'string'
+        ? err.error.message
+        : '';
+    const combinedMessage = `${err.message ?? ''} ${backendMessage}`.toLowerCase();
+
+    return combinedMessage.includes('mot de passe du compte email est illisible')
+      || combinedMessage.includes('veuillez le saisir a nouveau')
+      || combinedMessage.includes('veuillez le saisir à nouveau');
   }
 }

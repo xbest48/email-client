@@ -5,19 +5,19 @@
       <app-kyma-logo class="block h-10 w-auto mb-10" aria-label="Kyma"></app-kyma-logo>
 
       <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
-        Sign in to your account
+        Connectez-vous a votre compte
       </h1>
       <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-        Not a member?
+        Vous n'avez pas encore de compte ?
         <a routerLink="/register" class="font-semibold text-amber-600 hover:text-amber-500 dark:text-amber-400 dark:hover:text-amber-300">
-          Start a 14 day free trial
+          Demarrer un essai gratuit de 14 jours
         </a>
       </p>
 
       <form class="mt-10" (submit)="$event.preventDefault(); onSignIn()">
         <div class="mb-5">
           <label for="login-email" class="block text-sm font-medium text-gray-900 dark:text-gray-200 mb-2">
-            Email address
+            Adresse e-mail
           </label>
           <input
             id="login-email"
@@ -35,7 +35,7 @@
 
         <div class="mb-5">
           <label for="login-password" class="block text-sm font-medium text-gray-900 dark:text-gray-200 mb-2">
-            Password
+            Mot de passe
           </label>
           <input
             id="login-password"
@@ -78,10 +78,10 @@
               name="rememberMe"
               class="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-amber-600
                      focus:ring-2 focus:ring-amber-500 bg-white dark:bg-gray-900">
-            <span class="text-sm text-gray-700 dark:text-gray-300">Remember me</span>
+            <span class="text-sm text-gray-700 dark:text-gray-300">Se souvenir de moi</span>
           </label>
           <a href="#" class="text-sm font-semibold text-amber-600 hover:text-amber-500 dark:text-amber-400 dark:hover:text-amber-300">
-            Forgot password?
+            Mot de passe oublie ?
           </a>
         </div>
 
@@ -104,7 +104,7 @@
             <div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
             <span>Connexion...</span>
           } @else {
-            <span>{{ requires2FA() ? 'Verifier le code' : 'Sign in' }}</span>
+            <span>{{ requires2FA() ? 'Verifier le code' : 'Se connecter' }}</span>
           }
         </button>
 
@@ -132,7 +132,7 @@
           </div>
           <div class="relative flex justify-center text-xs">
             <span class="bg-white dark:bg-gray-950 px-3 text-gray-500 dark:text-gray-400">
-              Or continue with
+              Ou continuer avec
             </span>
           </div>
         </div>
@@ -200,7 +200,7 @@
   <!-- Right: illustration -->
   <div class="hidden lg:block lg:w-1/2 relative">
     <img
-      src="login-illustration.svg"
+      src="photo-bureau.avif"
       alt=""
       aria-hidden="true"
       class="absolute inset-0 h-full w-full object-cover">

@@ -11,7 +11,7 @@ export interface DeviceContext {
 
 /**
  * Sends security notifications (currently: "new login from unknown device").
- * Uses the user's own SMTP account because MailFlow has no server-side
+ * Uses the user's own SMTP account because KYMA Mail has no server-side
  * transactional mailer. If the user has no account yet we silently skip.
  */
 @Injectable()
@@ -101,10 +101,10 @@ export class SecurityNotificationService {
       },
       {
         to: user.email,
-        subject: 'Nouvelle connexion à votre compte MailFlow',
+        subject: 'Nouvelle connexion à votre compte KYMA Mail',
         text,
         html,
-        senderName: 'MailFlow Security',
+        senderName: 'KYMA Mail Security',
       },
     );
 
@@ -170,20 +170,20 @@ export class SecurityNotificationService {
 
     const text =
       'Bonjour,\n\n' +
-      "Une connexion à votre compte MailFlow vient d'être effectuée depuis un appareil que nous ne reconnaissons pas.\n\n" +
+      "Une connexion à votre compte KYMA Mail vient d'être effectuée depuis un appareil que nous ne reconnaissons pas.\n\n" +
       `Date : ${date}\n` +
       `Navigateur / appareil : ${userAgent}\n` +
       `Adresse IP : ${ip}\n\n` +
       "Si c'était vous, aucune action n'est nécessaire.\n" +
       "Si ce n'était PAS vous, changez immédiatement votre mot de passe et révoquez cette session depuis :\n" +
       '  Paramètres → Sécurité → Appareils connectés.\n\n' +
-      "— L'équipe MailFlow";
+      "— L'équipe KYMA Mail";
 
     const html = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: auto; color: #222;">
         <h2 style="margin: 0 0 16px;">Nouvelle connexion détectée</h2>
         <p>Bonjour,</p>
-        <p>Une connexion à votre compte MailFlow vient d'être effectuée depuis un appareil que nous ne reconnaissons pas.</p>
+        <p>Une connexion à votre compte KYMA Mail vient d'être effectuée depuis un appareil que nous ne reconnaissons pas.</p>
         <table style="border-collapse: collapse; margin: 12px 0;">
           <tr><td style="padding: 4px 8px; color:#666;">Date</td><td style="padding: 4px 8px;"><strong>${this.escape(date)}</strong></td></tr>
           <tr><td style="padding: 4px 8px; color:#666;">Navigateur / appareil</td><td style="padding: 4px 8px;"><strong>${this.escape(userAgent)}</strong></td></tr>
@@ -194,7 +194,7 @@ export class SecurityNotificationService {
           Si ce n'était <strong>pas</strong> vous, changez immédiatement votre mot de passe et révoquez cette session depuis
           <em>Paramètres → Sécurité → Appareils connectés</em>.
         </p>
-        <p style="color:#888; font-size: 0.85em; margin-top: 24px;">— L'équipe MailFlow</p>
+        <p style="color:#888; font-size: 0.85em; margin-top: 24px;">— L'équipe KYMA Mail</p>
       </div>
     `;
 

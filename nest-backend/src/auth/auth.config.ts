@@ -63,7 +63,7 @@ export interface WebAuthnConfig {
 }
 
 export function getWebAuthnConfig(): WebAuthnConfig {
-  const rpName = process.env.WEBAUTHN_RP_NAME || 'MailFlow';
+  const rpName = process.env.WEBAUTHN_RP_NAME || 'KYMA Mail';
   const rpID = process.env.WEBAUTHN_RP_ID || 'localhost';
   const originsEnv = process.env.WEBAUTHN_ORIGINS
     || process.env.WEBAUTHN_ORIGIN

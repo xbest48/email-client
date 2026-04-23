@@ -1,4 +1,4 @@
-# MailFlow — Email Client
+# KYMA Mail — Email Client
 
 A full-stack IMAP/SMTP email client with Passkeys / WebAuthn authentication,
 2FA (TOTP), PGP encryption, AI-assisted reading/writing and per-account
@@ -65,7 +65,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 | `JWT_REFRESH_SECRET` | **yes (prod)** | falls back to `JWT_SECRET` in dev | Signing key for refresh tokens. Use a **different** value than `JWT_SECRET` so leaking one doesn't compromise the other. |
 | `BCRYPT_ROUNDS` | no | `12` | Bcrypt cost factor for password and refresh-token hashing. Valid range: `10`..`15`. Higher is safer but slower on login. |
 | `CORS_ORIGINS` | no | `http://localhost:4200,http://localhost:4000` | Comma-separated list of origins allowed to call the API with credentials. Must include the frontend's exact origin because the refresh cookie is `SameSite=Strict`. |
-| `WEBAUTHN_RP_NAME` | no | `MailFlow` | Human-readable relying-party name displayed in the OS credential dialog. |
+| `WEBAUTHN_RP_NAME` | no | `KYMA Mail` | Human-readable relying-party name displayed in the OS credential dialog. |
 | `WEBAUTHN_RP_ID` | no | `localhost` | WebAuthn relying-party ID. Must be the registrable domain (e.g. `example.com`, not `https://mail.example.com`). In production, `localhost` is refused. |
 | `WEBAUTHN_ORIGINS` | no | `http://<RP_ID>:4200` | Comma-separated list of full origins accepted during passkey ceremonies. In production all entries must use `https://`. |
 | `SMTP_ALLOW_INVALID_CERTS` | no | `false` | Set to `true` to keep the previous permissive TLS behaviour (accept self-signed certs from the user's SMTP server). Leave `false` for real providers. |

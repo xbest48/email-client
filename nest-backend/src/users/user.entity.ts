@@ -76,6 +76,15 @@ export class User {
   @Column({ default: 'force-dark' })
   darkEmailRendering: 'preserve' | 'force-dark';
 
+  /**
+   * JSON-encoded AppSettings subset (signatures, templates, accentColor,
+   * pageSize, showFolders, showLabelsSection). Stored as a TEXT blob so the
+   * frontend can sync arbitrary UI preferences without requiring DB migrations
+   * for each new field.  Accounts are excluded — they have their own table.
+   */
+  @Column({ type: 'text', nullable: true })
+  appSettings?: string;
+
   @OneToMany(() => Account, account => account.user)
   accounts: Account[];
 

@@ -11,9 +11,15 @@ import { ToastService } from '../../services/toast.service';
 import { LabelService, Label } from '../../services/label.service';
 import { FilterService, FilterRule } from '../../services/filter.service';
 import { PgpService } from '../../services/pgp.service';
+import { EmailService } from '../../services/email.service';
 import { ConfirmDialogService } from '../../services/confirm-dialog.service';
 import { SandboxedHtmlDirective } from '../../directives/sandboxed-html.directive';
 import { ThemeService, ThemeMode } from '../../services/theme.service';
+import {
+  findOversizedEmbeddedSignatureImage,
+  formatEmbeddedImageSizeKiB,
+  MAX_SIGNATURE_EMBEDDED_IMAGE_BYTES,
+} from '../../utils/signature-embedded-image-policy';
 import * as QRCode from 'qrcode';
 import { startRegistration } from '@simplewebauthn/browser';
 
@@ -34,6 +40,7 @@ export class SettingsComponent {
   protected readonly labelService = inject(LabelService);
   protected readonly filterService = inject(FilterService);
   protected readonly pgpService = inject(PgpService);
+  protected readonly emailService = inject(EmailService);
   protected readonly themeService = inject(ThemeService);
   protected readonly notificationService = inject(NotificationService);
   private readonly toastService = inject(ToastService);
@@ -132,6 +139,7 @@ export class SettingsComponent {
   readonly signatureEditor = viewChild<RichEditorComponent>('signatureEditor');
   readonly signatureSourceMode = signal(false);
   readonly signatureHtmlSource = signal('');
+  readonly lastAcceptedSignatureHtml = signal('');
 
   readonly testConnectionLoading = signal(false);
 
@@ -323,6 +331,7 @@ export class SettingsComponent {
 
     const editingId = this.editingAccountId();
     if (editingId) {
+      const hasNewPassword = !!this.accountPassword();
       const data: Partial<EmailAccount> = {
         email: this.accountEmail(),
         displayName: this.accountDisplayName(),
@@ -335,6 +344,9 @@ export class SettingsComponent {
         data.password = this.accountPassword();
       }
       await this.settingsService.updateAccount(editingId, data);
+      if (hasNewPassword) {
+        this.emailService.clearMailboxCredentialError(editingId);
+      }
     } else {
       if (!this.accountPassword()) return;
       await this.settingsService.addAccount({
@@ -365,14 +377,22 @@ export class SettingsComponent {
     const sourceMode = this.signatureSourceMode();
     const editor = this.signatureEditor();
     if (sourceMode) {
+      const oversizedImage = findOversizedEmbeddedSignatureImage(this.signatureHtmlSource());
+      if (oversizedImage) {
+        this.toastService.show('error', this.buildSignatureImageTooLargeMessage(oversizedImage));
+        return;
+      }
       // Switching from source to visual: apply HTML source to editor
       if (editor) {
         editor.setHtml(this.signatureHtmlSource());
+        this.lastAcceptedSignatureHtml.set(this.signatureHtmlSource());
       }
     } else {
       // Switching from visual to source: copy editor content to textarea
       if (editor) {
-        this.signatureHtmlSource.set(editor.getHtml());
+        const html = editor.getHtml();
+        this.signatureHtmlSource.set(html);
+        this.lastAcceptedSignatureHtml.set(html);
       }
     }
     this.signatureSourceMode.set(!sourceMode);
@@ -383,7 +403,7 @@ export class SettingsComponent {
     this.showSignatureForm.set(true);
   }
 
-  saveSignature(): void {
+  async saveSignature(): Promise<void> {
     const name = this.signatureName();
     if (!name) return;
 
@@ -397,16 +417,22 @@ export class SettingsComponent {
     }
 
     if (!html) return;
+    const oversizedImage = findOversizedEmbeddedSignatureImage(html);
+    if (oversizedImage) {
+      this.toastService.show('error', this.buildSignatureImageTooLargeMessage(oversizedImage));
+      return;
+    }
+
     const editId = this.editingSignatureId();
 
     if (editId) {
-      this.settingsService.updateSignature(editId, {
+      await this.settingsService.updateSignature(editId, {
         name,
         html,
         isDefault: this.signatureIsDefault(),
       });
     } else {
-      this.settingsService.addSignature({
+      await this.settingsService.addSignature({
         name,
         html,
         isDefault: this.signatureIsDefault(),
@@ -416,11 +442,27 @@ export class SettingsComponent {
     this.cancelSignatureForm();
   }
 
+  onSignatureEditorChange(html: string): void {
+    const oversizedImage = findOversizedEmbeddedSignatureImage(html);
+    if (oversizedImage) {
+      this.toastService.show('error', this.buildSignatureImageTooLargeMessage(oversizedImage));
+      const editor = this.signatureEditor();
+      if (editor) {
+        editor.setHtml(this.lastAcceptedSignatureHtml());
+      }
+      return;
+    }
+
+    this.signatureHtmlSource.set(html);
+    this.lastAcceptedSignatureHtml.set(html);
+  }
+
   editSignature(sig: EmailSignature): void {
     this.editingSignatureId.set(sig.id);
     this.signatureName.set(sig.name);
     this.signatureIsDefault.set(sig.isDefault);
     this.signatureHtmlSource.set(sig.html);
+    this.lastAcceptedSignatureHtml.set(sig.html);
     this.showSignatureForm.set(true);
   }
 
@@ -880,7 +922,18 @@ export class SettingsComponent {
     this.signatureIsDefault.set(false);
     this.signatureSourceMode.set(false);
     this.signatureHtmlSource.set('');
+    this.lastAcceptedSignatureHtml.set('');
     this.signatureEditor()?.clear();
+  }
+
+  private buildSignatureImageTooLargeMessage(
+    oversizedImage: ReturnType<typeof findOversizedEmbeddedSignatureImage> extends infer T
+      ? Exclude<T, null>
+      : never,
+  ): string {
+    const label = oversizedImage.alt?.trim() ? `"${oversizedImage.alt.trim()}"` : `Image ${oversizedImage.index}`;
+    return `${label} est trop lourde (${formatEmbeddedImageSizeKiB(oversizedImage.approxBytes)}). `
+      + `Limite: ${formatEmbeddedImageSizeKiB(MAX_SIGNATURE_EMBEDDED_IMAGE_BYTES)} par image integree dans une signature.`;
   }
 
   async saveAiSettings(): Promise<void> {

@@ -441,6 +441,7 @@
                   <app-rich-editor
                     #signatureEditor
                     [initialContent]="signatureHtmlSource()"
+                    (contentChange)="onSignatureEditorChange($event)"
                     placeholder="Composez votre signature..."
                     minHeight="120px"
                     toolbarPosition="top"/>

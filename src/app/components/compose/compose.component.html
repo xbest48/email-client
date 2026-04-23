@@ -8,9 +8,20 @@
     aria-hidden="true"></div>
 }
 
-<!-- Compose dialog -->
+<!-- Compose dialog.
+     When the compose is a true full-screen modal (maximized + not minimized)
+     the outer wrapper is already sized to the viewport, so pointer events and
+     role="dialog" are appropriate.
+     In every other state (floating card or minimized strip) the wrapper must
+     be pointer-events-none so its invisible layout box — which can still span
+     the full page via the base `inset-x-0 top-0` classes before responsive
+     overrides kick in — doesn't swallow clicks meant for the content behind.
+     role="region" (not "dialog") prevents browsers from making background
+     content inert via aria-modal semantics. -->
 <div
   class="fixed inset-x-0 bottom-0 top-0 z-50 flex flex-col overflow-hidden bg-white shadow-2xl dark:bg-gray-800 md:border md:border-gray-200 md:dark:border-gray-700"
+  [class.pointer-events-none]="minimized() || !maximized()"
+  [class.pointer-events-auto]="maximized() && !minimized()"
   [class.md:top-auto]="minimized() || !maximized()"
   [class.md:left-auto]="minimized() || !maximized()"
   [class.md:right-8]="minimized() || !maximized()"
@@ -24,8 +35,8 @@
   (dragover)="onDragOver($event)"
   (dragleave)="onDragLeave()"
   (drop)="onDrop($event)"
-  role="dialog"
-  [attr.aria-modal]="maximized() && !minimized() ? 'true' : 'false'"
+  [attr.role]="maximized() && !minimized() ? 'dialog' : 'region'"
+  [attr.aria-modal]="maximized() && !minimized() ? 'true' : null"
   aria-label="Nouveau message">
 
   <!-- Drag overlay -->
@@ -40,8 +51,9 @@
     </div>
   }
 
-  <!-- Header -->
-  <div class="flex items-center justify-between px-4 py-3 bg-gray-800 dark:bg-gray-900"
+  <!-- Header — always pointer-events-auto so the wrapper's pointer-events-none
+       (applied in floating / minimized states) doesn't block clicks here. -->
+  <div class="pointer-events-auto flex items-center justify-between px-4 py-3 bg-gray-800 dark:bg-gray-900"
        [class.md:rounded-t-2xl]="!maximized()">
     <h2 class="text-sm font-semibold text-white">Nouveau message</h2>
     <div class="flex items-center gap-1">
@@ -122,7 +134,7 @@
   </div>
 
   @if (!minimized()) {
-    <form (submit)="$event.preventDefault(); onSend()" novalidate class="flex min-h-0 flex-col flex-1 overflow-hidden">
+    <form (submit)="$event.preventDefault(); onSend()" novalidate class="pointer-events-auto flex min-h-0 flex-col flex-1 overflow-hidden">
       <!-- To with autocomplete -->
       <div class="relative flex items-center border-b border-gray-100 dark:border-gray-700 px-4">
         <label for="compose-to" class="text-sm text-gray-500 w-8 shrink-0">A</label>

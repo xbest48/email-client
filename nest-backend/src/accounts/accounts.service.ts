@@ -87,7 +87,17 @@ export class AccountsService {
   async update(id: string, userId: string, data: Partial<Account>): Promise<Account | null> {
     const acc = await this.accountsRepository.findOne({ where: { id, user: { id: userId } } });
     if (!acc) return null;
+
+    if (data.email !== undefined) acc.email = data.email;
     if (data.displayName !== undefined) acc.displayName = data.displayName;
+    if (data.imapHost !== undefined) acc.imapHost = data.imapHost;
+    if (data.imapPort !== undefined) acc.imapPort = data.imapPort;
+    if (data.smtpHost !== undefined) acc.smtpHost = data.smtpHost;
+    if (data.smtpPort !== undefined) acc.smtpPort = data.smtpPort;
+    if (data.password !== undefined && data.password !== '') {
+      acc.password = encrypt(data.password);
+    }
+
     const saved = await this.accountsRepository.save(acc);
     const { password, ...withoutPassword } = saved;
     return withoutPassword as Account;

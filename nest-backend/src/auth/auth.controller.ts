@@ -3,6 +3,7 @@ import {
   Post,
   Body,
   Get,
+  Put,
   UseGuards,
   Request,
   UnauthorizedException,
@@ -224,6 +225,44 @@ export class AuthController {
       updateData.darkEmailRendering = darkEmailRendering;
     }
     await this.usersService.update(req.user.id, updateData);
+    return { success: true };
+  }
+
+  // --- App settings (signatures, templates, UI preferences) ---
+
+  /**
+   * Returns the JSON-encoded app settings blob for the authenticated user.
+   * Returns {} when no settings have been saved yet (e.g. fresh account).
+   */
+  @UseGuards(JwtAuthGuard)
+  @Get('app-settings')
+  async getAppSettings(@Request() req: any) {
+    const user = await this.usersService.findById(req.user.id);
+    if (!user?.appSettings) return {};
+    try {
+      return JSON.parse(user.appSettings);
+    } catch {
+      return {};
+    }
+  }
+
+  /**
+   * Persists the app settings blob for the authenticated user.
+   * The body is a free-form JSON object — accounts are stripped server-side
+   * because they are managed through their own endpoint.
+   */
+  @UseGuards(JwtAuthGuard)
+  @Put('app-settings')
+  async saveAppSettings(@Request() req: any, @Body() body: any) {
+    // Strip accounts — they have their own dedicated endpoint/table.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { accounts: _accounts, ...safeSettings } = body ?? {};
+    const json = JSON.stringify(safeSettings);
+    // 10 MB hard cap to protect the DB from runaway base64 blobs.
+    if (json.length > 10 * 1024 * 1024) {
+      throw new BadRequestException('app-settings payload too large');
+    }
+    await this.usersService.update(req.user.id, { appSettings: json });
     return { success: true };
   }
 
