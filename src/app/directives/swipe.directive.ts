@@ -13,6 +13,8 @@ export class SwipeDirective {
 
   readonly swipeLeft = output<void>();
   readonly swipeRight = output<void>();
+  readonly swipeProgress = output<{ offset: number }>();
+  readonly swipeReset = output<void>();
 
   private startX = 0;
   private currentX = 0;
@@ -34,14 +36,7 @@ export class SwipeDirective {
     const clamped = Math.max(-120, Math.min(120, diff));
     el.style.transform = `translateX(${clamped}px)`;
     el.style.transition = 'none';
-
-    if (diff > 30) {
-      el.style.backgroundColor = 'rgba(245, 158, 11, 0.15)';
-    } else if (diff < -30) {
-      el.style.backgroundColor = 'rgba(239, 68, 68, 0.15)';
-    } else {
-      el.style.backgroundColor = '';
-    }
+    this.swipeProgress.emit({ offset: clamped });
   }
 
   onTouchEnd(): void {
@@ -51,8 +46,8 @@ export class SwipeDirective {
     const diff = this.currentX - this.startX;
     const el = this.el.nativeElement as HTMLElement;
     el.style.transform = '';
-    el.style.transition = 'transform 0.2s ease, background-color 0.2s ease';
-    el.style.backgroundColor = '';
+    el.style.transition = 'transform 0.2s ease';
+    this.swipeReset.emit();
 
     if (diff > this.threshold) {
       this.swipeRight.emit();

@@ -45,6 +45,10 @@ export interface AppSettings {
   showFolders: boolean;
   showLabelsSection: boolean;
   accentColor: string;
+  mobileSwipeLeftAction: 'trash' | 'move' | 'spam' | 'toggleRead' | 'toggleStar';
+  mobileSwipeLeftMoveFolder: string;
+  mobileSwipeRightAction: 'trash' | 'move' | 'spam' | 'toggleRead' | 'toggleStar';
+  mobileSwipeRightMoveFolder: string;
 }
 
 const STORAGE_KEY = 'mailflow_settings';
@@ -58,6 +62,10 @@ const DEFAULT_SETTINGS: AppSettings = {
   showFolders: true,
   showLabelsSection: true,
   accentColor: '#403d84',
+  mobileSwipeLeftAction: 'trash',
+  mobileSwipeLeftMoveFolder: '',
+  mobileSwipeRightAction: 'move',
+  mobileSwipeRightMoveFolder: 'INBOX',
 };
 
 @Injectable({ providedIn: 'root' })
@@ -108,6 +116,22 @@ export class SettingsService {
 
   get showLabelsSection(): boolean {
     return this.settings().showLabelsSection;
+  }
+
+  get mobileSwipeLeftAction(): 'trash' | 'move' | 'spam' | 'toggleRead' | 'toggleStar' {
+    return this.settings().mobileSwipeLeftAction;
+  }
+
+  get mobileSwipeLeftMoveFolder(): string {
+    return this.settings().mobileSwipeLeftMoveFolder;
+  }
+
+  get mobileSwipeRightAction(): 'trash' | 'move' | 'spam' | 'toggleRead' | 'toggleStar' {
+    return this.settings().mobileSwipeRightAction;
+  }
+
+  get mobileSwipeRightMoveFolder(): string {
+    return this.settings().mobileSwipeRightMoveFolder;
   }
 
   update(partial: Partial<AppSettings>): void {
@@ -364,6 +388,18 @@ export class SettingsService {
         if (typeof s.pageSize === 'number' && s.pageSize > 0) settings.pageSize = s.pageSize;
         if (typeof s.showFolders === 'boolean') settings.showFolders = s.showFolders;
         if (typeof s.showLabelsSection === 'boolean') settings.showLabelsSection = s.showLabelsSection;
+        if (this.isValidMobileSwipeAction(s.mobileSwipeLeftAction)) {
+          settings.mobileSwipeLeftAction = s.mobileSwipeLeftAction;
+        }
+        if (typeof s.mobileSwipeLeftMoveFolder === 'string') {
+          settings.mobileSwipeLeftMoveFolder = s.mobileSwipeLeftMoveFolder;
+        }
+        if (this.isValidMobileSwipeAction(s.mobileSwipeRightAction)) {
+          settings.mobileSwipeRightAction = s.mobileSwipeRightAction;
+        }
+        if (typeof s.mobileSwipeRightMoveFolder === 'string') {
+          settings.mobileSwipeRightMoveFolder = s.mobileSwipeRightMoveFolder;
+        }
       }
     }
 
@@ -525,8 +561,22 @@ export class SettingsService {
       || settings.showFolders !== DEFAULT_SETTINGS.showFolders
       || settings.showLabelsSection !== DEFAULT_SETTINGS.showLabelsSection
       || settings.accentColor !== DEFAULT_SETTINGS.accentColor
+      || settings.mobileSwipeLeftAction !== DEFAULT_SETTINGS.mobileSwipeLeftAction
+      || settings.mobileSwipeLeftMoveFolder !== DEFAULT_SETTINGS.mobileSwipeLeftMoveFolder
+      || settings.mobileSwipeRightAction !== DEFAULT_SETTINGS.mobileSwipeRightAction
+      || settings.mobileSwipeRightMoveFolder !== DEFAULT_SETTINGS.mobileSwipeRightMoveFolder
       || settings.signatures.length > 0
       || settings.templates.length > 0;
+  }
+
+  private isValidMobileSwipeAction(
+    value: unknown,
+  ): value is 'trash' | 'move' | 'spam' | 'toggleRead' | 'toggleStar' {
+    return value === 'trash'
+      || value === 'move'
+      || value === 'spam'
+      || value === 'toggleRead'
+      || value === 'toggleStar';
   }
 
   private resetTransientStateForScopeChange(): void {

@@ -66,11 +66,50 @@ export class SandboxedHtmlDirective {
       .email-body {
         width: 100%;
         padding: 16px;
-        overflow-x: auto;
+        max-width: 100%;
+        overflow-x: hidden;
         overflow-wrap: break-word;
+        word-break: break-word;
         box-sizing: border-box;
       }
-      .email-body img { max-width: 100%; height: auto; }
+      .email-body * { box-sizing: border-box; max-width: 100%; }
+      .email-body img,
+      .email-body video,
+      .email-body iframe {
+        max-width: 100%;
+        height: auto;
+      }
+      .email-body table {
+        max-width: 100% !important;
+        table-layout: fixed;
+      }
+      .email-body td,
+      .email-body th {
+        max-width: 100%;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+      .email-body pre,
+      .email-body code {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+      @media (max-width: 640px) {
+        .email-body {
+          padding: 12px;
+        }
+        .email-body table,
+        .email-body tbody,
+        .email-body thead,
+        .email-body tfoot,
+        .email-body tr,
+        .email-body td,
+        .email-body th {
+          width: 100% !important;
+          max-width: 100% !important;
+        }
+      }
     `;
 
     // Preserve mode: always render on a white card, in both themes. The

@@ -1,5 +1,39 @@
+:host {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 .email-row-unread {
   background-color: color-mix(in srgb, var(--color-amber-500) 7%, white);
+}
+
+.email-list-header,
+.email-list-mobile-toolbar,
+.email-list-row,
+.email-list-row-shell {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.email-list-row {
+  overflow: hidden;
+  will-change: transform;
+}
+
+.email-list-row > * {
+  min-width: 0;
+}
+
+.email-list-row-shell {
+  position: relative;
+}
+
+@media (max-width: 640px) {
+  .email-list-header {
+    flex-wrap: wrap;
+  }
 }
 
 .group:hover.email-row-unread {

@@ -121,6 +121,10 @@ export class SettingsComponent {
   readonly hideAiHintsPreference = signal(false);
   readonly savingAiSettings = signal(false);
   readonly customAccentColor = signal(this.settingsService.accentColor);
+  readonly mobileSwipeLeftAction = signal<'trash' | 'move' | 'spam' | 'toggleRead' | 'toggleStar'>(this.settingsService.mobileSwipeLeftAction);
+  readonly mobileSwipeLeftMoveFolder = signal(this.settingsService.mobileSwipeLeftMoveFolder);
+  readonly mobileSwipeRightAction = signal<'trash' | 'move' | 'spam' | 'toggleRead' | 'toggleStar'>(this.settingsService.mobileSwipeRightAction);
+  readonly mobileSwipeRightMoveFolder = signal(this.settingsService.mobileSwipeRightMoveFolder);
   readonly blockTrackingPixels = computed(() => this.authService.user()?.blockTrackingPixels ?? false);
   readonly undoSendDelay = computed(() => this.authService.user()?.undoSendDelay ?? 0);
   readonly desktopNotificationsEnabled = computed(() => this.authService.user()?.desktopNotificationsEnabled ?? false);
@@ -130,6 +134,17 @@ export class SettingsComponent {
     { value: 'google', label: 'Google' },
     { value: 'mistral', label: 'Mistral' },
     { value: 'other', label: 'Autre' },
+  ];
+  readonly mobileSwipeActionOptions: ReadonlyArray<{
+    value: 'trash' | 'move' | 'spam' | 'toggleRead' | 'toggleStar';
+    label: string;
+    description: string;
+  }> = [
+    { value: 'trash', label: 'Supprimer', description: 'Envoie le message a la corbeille.' },
+    { value: 'move', label: 'Deplacer', description: 'Deplace le message vers un dossier choisi.' },
+    { value: 'spam', label: 'Spam', description: 'Marque le message comme spam.' },
+    { value: 'toggleRead', label: 'Lu / Non lu', description: 'Bascule l\'etat lu du message.' },
+    { value: 'toggleStar', label: 'Suivi', description: 'Ajoute ou retire le suivi du message.' },
   ];
   readonly aiProviderLabel = computed(() => {
     const provider = this.authService.user()?.aiProvider ?? 'openai';
@@ -651,6 +666,15 @@ export class SettingsComponent {
   applyCustomAccentColor(): void {
     this.selectedAccentColor.set(this.customAccentColor());
     this.settingsService.setAccentColor(this.customAccentColor());
+  }
+
+  saveMobileSwipeSettings(): void {
+    this.settingsService.update({
+      mobileSwipeLeftAction: this.mobileSwipeLeftAction(),
+      mobileSwipeLeftMoveFolder: this.mobileSwipeLeftMoveFolder(),
+      mobileSwipeRightAction: this.mobileSwipeRightAction(),
+      mobileSwipeRightMoveFolder: this.mobileSwipeRightMoveFolder(),
+    });
   }
 
   async updateSetting(key: string, value: unknown): Promise<void> {

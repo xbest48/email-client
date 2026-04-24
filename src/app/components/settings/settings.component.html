@@ -859,6 +859,77 @@
         </div>
 
         <div class="pt-4 border-t border-gray-100 dark:border-gray-700">
+          <h3 class="text-sm font-semibold text-gray-800 dark:text-white mb-3">Gestes sur mobile</h3>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">
+            Choisissez l'action declenchee quand vous glissez un message dans la liste sur mobile.
+          </p>
+
+          <div class="space-y-4">
+            <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-4 space-y-3">
+              <div class="flex items-center gap-3">
+                <label for="mobile-swipe-left-action" class="text-sm text-gray-700 dark:text-gray-300 w-48">Glisser vers la gauche :</label>
+                <select
+                  id="mobile-swipe-left-action"
+                  [ngModel]="mobileSwipeLeftAction()"
+                  (ngModelChange)="mobileSwipeLeftAction.set($event); saveMobileSwipeSettings()"
+                  name="mobileSwipeLeftAction"
+                  class="w-40 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white dark:bg-gray-700 dark:text-white">
+                  @for (option of mobileSwipeActionOptions; track option.value) {
+                    <option [ngValue]="option.value">{{ option.label }}</option>
+                  }
+                </select>
+              </div>
+              @if (mobileSwipeLeftAction() === 'move') {
+                <div class="flex items-center gap-3">
+                  <label for="mobile-swipe-left-folder" class="text-sm text-gray-700 dark:text-gray-300 w-48">Dossier cible :</label>
+                  <select
+                    id="mobile-swipe-left-folder"
+                    [ngModel]="mobileSwipeLeftMoveFolder()"
+                    (ngModelChange)="mobileSwipeLeftMoveFolder.set($event); saveMobileSwipeSettings()"
+                    name="mobileSwipeLeftMoveFolder"
+                    class="min-w-0 flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white dark:bg-gray-700 dark:text-white">
+                    @for (folder of emailService.folders(); track folder.path) {
+                      <option [ngValue]="folder.path">{{ folder.name }}</option>
+                    }
+                  </select>
+                </div>
+              }
+            </div>
+
+            <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 p-4 space-y-3">
+              <div class="flex items-center gap-3">
+                <label for="mobile-swipe-right-action" class="text-sm text-gray-700 dark:text-gray-300 w-48">Glisser vers la droite :</label>
+                <select
+                  id="mobile-swipe-right-action"
+                  [ngModel]="mobileSwipeRightAction()"
+                  (ngModelChange)="mobileSwipeRightAction.set($event); saveMobileSwipeSettings()"
+                  name="mobileSwipeRightAction"
+                  class="w-40 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white dark:bg-gray-700 dark:text-white">
+                  @for (option of mobileSwipeActionOptions; track option.value) {
+                    <option [ngValue]="option.value">{{ option.label }}</option>
+                  }
+                </select>
+              </div>
+              @if (mobileSwipeRightAction() === 'move') {
+                <div class="flex items-center gap-3">
+                  <label for="mobile-swipe-right-folder" class="text-sm text-gray-700 dark:text-gray-300 w-48">Dossier cible :</label>
+                  <select
+                    id="mobile-swipe-right-folder"
+                    [ngModel]="mobileSwipeRightMoveFolder()"
+                    (ngModelChange)="mobileSwipeRightMoveFolder.set($event); saveMobileSwipeSettings()"
+                    name="mobileSwipeRightMoveFolder"
+                    class="min-w-0 flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white dark:bg-gray-700 dark:text-white">
+                    @for (folder of emailService.folders(); track folder.path) {
+                      <option [ngValue]="folder.path">{{ folder.name }}</option>
+                    }
+                  </select>
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-4 border-t border-gray-100 dark:border-gray-700">
           <h3 class="text-sm font-semibold text-gray-800 dark:text-white mb-3">Notifications bureau</h3>
           <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
             Affichez une notification de votre systeme d'exploitation lorsqu'un nouveau message arrive dans votre boite de reception, meme quand l'onglet est en arriere-plan.

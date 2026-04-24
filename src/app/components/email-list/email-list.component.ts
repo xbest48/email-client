@@ -11,6 +11,7 @@ import { SettingsService } from '../../services/settings.service';
 import { AuthService } from '../../services/auth.service';
 import { AiService, EmailTriageResult } from '../../services/ai.service';
 import { TaskService } from '../../services/task.service';
+import { ToastService } from '../../services/toast.service';
 
 const FOLDER_MAP: Record<string, string> = {
   inbox: 'INBOX',
@@ -43,6 +44,7 @@ export class EmailListComponent implements OnInit, OnDestroy {
   protected readonly authService = inject(AuthService);
   private readonly aiService = inject(AiService);
   protected readonly taskService = inject(TaskService);
+  private readonly toastService = inject(ToastService);
 
   readonly selectedIds = signal<Set<string>>(new Set());
   readonly focusedIndex = signal(-1);
@@ -81,6 +83,7 @@ export class EmailListComponent implements OnInit, OnDestroy {
     return null;
   });
   readonly aiInsights = signal<Map<string, EmailTriageResult>>(new Map());
+  readonly swipeOffsets = signal<Map<string, number>>(new Map());
   readonly showTaskPanel = signal(false);
   private readonly scrollContainer = viewChild<ElementRef<HTMLDivElement>>('scrollContainer');
   private readonly contextMenuEl = viewChild<ElementRef<HTMLDivElement>>('contextMenuEl');
@@ -440,11 +443,141 @@ export class EmailListComponent implements OnInit, OnDestroy {
   }
 
   async onSwipeLeft(email: Email): Promise<void> {
-    await this.trashEmailAndRefill(email);
+    this.clearSwipePreview(email);
+    await this.runSwipeAction(
+      email,
+      this.settingsService.mobileSwipeLeftAction,
+      this.settingsService.mobileSwipeLeftMoveFolder,
+    );
   }
 
-  onSwipeRight(email: Email): void {
-    this.emailService.toggleStar(email);
+  async onSwipeRight(email: Email): Promise<void> {
+    this.clearSwipePreview(email);
+    await this.runSwipeAction(
+      email,
+      this.settingsService.mobileSwipeRightAction,
+      this.settingsService.mobileSwipeRightMoveFolder,
+    );
+  }
+
+  private async runSwipeAction(
+    email: Email,
+    action: 'trash' | 'move' | 'spam' | 'toggleRead' | 'toggleStar',
+    destinationFolder: string,
+  ): Promise<void> {
+    if (action === 'trash') {
+      await this.trashEmailAndRefill(email);
+      return;
+    }
+
+    if (action === 'spam') {
+      if (this.isSpamFolder()) {
+        await this.emailService.markAsNotSpam(email);
+      } else {
+        await this.emailService.spamEmail(email);
+      }
+      await this.refillVisibleEmails();
+      return;
+    }
+
+    if (action === 'toggleRead') {
+      if (email.isRead) {
+        await this.emailService.markAsUnread(email);
+      } else {
+        await this.emailService.markAsRead(email);
+      }
+      return;
+    }
+
+    if (action === 'toggleStar') {
+      await this.emailService.toggleStar(email);
+      return;
+    }
+
+    if (!destinationFolder || destinationFolder === email.folder) {
+      this.toastService.show('error', 'Choisissez un dossier de destination different pour cette action de glissement.');
+      return;
+    }
+
+    await this.emailService.moveToFolder(email, destinationFolder);
+    await this.refillVisibleEmails();
+  }
+
+  updateSwipePreview(email: Email, offset: number): void {
+    const key = this.emailKey(email);
+    this.swipeOffsets.update((current) => {
+      const next = new Map(current);
+      if (offset === 0) {
+        next.delete(key);
+      } else {
+        next.set(key, offset);
+      }
+      return next;
+    });
+  }
+
+  clearSwipePreview(email: Email): void {
+    const key = this.emailKey(email);
+    this.swipeOffsets.update((current) => {
+      if (!current.has(key)) return current;
+      const next = new Map(current);
+      next.delete(key);
+      return next;
+    });
+  }
+
+  swipeIndicatorOpacity(email: Email, side: 'left' | 'right'): number {
+    const offset = this.swipeOffsets().get(this.emailKey(email)) ?? 0;
+    const matchingOffset = side === 'left' ? Math.max(0, offset) : Math.max(0, -offset);
+    return Math.max(0, Math.min(1, matchingOffset / 80));
+  }
+
+  swipeActionLabel(side: 'left' | 'right'): string {
+    const action = side === 'left'
+      ? this.settingsService.mobileSwipeRightAction
+      : this.settingsService.mobileSwipeLeftAction;
+    switch (action) {
+      case 'trash':
+        return 'Supprimer';
+      case 'move':
+        return 'Deplacer';
+      case 'spam':
+        return this.isSpamFolder() ? 'Non-spam' : 'Spam';
+      case 'toggleRead':
+        return 'Lu / Non lu';
+      case 'toggleStar':
+        return 'Suivi';
+    }
+  }
+
+  swipeActionIcon(side: 'left' | 'right'): 'trash' | 'move' | 'spam' | 'toggleRead' | 'toggleStar' | 'notSpam' {
+    const action = side === 'left'
+      ? this.settingsService.mobileSwipeRightAction
+      : this.settingsService.mobileSwipeLeftAction;
+    if (action === 'spam' && this.isSpamFolder()) {
+      return 'notSpam';
+    }
+    return action;
+  }
+
+  swipeActionClasses(side: 'left' | 'right'): string {
+    const action = side === 'left'
+      ? this.settingsService.mobileSwipeRightAction
+      : this.settingsService.mobileSwipeLeftAction;
+    switch (action) {
+      case 'trash':
+        return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
+      case 'move':
+        return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300';
+      case 'spam':
+        return this.isSpamFolder()
+          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+          : 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300';
+      case 'toggleRead':
+        return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+      case 'toggleStar':
+        return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300';
+    }
   }
 
   // Drag & Drop
