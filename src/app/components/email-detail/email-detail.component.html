@@ -1,5 +1,5 @@
 @if (email(); as mail) {
-  <div class="flex flex-col h-full bg-white dark:bg-gray-900">
+  <div class="flex min-h-0 flex-col h-full bg-white dark:bg-gray-900">
     <!-- Toolbar.
          `relative z-30` is required: the toolbar uses backdrop-blur-sm, which
          creates a stacking context. Without elevating that context, the AI /
@@ -250,7 +250,7 @@
     </div>
 
     <!-- Email content -->
-    <div class="flex-1 overflow-y-auto" (click)="showSnoozeMenu.set(false); showLabelMenu.set(false); showAiMenu.set(false)">
+    <div class="email-detail-scroll flex-1 min-h-0 overflow-y-auto" (click)="showSnoozeMenu.set(false); showLabelMenu.set(false); showAiMenu.set(false)">
       <div class="max-w-4xl mx-auto p-4 md:p-6">
 
         <!-- Read receipt banner -->
@@ -597,19 +597,19 @@
           }
 
           @if (aiPhishing()) {
-            <div class="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 relative">
-              <button (click)="dismissAiResult('phishing')" class="absolute top-2 right-2 p-1 text-red-400 hover:text-red-600 dark:hover:text-red-300 rounded-full transition-colors" aria-label="Fermer">
+            <div class="mb-4 border rounded-xl p-4 relative" [class]="aiPhishingAppearance().card">
+              <button (click)="dismissAiResult('phishing')" class="absolute top-2 right-2 p-1 rounded-full transition-colors" [class]="aiPhishingAppearance().dismiss" aria-label="Fermer">
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
               </button>
-              <h3 class="text-sm font-semibold text-red-800 dark:text-red-300 mb-2 flex items-center gap-2">
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-                Analyse de sécurité: {{ aiPhishing()?.level === 'high' ? 'Danger' : (aiPhishing()?.level === 'medium' ? 'Attention' : 'Sûr') }}
+              <h3 class="text-sm font-semibold mb-2 flex items-center gap-2" [class]="aiPhishingAppearance().title">
+                <svg class="w-4 h-4" [class]="aiPhishingAppearance().icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                Analyse de sécurité: {{ aiPhishingAppearance().label }}
               </h3>
-              <p class="text-sm text-red-900 dark:text-red-200">{{ aiPhishing()?.reason }}</p>
+              <p class="text-sm" [class]="aiPhishingAppearance().body">{{ aiPhishing()?.reason }}</p>
               @if (aiPhishing()?.indicators?.length) {
                 <div class="mt-3 flex flex-wrap gap-2">
                   @for (indicator of aiPhishing()?.indicators ?? []; track indicator) {
-                    <span class="rounded-full bg-red-100 dark:bg-red-900/50 px-2 py-1 text-xs text-red-800 dark:text-red-200">
+                    <span class="rounded-full px-2 py-1 text-xs" [class]="aiPhishingAppearance().badge">
                       {{ indicator }}
                     </span>
                   }

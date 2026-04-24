@@ -79,9 +79,19 @@ export class AiController {
   @Post('phishing')
   async phishing(
     @Request() req: any,
-    @Body() body: { emailContent: string },
+    @Headers('x-account-id') accountId: string | undefined,
+    @Body() body: { emailContent: string; messageId?: string; folder?: string; uid?: number },
   ): Promise<{ result: AiPhishingResult }> {
-    const result = await this.aiService.phishing(req.user.id, body.emailContent);
+    const result = await this.aiService.phishing(
+      req.user.id,
+      body.emailContent,
+      {
+        messageId: body.messageId,
+        folder: body.folder,
+        uid: body.uid,
+      },
+      accountId,
+    );
     return { result };
   }
 

@@ -86,6 +86,42 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
   readonly aiPhishing = signal<AiPhishingResult | null>(null);
   readonly aiCategory = signal<AiCategoryResult | null>(null);
   readonly aiTranslation = signal<string | null>(null);
+  readonly aiPhishingAppearance = computed(() => {
+    const level = this.aiPhishing()?.level ?? 'low';
+    switch (level) {
+      case 'high':
+        return {
+          card: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800',
+          dismiss: 'text-red-400 hover:text-red-600 dark:hover:text-red-300',
+          title: 'text-red-800 dark:text-red-300',
+          body: 'text-red-900 dark:text-red-200',
+          badge: 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-200',
+          icon: 'text-red-600 dark:text-red-300',
+          label: 'Danger',
+        };
+      case 'medium':
+        return {
+          card: 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800',
+          dismiss: 'text-orange-400 hover:text-orange-600 dark:hover:text-orange-300',
+          title: 'text-orange-800 dark:text-orange-300',
+          body: 'text-orange-900 dark:text-orange-200',
+          badge: 'bg-orange-100 dark:bg-orange-900/50 text-orange-800 dark:text-orange-200',
+          icon: 'text-orange-600 dark:text-orange-300',
+          label: 'Attention',
+        };
+      case 'low':
+      default:
+        return {
+          card: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800',
+          dismiss: 'text-emerald-400 hover:text-emerald-600 dark:hover:text-emerald-300',
+          title: 'text-emerald-800 dark:text-emerald-300',
+          body: 'text-emerald-900 dark:text-emerald-200',
+          badge: 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-200',
+          icon: 'text-emerald-600 dark:text-emerald-300',
+          label: 'Sur',
+        };
+    }
+  });
 
   readonly trustedPreviewUrl = computed<SafeResourceUrl | null>(() => {
     const preview = this.previewAttachment();
@@ -680,10 +716,15 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
       this.showAiMenu.set(false);
     }
     const content = this.getEmailText();
+    const mail = this.email();
     if (!content) return;
     this.aiLoading.set(true);
     try {
-      const result = await this.aiService.phishing(content);
+      const result = await this.aiService.phishing(content, {
+        messageId: mail?.messageId,
+        folder: mail?.folder,
+        uid: mail?.uid,
+      });
       this.aiPhishing.set(result);
     } catch (e) {
       console.error('Failed to detect phishing', e);

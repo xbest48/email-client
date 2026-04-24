@@ -121,9 +121,21 @@ export class AiService {
     return res.result;
   }
 
-  async phishing(emailContent: string): Promise<AiPhishingResult> {
+  async phishing(
+    emailContent: string,
+    metadata?: { messageId?: string; folder?: string; uid?: number },
+  ): Promise<AiPhishingResult> {
     const res = await firstValueFrom(
-      this.http.post<{ result: AiPhishingResult }>(`${this.apiUrl}/phishing`, { emailContent }, { headers: this.getHeaders() })
+      this.http.post<{ result: AiPhishingResult }>(
+        `${this.apiUrl}/phishing`,
+        {
+          emailContent,
+          messageId: metadata?.messageId,
+          folder: metadata?.folder,
+          uid: metadata?.uid,
+        },
+        { headers: this.getHeaders() },
+      )
     );
     return res.result;
   }

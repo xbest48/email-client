@@ -259,7 +259,25 @@ export class AiService {
     return normalizedResult;
   }
 
-  async phishing(userId: string, emailContent: string): Promise<AiPhishingResult> {
+  async phishing(
+    userId: string,
+    emailContent: string,
+    identity?: EmailInsightIdentity,
+    accountId?: string | null,
+  ): Promise<AiPhishingResult> {
+    const normalizedIdentity = this.normalizeIdentity(identity);
+    const normalizedAccountId = this.normalizeAccountId(accountId);
+    const contentHash = this.hashContent(emailContent);
+    const cached = await this.findCachedInsight(userId, normalizedAccountId, normalizedIdentity);
+
+    if (cached && cached.contentHash === contentHash && cached.phishingLevel) {
+      return {
+        level: this.normalizePhishingLevel(cached.phishingLevel),
+        reason: cached.reason || '',
+        indicators: [],
+      };
+    }
+
     const result = await this.requestJson<AiPhishingResult>(
       userId,
       [
@@ -271,13 +289,30 @@ export class AiService {
       emailContent,
     );
 
-    return {
+    const normalizedResult = {
       level: this.normalizePhishingLevel(result.level),
       reason: (result.reason || '').trim(),
       indicators: Array.isArray(result.indicators)
         ? result.indicators.filter((item) => typeof item === 'string' && item.trim().length > 0).slice(0, 5)
         : [],
     };
+
+    await this.saveInsight(
+      userId,
+      normalizedAccountId,
+      normalizedIdentity,
+      contentHash,
+      {
+        category: cached?.category,
+        confidence: cached?.contentHash === contentHash ? this.normalizeNullableConfidence(cached?.confidence) : null,
+        urgency: cached?.contentHash === contentHash ? this.normalizeNullableConfidence(cached?.urgency) : null,
+        phishingLevel: normalizedResult.level,
+        reason: normalizedResult.reason,
+      },
+      cached,
+    );
+
+    return normalizedResult;
   }
 
   async triage(
@@ -441,7 +476,7 @@ export class AiService {
     identity: EmailInsightIdentity,
     contentHash: string,
     values: {
-      category: string;
+      category?: string | null;
       urgency?: ConfidenceLevel | null;
       confidence?: ConfidenceLevel | null;
       phishingLevel?: PhishingLevel | null;
@@ -461,7 +496,7 @@ export class AiService {
     insight.folder = identity.folder ?? insight.folder ?? null;
     insight.uid = identity.uid ?? insight.uid ?? null;
     insight.contentHash = contentHash;
-    insight.category = values.category;
+    insight.category = values.category?.trim() || insight.category || 'Autre';
     insight.urgency = this.normalizeNullableConfidence(values.urgency);
     insight.confidence = this.normalizeNullableConfidence(values.confidence);
     insight.phishingLevel = this.normalizeNullablePhishingLevel(values.phishingLevel);
