@@ -1,4 +1,4 @@
-import { Injectable, signal, inject } from '@angular/core';
+import { Injectable, signal, inject, effect } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from './auth.service';
@@ -66,14 +66,21 @@ export class SettingsService {
   private readonly auth = inject(AuthService);
   readonly settings = signal<AppSettings>({ ...DEFAULT_SETTINGS });
 
-  readonly loadPromise: Promise<void>;
+  private currentLoadPromise: Promise<void> = Promise.resolve();
   private syncTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingServerSyncSettings: AppSettings | null = null;
+  private loadVersion = 0;
+  private observedAuthScope = this.getAuthScope();
 
   constructor() {
     this.applyAccentTheme(DEFAULT_SETTINGS.accentColor);
     this.installSyncLifecycleHooks();
-    this.loadPromise = this.load();
+    this.currentLoadPromise = this.load();
+    this.installAuthScopeWatcher();
+  }
+
+  get loadPromise(): Promise<void> {
+    return this.currentLoadPromise;
   }
 
   get pageSize(): number {
@@ -272,13 +279,18 @@ export class SettingsService {
 
   saveDraft(draft: DraftState): void {
     try {
-      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify({ ...draft, savedAt: new Date().toISOString() }));
+      localStorage.setItem(
+        this.getDraftStorageKey(),
+        JSON.stringify({ ...draft, savedAt: new Date().toISOString() }),
+      );
+      localStorage.removeItem(DRAFT_STORAGE_KEY);
     } catch { /* ignore */ }
   }
 
   loadDraft(): DraftState | null {
     try {
-      const stored = localStorage.getItem(DRAFT_STORAGE_KEY);
+      const stored = localStorage.getItem(this.getDraftStorageKey())
+        ?? this.getLegacyDraftValueForMigration();
       return stored ? JSON.parse(stored) : null;
     } catch {
       return null;
@@ -286,15 +298,18 @@ export class SettingsService {
   }
 
   clearDraft(): void {
+    localStorage.removeItem(this.getDraftStorageKey());
     localStorage.removeItem(DRAFT_STORAGE_KEY);
   }
 
   private async load(): Promise<void> {
+    const version = ++this.loadVersion;
     let settings = { ...DEFAULT_SETTINGS };
 
     // 1. Seed from localStorage so the UI has something to show immediately.
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      const stored = localStorage.getItem(this.getSettingsStorageKey())
+        ?? this.getLegacySettingsValueForMigration();
       if (stored) {
         const parsed = JSON.parse(stored);
         settings = { ...DEFAULT_SETTINGS, ...parsed };
@@ -317,6 +332,7 @@ export class SettingsService {
         }))
       );
 
+      if (version !== this.loadVersion) return;
       this.settings.set(settings);
       this.applyAccentTheme(settings.accentColor);
       this.save(settings);
@@ -359,6 +375,7 @@ export class SettingsService {
       }))
     );
 
+    if (version !== this.loadVersion) return;
     this.settings.set(settings);
     this.applyAccentTheme(settings.accentColor);
 
@@ -388,7 +405,8 @@ export class SettingsService {
   private save(settings: AppSettings): void {
     try {
       const { accounts, ...settingsToSave } = settings;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(settingsToSave));
+      localStorage.setItem(this.getSettingsStorageKey(), JSON.stringify(settingsToSave));
+      localStorage.removeItem(STORAGE_KEY);
     } catch { /* ignore */ }
   }
 
@@ -467,6 +485,19 @@ export class SettingsService {
     });
   }
 
+  private installAuthScopeWatcher(): void {
+    effect(() => {
+      const nextScope = this.getAuthScope();
+      if (nextScope === this.observedAuthScope) {
+        return;
+      }
+
+      this.observedAuthScope = nextScope;
+      this.resetTransientStateForScopeChange();
+      this.currentLoadPromise = this.load();
+    });
+  }
+
   private flushPendingSyncWithKeepalive(): void {
     const settings = this.pendingServerSyncSettings;
     const token = this.auth.getToken();
@@ -496,6 +527,62 @@ export class SettingsService {
       || settings.accentColor !== DEFAULT_SETTINGS.accentColor
       || settings.signatures.length > 0
       || settings.templates.length > 0;
+  }
+
+  private resetTransientStateForScopeChange(): void {
+    if (this.syncTimer !== null) {
+      clearTimeout(this.syncTimer);
+      this.syncTimer = null;
+    }
+    this.pendingServerSyncSettings = null;
+    this.settings.set({ ...DEFAULT_SETTINGS });
+    this.applyAccentTheme(DEFAULT_SETTINGS.accentColor);
+  }
+
+  private getAuthScope(): string {
+    const token = this.auth.getToken();
+    const userId = this.auth.user()?.id;
+    if (!token) return 'anonymous';
+    return userId ? `user:${userId}` : 'authenticated';
+  }
+
+  private getStorageScope(): string {
+    const userId = this.auth.user()?.id;
+    return userId ? `user:${userId}` : 'anonymous';
+  }
+
+  private getSettingsStorageKey(): string {
+    return `${STORAGE_KEY}:${this.getStorageScope()}`;
+  }
+
+  private getDraftStorageKey(): string {
+    return `${DRAFT_STORAGE_KEY}:${this.getStorageScope()}`;
+  }
+
+  private getLegacySettingsValueForMigration(): string | null {
+    if (this.getStorageScope() === 'anonymous') {
+      return localStorage.getItem(STORAGE_KEY);
+    }
+
+    const legacy = localStorage.getItem(STORAGE_KEY);
+    if (legacy) {
+      localStorage.setItem(this.getSettingsStorageKey(), legacy);
+      localStorage.removeItem(STORAGE_KEY);
+    }
+    return legacy;
+  }
+
+  private getLegacyDraftValueForMigration(): string | null {
+    if (this.getStorageScope() === 'anonymous') {
+      return localStorage.getItem(DRAFT_STORAGE_KEY);
+    }
+
+    const legacy = localStorage.getItem(DRAFT_STORAGE_KEY);
+    if (legacy) {
+      localStorage.setItem(this.getDraftStorageKey(), legacy);
+      localStorage.removeItem(DRAFT_STORAGE_KEY);
+    }
+    return legacy;
   }
 
   private normalizeEmbeddedDataImageUrls(html: string): string {
