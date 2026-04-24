@@ -304,7 +304,7 @@
       @for (email of visibleEmails(); track emailKey(email); let i = $index) {
         <div class="email-list-row-shell relative overflow-hidden">
           <div
-            class="pointer-events-none absolute inset-y-0 left-0 z-0 flex w-24 items-center justify-start pl-4 transition-opacity duration-150 sm:hidden"
+            class="pointer-events-none absolute inset-0 z-0 flex items-center justify-start px-4 transition-opacity duration-150 sm:hidden"
             [class]="swipeActionClasses('left')"
             [style.opacity]="swipeIndicatorOpacity(email, 'left')">
             <div class="flex items-center gap-2">
@@ -335,7 +335,7 @@
           </div>
 
           <div
-            class="pointer-events-none absolute inset-y-0 right-0 z-0 flex w-24 items-center justify-end pr-4 transition-opacity duration-150 sm:hidden"
+            class="pointer-events-none absolute inset-0 z-0 flex items-center justify-end px-4 transition-opacity duration-150 sm:hidden"
             [class]="swipeActionClasses('right')"
             [style.opacity]="swipeIndicatorOpacity(email, 'right')">
             <div class="flex items-center gap-2">
