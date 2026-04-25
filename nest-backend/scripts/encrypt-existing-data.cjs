@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const crypto = require('crypto');
+const fs = require('fs');
 const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
 
@@ -49,9 +50,12 @@ function deriveKey(raw, context) {
 }
 
 function getKey() {
-  const raw = process.env.ENCRYPTION_KEY;
+  const keyFile = process.env.ENCRYPTION_KEY_FILE && process.env.ENCRYPTION_KEY_FILE.trim();
+  const raw = keyFile
+    ? fs.readFileSync(keyFile, 'utf8').trim()
+    : process.env.ENCRYPTION_KEY;
   if (!raw) {
-    throw new Error('ENCRYPTION_KEY is required before encrypting existing data.');
+    throw new Error('ENCRYPTION_KEY or ENCRYPTION_KEY_FILE is required before encrypting existing data.');
   }
   return deriveKey(raw, 'ENCRYPTION_KEY');
 }

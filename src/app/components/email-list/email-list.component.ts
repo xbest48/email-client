@@ -835,6 +835,10 @@ export class EmailListComponent implements OnInit, OnDestroy {
     await this.refillVisibleEmails();
   }
 
+  async trashEmail(email: Email): Promise<void> {
+    await this.trashEmailAndRefill(email);
+  }
+
   async spamEmail(email: Email): Promise<void> {
     await this.spamEmailAndRefill(email);
   }
@@ -851,6 +855,14 @@ export class EmailListComponent implements OnInit, OnDestroy {
   private async notSpamEmailAndRefill(email: Email): Promise<void> {
     await this.emailService.markAsNotSpam(email);
     await this.refillVisibleEmails();
+  }
+
+  async toggleRead(email: Email): Promise<void> {
+    if (email.isRead) {
+      await this.emailService.markAsUnread(email);
+    } else {
+      await this.emailService.markAsRead(email);
+    }
   }
 
   private async refillVisibleEmails(): Promise<void> {

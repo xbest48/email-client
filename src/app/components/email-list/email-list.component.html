@@ -658,10 +658,77 @@
             <span class="hidden sm:block w-4 shrink-0"></span>
           }
 
-          <!-- Date -->
-          <span class="hidden sm:block text-xs text-gray-500 dark:text-gray-400 shrink-0 w-20 text-right" [class.font-semibold]="!email.isRead">
-            {{ email.date | relativeTime }}
-          </span>
+          <!-- Date / hover actions -->
+          <div class="email-row-actions-slot hidden sm:flex relative shrink-0 w-32 justify-end">
+            <span class="email-row-date block text-xs text-gray-500 dark:text-gray-400 text-right transition-opacity duration-100" [class.font-semibold]="!email.isRead">
+              {{ email.date | relativeTime }}
+            </span>
+            <div class="email-row-hover-actions absolute inset-y-1 right-0 z-20 flex items-center gap-0.5 rounded-lg bg-white/95 px-1 opacity-0 shadow-sm ring-1 ring-gray-200/80 backdrop-blur-sm transition-opacity duration-100 pointer-events-none
+                        dark:bg-gray-900/95 dark:ring-gray-700/80">
+              @if (isSpamFolder()) {
+                <button
+                  (click)="$event.stopPropagation(); notSpamEmail(email)"
+                  class="p-1.5 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 dark:text-gray-400 dark:hover:bg-emerald-900/20 dark:hover:text-emerald-400 rounded-lg transition-colors
+                         focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                  type="button"
+                  aria-label="Marquer comme non-spam"
+                  title="Marquer comme non-spam">
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                  </svg>
+                </button>
+              } @else {
+                <button
+                  (click)="$event.stopPropagation(); spamEmail(email)"
+                  class="p-1.5 text-gray-500 hover:text-orange-600 hover:bg-orange-50 dark:text-gray-400 dark:hover:bg-orange-900/20 dark:hover:text-orange-400 rounded-lg transition-colors
+                         focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  type="button"
+                  aria-label="Marquer comme spam"
+                  title="Marquer comme spam">
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z"/>
+                  </svg>
+                </button>
+              }
+              <button
+                (click)="$event.stopPropagation(); trashEmail(email)"
+                class="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:text-gray-400 dark:hover:bg-red-900/20 dark:hover:text-red-400 rounded-lg transition-colors
+                       focus:outline-none focus:ring-2 focus:ring-red-400"
+                type="button"
+                aria-label="Supprimer"
+                title="Supprimer">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+              </button>
+              <button
+                (click)="$event.stopPropagation(); toggleRead(email)"
+                class="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-800 rounded-lg transition-colors
+                       focus:outline-none focus:ring-2 focus:ring-amber-400"
+                type="button"
+                [attr.aria-label]="email.isRead ? 'Marquer comme non lu' : 'Marquer comme lu'"
+                [title]="email.isRead ? 'Marquer comme non lu' : 'Marquer comme lu'">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                </svg>
+              </button>
+              <button
+                (click)="$event.stopPropagation(); toggleStar(email)"
+                class="p-1.5 transition-colors rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
+                [class.text-amber-400]="email.isStarred"
+                [class.text-gray-400]="!email.isStarred"
+                [class.hover:text-amber-500]="!email.isStarred"
+                type="button"
+                [attr.aria-label]="email.isStarred ? 'Retirer des suivis' : 'Suivre'"
+                [title]="email.isStarred ? 'Retirer des suivis' : 'Suivre'">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"
+                     [attr.fill]="email.isStarred ? 'currentColor' : 'none'" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+                </svg>
+              </button>
+            </div>
+          </div>
 
           <button
             (click)="openMobileActionMenu($event, email)"

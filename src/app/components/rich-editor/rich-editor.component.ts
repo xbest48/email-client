@@ -13,6 +13,7 @@ import {
   restoreTokenizedEmbeddedDataImageHtml,
   tokenizeEmbeddedDataImageHtml,
 } from '../../utils/embedded-data-image-html';
+import { sanitizeEmailHtml } from '../../utils/html-sanitizer';
 
 export type EditorToolbarPosition = 'top' | 'bottom';
 
@@ -79,7 +80,7 @@ export class RichEditorComponent implements OnDestroy {
     if (this.suppressInput) return;
     const editor = this.editorRef()?.nativeElement;
     if (editor) {
-      const restored = this.extractBodyHtml(editor);
+      const restored = sanitizeEmailHtml(this.extractBodyHtml(editor));
       this.lastSourceHtml = restored;
       this.contentChange.emit(restored);
     }
@@ -217,7 +218,7 @@ export class RichEditorComponent implements OnDestroy {
     // couldn't fully pin down, the conversion broke rendering of the first
     // large image inside contenteditable / shadow-root paths in settings,
     // while non-converted data URLs always work.
-    return html;
+    return sanitizeEmailHtml(html);
   }
 
   private restoreEmbeddedDataImageUrls(html: string): string {

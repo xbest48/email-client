@@ -38,6 +38,21 @@
   touch-action: pan-y;
 }
 
+.email-row-actions-slot {
+  min-height: 2rem;
+}
+
+.email-list-row:hover .email-row-date,
+.email-list-row:focus-within .email-row-date {
+  opacity: 0;
+}
+
+.email-list-row:hover .email-row-hover-actions,
+.email-list-row:focus-within .email-row-hover-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 @media (max-width: 640px) {
   .email-list-header {
     flex-wrap: wrap;

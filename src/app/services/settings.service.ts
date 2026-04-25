@@ -2,6 +2,7 @@ import { Injectable, signal, inject, effect } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from './auth.service';
+import { sanitizeEmailHtml } from '../utils/html-sanitizer';
 
 export interface EmailAccount {
   id: string;
@@ -191,15 +192,17 @@ export class SettingsService {
     }
   }
 
-  async updateAccount(id: string, data: Partial<EmailAccount>): Promise<void> {
+  async updateAccount(id: string, data: Partial<EmailAccount>): Promise<EmailAccount | null> {
     try {
       const updated = await firstValueFrom(this.http.put<EmailAccount>(`/api/accounts/${id}`, data));
       this.settings.update((s) => ({
         ...s,
         accounts: s.accounts.map((a) => (a.id === id ? { ...a, ...updated } : a)),
       }));
+      return updated;
     } catch (err) {
       console.error('Failed to update account', err);
+      return null;
     }
   }
 
@@ -658,7 +661,7 @@ export class SettingsService {
   }
 
   private normalizeSignatureHtml(html: string): string {
-    return this.normalizeEmbeddedDataImageUrls(this.decodeEscapedHtmlIfNeeded(html));
+    return sanitizeEmailHtml(this.normalizeEmbeddedDataImageUrls(this.decodeEscapedHtmlIfNeeded(html)));
   }
 
   private async prepareSignatureHtml(html: string): Promise<string> {

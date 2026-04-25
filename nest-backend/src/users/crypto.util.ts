@@ -1,4 +1,5 @@
 import * as crypto from 'crypto';
+import * as fs from 'fs';
 
 /**
  * Symmetric encryption used for at-rest sensitive values (IMAP/SMTP passwords,
@@ -37,19 +38,27 @@ function deriveKey(raw: string, context: string): Buffer {
   return crypto.createHash('sha256').update(`${context}:${raw}`).digest();
 }
 
+function readSecret(name: string): string | undefined {
+  const filePath = process.env[`${name}_FILE`]?.trim();
+  if (filePath) {
+    return fs.readFileSync(filePath, 'utf8').trim();
+  }
+  return process.env[name]?.trim();
+}
+
 function loadKey(): Buffer {
-  const raw = process.env.ENCRYPTION_KEY;
+  const raw = readSecret('ENCRYPTION_KEY');
   if (!raw) {
     throw new Error(
-      'ENCRYPTION_KEY environment variable is required. Generate one with ' +
-        '`openssl rand -hex 32` and add it to your .env file.',
+      'ENCRYPTION_KEY or ENCRYPTION_KEY_FILE is required. Generate one with ' +
+        '`openssl rand -hex 32` and store it outside the database backups.',
     );
   }
   return deriveKey(raw, 'ENCRYPTION_KEY');
 }
 
 function loadLegacyKey(): Buffer | null {
-  const raw = process.env.LEGACY_ENCRYPTION_KEY;
+  const raw = readSecret('LEGACY_ENCRYPTION_KEY');
   if (!raw) return null;
   return deriveKey(raw, 'LEGACY_ENCRYPTION_KEY');
 }

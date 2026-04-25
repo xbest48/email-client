@@ -28,11 +28,17 @@ export class LoginComponent {
   readonly rememberMe = signal(false);
   private pendingTempToken: string | null = null;
 
-  onOAuthSignIn(provider: 'google' | 'microsoft' | 'apple'): void {
-    // Placeholder: OAuth providers will be wired up later.
-    this.auth.loginError.set(
-      `La connexion avec ${provider} sera disponible prochainement.`
-    );
+  constructor() {
+    // If the user lands on /login while a refresh cookie is still valid,
+    // attempt a silent session restore and redirect to inbox. Without this,
+    // browsers that auto-complete to /login in the address bar (or saved
+    // bookmarks pointing here) bypass the authGuard on '/' and the user
+    // sees the login form despite having a live session.
+    void this.auth.getInitialLoadPromise()?.then(() => {
+      if (this.auth.isAuthenticated()) {
+        this.router.navigate(['/inbox']);
+      }
+    });
   }
 
   async onSignIn(): Promise<void> {

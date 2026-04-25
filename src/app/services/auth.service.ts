@@ -60,9 +60,6 @@ export interface ActiveSession {
   ipAddress: string | null;
   isCurrent: boolean;
 }
-
-type TokenStorageMode = 'local' | 'session';
-
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private static readonly TOKEN_STORAGE_KEY = 'auth_token';
@@ -73,7 +70,7 @@ export class AuthService {
 
   private readonly userProfile = signal<UserProfile | null>(null);
   private readonly authenticated = signal(false);
-  private readonly token = signal<string | null>(this.readStoredToken());
+  private readonly token = signal<string | null>(null);
   readonly loginError = signal('');
 
   readonly isAuthenticated = computed(() => this.authenticated());
@@ -84,7 +81,15 @@ export class AuthService {
   private refreshPromise: Promise<boolean> | null = null;
 
   constructor() {
-    this.initialLoadPromise = this.checkAuthStatus();
+    this.clearStoredAccessTokens();
+    // Defer the initial auth check to a microtask so the constructor finishes
+    // and DI fully wires this instance before the HTTP interceptor runs and
+    // re-injects AuthService — without this defer, the synchronous chain
+    // constructor → checkAuthStatus → http.post → interceptor → inject(AuthService)
+    // hits a partially-constructed instance and Angular blows up with a
+    // "Cannot read properties of undefined" error in core.js, which silently
+    // aborts the refresh attempt and forces the user to re-login.
+    this.initialLoadPromise = Promise.resolve().then(() => this.checkAuthStatus());
     this.installVisibilityRefresh();
   }
 
@@ -101,7 +106,7 @@ export class AuthService {
       if (document.visibilityState !== 'visible') return;
       // Only refresh if we think we're logged in — otherwise a refresh would
       // be pointless and might race with an ongoing login flow.
-      if (!this.authenticated() || !this.getToken()) return;
+      if (!this.authenticated()) return;
       void this.refreshAccessToken();
     });
   }
@@ -111,15 +116,19 @@ export class AuthService {
   }
 
   getToken(): string | null {
-    return this.token() ?? this.readStoredToken();
+    return this.token();
   }
 
   async checkAuthStatus(): Promise<void> {
-    const currentToken = this.getToken();
+    let currentToken = this.getToken();
     if (!currentToken) {
-      this.authenticated.set(false);
-      this.userProfile.set(null);
-      return;
+      const refreshed = await this.refreshAccessToken();
+      currentToken = this.getToken();
+      if (!refreshed || !currentToken) {
+        this.authenticated.set(false);
+        this.userProfile.set(null);
+        return;
+      }
     }
 
     try {
@@ -142,17 +151,18 @@ export class AuthService {
     }
   }
 
-  private setToken(newToken: string | null, rememberMe = true) {
+  private setToken(newToken: string | null) {
     this.token.set(newToken);
+    // Access tokens are intentionally memory-only. The httpOnly refresh cookie
+    // restores the session after reload without exposing bearer tokens to XSS.
+    this.clearStoredAccessTokens();
+  }
+
+  private clearStoredAccessTokens(): void {
     localStorage.removeItem(AuthService.TOKEN_STORAGE_KEY);
     sessionStorage.removeItem(AuthService.TOKEN_STORAGE_KEY);
     localStorage.removeItem(AuthService.TOKEN_STORAGE_MODE_KEY);
     sessionStorage.removeItem(AuthService.TOKEN_STORAGE_MODE_KEY);
-    if (newToken) {
-      const storage = rememberMe ? localStorage : sessionStorage;
-      storage.setItem(AuthService.TOKEN_STORAGE_KEY, newToken);
-      storage.setItem(AuthService.TOKEN_STORAGE_MODE_KEY, rememberMe ? 'local' : 'session');
-    }
   }
 
   async register(credentials: LoginCredentials): Promise<boolean> {
@@ -165,7 +175,7 @@ export class AuthService {
           { withCredentials: true },
         )
       );
-      this.setToken(res.access_token, true);
+      this.setToken(res.access_token);
       await this.checkAuthStatus();
       return true;
     } catch (err: unknown) {
@@ -194,7 +204,7 @@ export class AuthService {
       }
 
       if (res.access_token) {
-        this.setToken(res.access_token, rememberMe);
+        this.setToken(res.access_token);
         await this.checkAuthStatus();
         return { success: true };
       }
@@ -216,7 +226,7 @@ export class AuthService {
           { withCredentials: true },
         )
       );
-      this.setToken(res.access_token, rememberMe);
+      this.setToken(res.access_token);
       await this.checkAuthStatus();
       return true;
     } catch (err: unknown) {
@@ -250,7 +260,7 @@ export class AuthService {
       }
 
       if (res.access_token) {
-        this.setToken(res.access_token, rememberMe);
+        this.setToken(res.access_token);
         await this.checkAuthStatus();
         return { success: true };
       }
@@ -376,11 +386,6 @@ export class AuthService {
     this.userProfile.set(null);
   }
 
-  private readStoredToken(): string | null {
-    return localStorage.getItem(AuthService.TOKEN_STORAGE_KEY)
-      ?? sessionStorage.getItem(AuthService.TOKEN_STORAGE_KEY);
-  }
-
   private async performRefreshAccessToken(): Promise<boolean> {
     try {
       const res = await firstValueFrom(
@@ -391,31 +396,12 @@ export class AuthService {
         )
       );
 
-      this.setToken(res.access_token, this.getStoredTokenMode() === 'local');
+      this.setToken(res.access_token);
       return true;
     } catch {
       this.clearAuthState();
       return false;
     }
-  }
-
-  private getStoredTokenMode(): TokenStorageMode {
-    const mode = localStorage.getItem(AuthService.TOKEN_STORAGE_MODE_KEY)
-      ?? sessionStorage.getItem(AuthService.TOKEN_STORAGE_MODE_KEY);
-
-    if (mode === 'local' || mode === 'session') {
-      return mode;
-    }
-
-    if (localStorage.getItem(AuthService.TOKEN_STORAGE_KEY)) {
-      return 'local';
-    }
-
-    if (sessionStorage.getItem(AuthService.TOKEN_STORAGE_KEY)) {
-      return 'session';
-    }
-
-    return 'local';
   }
 
   private isPublicAuthRoute(url: string): boolean {

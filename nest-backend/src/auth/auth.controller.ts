@@ -352,6 +352,13 @@ export class AuthController {
   }
 
   private setRefreshCookie(res: any, refreshToken: string, rememberMe: boolean): void {
+    // Always set maxAge so the cookie survives tab/browser close. Without it,
+    // the browser treats it as a session cookie and wipes it on shutdown,
+    // forcing a re-login. The actual session TTL is still enforced server-side
+    // via the DB-backed AuthSession (24 h without rememberMe, 30 d with).
+    const maxAge = rememberMe
+      ? AuthService.PERSISTENT_REFRESH_TOKEN_TTL_MS
+      : AuthService.SESSION_REFRESH_TOKEN_TTL_MS;
     res.cookie(
       AuthController.REFRESH_COOKIE_NAME,
       refreshToken,
@@ -362,7 +369,7 @@ export class AuthController {
         sameSite: 'strict',
         secure: IS_PROD,
         path: '/api/auth',
-        ...(rememberMe ? { maxAge: AuthService.PERSISTENT_REFRESH_TOKEN_TTL_MS } : {}),
+        maxAge,
       },
     );
   }

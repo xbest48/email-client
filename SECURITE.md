@@ -34,6 +34,7 @@ Ce fichier sert de memo des protections deja presentes dans l'application. Il ne
 - Les passkeys WebAuthn sont prises en charge pour l'enregistrement et la connexion.
 - En production, WebAuthn exige un `RP_ID` non-localhost et des origins en `https://`.
 - Les challenges WebAuthn sont verifies cote backend avec `expectedChallenge`, `expectedOrigin` et `expectedRPID`.
+- WebAuthn exige la verification utilisateur avec `userVerification: required`.
 - Les compteurs WebAuthn sont mis a jour apres verification reussie.
 - Les credentials WebAuthn existants sont exclus lors de l'enregistrement d'un nouveau passkey pour eviter les doublons.
 
@@ -61,7 +62,9 @@ Ce fichier sert de memo des protections deja presentes dans l'application. Il ne
 
 - Les secrets applicatifs sensibles utilisent AES-256-GCM avec authentification.
 - `ENCRYPTION_KEY` est obligatoire pour chiffrer et dechiffrer les donnees sensibles.
+- `ENCRYPTION_KEY_FILE` permet de stocker la cle de chiffrement dans un fichier separe du `.env` et de la base.
 - Les anciens chiffrements AES-256-CBC peuvent etre relus avec `LEGACY_ENCRYPTION_KEY` pour permettre une migration controlee.
+- `LEGACY_ENCRYPTION_KEY_FILE` permet aussi de sortir l'ancienne cle de rotation du `.env`.
 - Les mots de passe IMAP/SMTP des comptes email sont chiffres au repos.
 - Les cles API IA sont chiffrees au repos.
 - Les cles privees PGP sont chiffrees au repos.
@@ -83,6 +86,7 @@ Ce fichier sert de memo des protections deja presentes dans l'application. Il ne
 - Les images externes des emails peuvent etre bloquees selon la politique utilisateur.
 - Les domaines d'images explicitement autorises ou bloques sont geres par utilisateur.
 - Les liens dans le rendu HTML des emails qui s'ouvrent dans un nouvel onglet recoivent `rel="noopener noreferrer"`.
+- Le HTML des emails est nettoye avant rendu : suppression des balises actives, attributs evenementiels, URLs dangereuses et styles a risque.
 - Les images base64 trop lourdes dans les signatures sont bloquees avant sauvegarde.
 - Les images base64 integrees dans les signatures sont limitees a `180 Ko` par image.
 - Les analyses IA de phishing sont mises en cache par utilisateur, compte et message pour eviter des appels repetes sur le meme contenu.
@@ -103,9 +107,13 @@ Ce fichier sert de memo des protections deja presentes dans l'application. Il ne
 - L'intercepteur HTTP attend un refresh token deja en cours avant d'envoyer de nouvelles requetes authentifiees.
 - En cas de `401`, l'intercepteur tente un rafraichissement de token puis rejoue la requete avec le nouveau token.
 - Les requetes qui utilisent le refresh cookie sont envoyees avec `withCredentials`.
+- Les access tokens sont gardes uniquement en memoire et ne sont plus conserves en `localStorage` ou `sessionStorage`.
+- La connexion persistante apres fermeture du navigateur repose sur le cookie de refresh `httpOnly` quand l'utilisateur choisit de rester connecte.
 - Les tokens locaux sont supprimes lors de la deconnexion.
 - Les caches locaux de parametres, brouillons et emails sont separes par utilisateur et par compte actif.
 - Les rendus HTML d'emails sont isoles dans un Shadow DOM pour eviter que le CSS des emails ne casse l'interface principale.
+- Le frontend definit une `Content-Security-Policy` dans `index.html`.
+- Le backend envoie aussi des en-tetes de securite avec `helmet`, dont une CSP restrictive pour les reponses API.
 
 ## Notifications De Securite
 

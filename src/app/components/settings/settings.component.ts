@@ -24,10 +24,25 @@ import * as QRCode from 'qrcode';
 import { startRegistration } from '@simplewebauthn/browser';
 
 type SettingsTab = 'accounts' | 'signatures' | 'security' | 'general' | 'labels' | 'filters' | 'templates' | 'privacy' | 'ai';
+type EmailAccountProvider = 'google' | 'microsoft' | 'apple';
 type AiFeatureToggle = {
   key: AiFeaturePreferenceKey;
   label: string;
   description: string;
+};
+type EmailAccountProviderOption = {
+  id: EmailAccountProvider;
+  name: string;
+  badge: string;
+  emailPlaceholder: string;
+  passwordLabel: string;
+  passwordPlaceholder: string;
+  hint: string;
+  imapHost: string;
+  imapPort: number;
+  smtpHost: string;
+  smtpPort: number;
+  domains: readonly string[];
 };
 
 @Component({
@@ -109,6 +124,57 @@ export class SettingsComponent {
   readonly accountImapPort = signal(993);
   readonly accountSmtpHost = signal('');
   readonly accountSmtpPort = signal(465);
+  readonly selectedAccountProvider = signal<EmailAccountProvider | null>(null);
+  readonly accountProviderOptions: ReadonlyArray<EmailAccountProviderOption> = [
+    {
+      id: 'google',
+      name: 'Google',
+      badge: 'Gmail',
+      emailPlaceholder: 'vous@gmail.com',
+      passwordLabel: "Mot de passe d'application Google",
+      passwordPlaceholder: "Mot de passe d'application",
+      hint: "Utilise les serveurs Gmail. Activez l'IMAP et creez un mot de passe d'application dans votre compte Google.",
+      imapHost: 'imap.gmail.com',
+      imapPort: 993,
+      smtpHost: 'smtp.gmail.com',
+      smtpPort: 465,
+      domains: ['gmail.com', 'googlemail.com'],
+    },
+    {
+      id: 'microsoft',
+      name: 'Microsoft',
+      badge: 'Outlook',
+      emailPlaceholder: 'vous@outlook.com',
+      passwordLabel: "Mot de passe d'application Microsoft",
+      passwordPlaceholder: "Mot de passe d'application",
+      hint: "Utilise les serveurs Outlook. Si la validation en deux etapes est active, utilisez un mot de passe d'application.",
+      imapHost: 'outlook.office365.com',
+      imapPort: 993,
+      smtpHost: 'smtp.office365.com',
+      smtpPort: 587,
+      domains: ['outlook.com', 'hotmail.com', 'live.com', 'msn.com'],
+    },
+    {
+      id: 'apple',
+      name: 'Apple',
+      badge: 'iCloud',
+      emailPlaceholder: 'vous@icloud.com',
+      passwordLabel: "Mot de passe specifique a l'app Apple",
+      passwordPlaceholder: "Mot de passe specifique a l'app",
+      hint: "Utilise les serveurs iCloud Mail. Apple demande un mot de passe specifique a l'app pour les clients mail tiers.",
+      imapHost: 'imap.mail.me.com',
+      imapPort: 993,
+      smtpHost: 'smtp.mail.me.com',
+      smtpPort: 587,
+      domains: ['icloud.com', 'me.com', 'mac.com'],
+    },
+  ];
+  readonly selectedAccountProviderOption = computed(() => {
+    const provider = this.selectedAccountProvider();
+    return provider
+      ? this.accountProviderOptions.find((option) => option.id === provider) ?? null
+      : null;
+  });
 
   // Signature form
   readonly showSignatureForm = signal(false);
@@ -339,7 +405,12 @@ export class SettingsComponent {
 
   onAccountEmailChange(): void {
     const email = this.accountEmail();
-    const domain = email.split('@')[1];
+    const domain = email.split('@')[1]?.trim().toLowerCase();
+    const provider = domain ? this.findAccountProviderByDomain(domain) : null;
+    if (provider) {
+      this.applyAccountProvider(provider.id, false);
+      return;
+    }
     if (domain && !this.accountImapHost()) {
       this.accountImapHost.set(`imap.${domain}`);
       this.accountSmtpHost.set(`smtp.${domain}`);
@@ -382,9 +453,16 @@ export class SettingsComponent {
     }
   }
 
-  openAddAccountForm(): void {
+  openAddAccountForm(provider?: EmailAccountProvider): void {
     this.resetAccountForm();
+    if (provider) {
+      this.applyAccountProvider(provider);
+    }
     this.showAccountForm.set(true);
+  }
+
+  openProviderAccountForm(provider: EmailAccountProvider): void {
+    this.openAddAccountForm(provider);
   }
 
   editAccount(account: EmailAccount): void {
@@ -396,7 +474,21 @@ export class SettingsComponent {
     this.accountImapPort.set(account.imapPort);
     this.accountSmtpHost.set(account.smtpHost);
     this.accountSmtpPort.set(account.smtpPort);
+    this.selectedAccountProvider.set(this.findAccountProviderByHosts(account.imapHost, account.smtpHost)?.id ?? null);
     this.showAccountForm.set(true);
+  }
+
+  applyAccountProvider(providerId: EmailAccountProvider, clearEmail = true): void {
+    const provider = this.accountProviderOptions.find((option) => option.id === providerId);
+    if (!provider) return;
+    this.selectedAccountProvider.set(provider.id);
+    this.accountImapHost.set(provider.imapHost);
+    this.accountImapPort.set(provider.imapPort);
+    this.accountSmtpHost.set(provider.smtpHost);
+    this.accountSmtpPort.set(provider.smtpPort);
+    if (clearEmail) {
+      this.accountEmail.set('');
+    }
   }
 
   cancelAccountForm(): void {
@@ -421,9 +513,12 @@ export class SettingsComponent {
       if (this.accountPassword()) {
         data.password = this.accountPassword();
       }
-      await this.settingsService.updateAccount(editingId, data);
-      if (hasNewPassword) {
-        this.emailService.clearMailboxCredentialError(editingId);
+      const updated = await this.settingsService.updateAccount(editingId, data);
+      if (updated) {
+        if (hasNewPassword) {
+          this.emailService.clearMailboxCredentialError(editingId);
+        }
+        await this.emailService.refreshActiveMailboxAfterAccountUpdate(editingId);
       }
     } else {
       if (!this.accountPassword()) return;
@@ -994,6 +1089,7 @@ export class SettingsComponent {
 
   private resetAccountForm(): void {
     this.editingAccountId.set(null);
+    this.selectedAccountProvider.set(null);
     this.accountEmail.set('');
     this.accountPassword.set('');
     this.accountDisplayName.set('');
@@ -1001,6 +1097,18 @@ export class SettingsComponent {
     this.accountImapPort.set(993);
     this.accountSmtpHost.set('');
     this.accountSmtpPort.set(465);
+  }
+
+  private findAccountProviderByDomain(domain: string): EmailAccountProviderOption | null {
+    return this.accountProviderOptions.find((option) => option.domains.includes(domain)) ?? null;
+  }
+
+  private findAccountProviderByHosts(imapHost: string, smtpHost: string): EmailAccountProviderOption | null {
+    const normalizedImap = imapHost.trim().toLowerCase();
+    const normalizedSmtp = smtpHost.trim().toLowerCase();
+    return this.accountProviderOptions.find(
+      (option) => option.imapHost === normalizedImap && option.smtpHost === normalizedSmtp,
+    ) ?? null;
   }
 
   private resetSignatureForm(): void {

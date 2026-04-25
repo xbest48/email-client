@@ -5,6 +5,7 @@ import {
   restoreTokenizedEmbeddedDataImageHtml,
   tokenizeEmbeddedDataImageHtml,
 } from '../utils/embedded-data-image-html';
+import { sanitizeEmailHtml } from '../utils/html-sanitizer';
 
 @Directive({
   selector: '[appSandboxedHtml]',
@@ -150,7 +151,7 @@ export class SandboxedHtmlDirective {
 
   private prepareHtmlForRendering(html: string): string {
     const template = document.createElement('template');
-    template.innerHTML = html;
+    template.innerHTML = sanitizeEmailHtml(html);
 
     // Inline data: URLs in <img src> are rendered natively by the browser —
     // we intentionally don't convert them to blob URLs here. The conversion

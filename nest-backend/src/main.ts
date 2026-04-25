@@ -28,12 +28,18 @@ async function bootstrap() {
   // Parse cookies (used for the httpOnly refresh cookie).
   app.use(cookieParser());
 
-  // Security headers. We keep CSP disabled here because this service is an
-  // API; the frontend emits its own CSP. Enable contentSecurityPolicy in a
-  // reverse proxy / Angular index.html if serving static assets from Nest.
+  // Security headers for API responses. The frontend also emits its own CSP
+  // in index.html for browsers loading the Angular app.
   app.use(
     helmet({
-      contentSecurityPolicy: false,
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'none'"],
+          baseUri: ["'none'"],
+          frameAncestors: ["'none'"],
+          formAction: ["'none'"],
+        },
+      },
       crossOriginResourcePolicy: { policy: 'same-site' },
       referrerPolicy: { policy: 'no-referrer' },
     }),

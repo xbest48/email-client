@@ -310,7 +310,7 @@ export class AuthService {
       authenticatorSelection: {
         residentKey: 'required',
         requireResidentKey: true,
-        userVerification: 'preferred',
+        userVerification: 'required',
       },
     });
 
@@ -378,7 +378,7 @@ export class AuthService {
           type: 'public-key',
           transports: passkey.transports as any,
         })),
-        userVerification: 'preferred',
+        userVerification: 'required',
       });
 
       await this.usersService.update(user.id, { currentChallenge: options.challenge });
@@ -392,7 +392,7 @@ export class AuthService {
     const options = await generateAuthenticationOptions({
       rpID,
       allowCredentials: [],
-      userVerification: 'preferred',
+      userVerification: 'required',
     });
 
     this.rememberDiscoverableChallenge(options.challenge);

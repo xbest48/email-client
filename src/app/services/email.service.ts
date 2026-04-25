@@ -36,6 +36,8 @@ export class EmailService {
 
   private trashFolder = '';
   private fetchRequestId = 0;
+  private lastFetchedFolder = 'INBOX';
+  private lastFetchedQuery = '';
   // Guard: only one status-fetch batch can run at a time. Concurrent callers
   // (e.g. LayoutComponent + EmailListComponent both calling fetchFolders on
   // init) reuse the same promise instead of spawning duplicate request storms
@@ -153,6 +155,10 @@ export class EmailService {
 
   async fetchEmails(folder: string, query = '', page = 1): Promise<void> {
     await this.settingsService.loadPromise;
+    if (page === 1) {
+      this.lastFetchedFolder = folder;
+      this.lastFetchedQuery = query;
+    }
     if (!this.getActiveUsableAccountId()) {
       this.currentEmails.set([]);
       this.currentTotal.set(0);
@@ -210,6 +216,23 @@ export class EmailService {
         this.loading.set(false);
       }
     }
+  }
+
+  async refreshActiveMailboxAfterAccountUpdate(accountId: string): Promise<void> {
+    if (this.settingsService.activeAccountId() !== accountId) return;
+
+    this.clearMailboxCredentialError(accountId);
+    this.folderFetchPromise = null;
+    this.statusFetchPromise = null;
+    this.fetchRequestId += 1;
+    this.selectedEmail.set(null);
+    this.currentEmails.set([]);
+    this.currentTotal.set(0);
+    this.currentPage.set(1);
+    this.folderStatuses.set(new Map());
+
+    await this.fetchFolders();
+    await this.fetchEmails(this.lastFetchedFolder, this.lastFetchedQuery);
   }
 
   async fetchEmail(folder: string, uid: number): Promise<Email | null> {
