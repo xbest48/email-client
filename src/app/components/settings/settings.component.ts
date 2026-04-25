@@ -5,7 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { SettingsService, EmailAccount, EmailSignature, EmailTemplate } from '../../services/settings.service';
 import { RichEditorComponent } from '../rich-editor/rich-editor.component';
-import { ActiveSession, AiProvider, AuthService, DarkEmailRendering } from '../../services/auth.service';
+import { ActiveSession, AiFeaturePreferenceKey, AiProvider, AuthService, DarkEmailRendering } from '../../services/auth.service';
 import { NotificationService } from '../../services/notification.service';
 import { ToastService } from '../../services/toast.service';
 import { LabelService, Label } from '../../services/label.service';
@@ -24,6 +24,11 @@ import * as QRCode from 'qrcode';
 import { startRegistration } from '@simplewebauthn/browser';
 
 type SettingsTab = 'accounts' | 'signatures' | 'security' | 'general' | 'labels' | 'filters' | 'templates' | 'privacy' | 'ai';
+type AiFeatureToggle = {
+  key: AiFeaturePreferenceKey;
+  label: string;
+  description: string;
+};
 
 @Component({
   selector: 'app-settings',
@@ -120,6 +125,14 @@ export class SettingsComponent {
   readonly aiApiUrl = signal('');
   readonly hideAiHintsPreference = signal(false);
   readonly savingAiSettings = signal(false);
+  readonly aiComposeEnabled = signal(true);
+  readonly aiSummaryEnabled = signal(true);
+  readonly aiReplySuggestionsEnabled = signal(true);
+  readonly aiActionExtractionEnabled = signal(true);
+  readonly aiPhishingEnabled = signal(true);
+  readonly aiCategorizationEnabled = signal(true);
+  readonly aiTranslationEnabled = signal(true);
+  readonly aiTriageEnabled = signal(true);
   readonly customAccentColor = signal(this.settingsService.accentColor);
   readonly mobileSwipeLeftAction = signal<'trash' | 'move' | 'spam' | 'toggleRead' | 'toggleStar'>(this.settingsService.mobileSwipeLeftAction);
   readonly mobileSwipeLeftMoveFolder = signal(this.settingsService.mobileSwipeLeftMoveFolder);
@@ -150,6 +163,48 @@ export class SettingsComponent {
     const provider = this.authService.user()?.aiProvider ?? 'openai';
     return this.aiProviderOptions.find((option) => option.value === provider)?.label ?? 'OpenAI';
   });
+  readonly aiFeatureToggles: ReadonlyArray<AiFeatureToggle> = [
+    {
+      key: 'aiComposeEnabled',
+      label: "Assistant de redaction",
+      description: "Aide a rediger ou ameliorer un brouillon dans la fenetre de composition.",
+    },
+    {
+      key: 'aiSummaryEnabled',
+      label: 'Resume des e-mails',
+      description: "Affiche l'action pour resumer rapidement le contenu d'un message.",
+    },
+    {
+      key: 'aiReplySuggestionsEnabled',
+      label: 'Suggestions de reponse',
+      description: 'Propose des reponses courtes pretes a envoyer.',
+    },
+    {
+      key: 'aiActionExtractionEnabled',
+      label: "Extraction d'actions",
+      description: "Repere les taches, suivis et echeances a partir d'un message.",
+    },
+    {
+      key: 'aiPhishingEnabled',
+      label: 'Analyse phishing',
+      description: "Analyse le niveau d'alerte d'un e-mail suspect.",
+    },
+    {
+      key: 'aiCategorizationEnabled',
+      label: 'Categorisation',
+      description: 'Classe un message dans une categorie utile pour la boite mail.',
+    },
+    {
+      key: 'aiTranslationEnabled',
+      label: 'Traduction',
+      description: "Affiche les actions de traduction dans l'ecran de lecture.",
+    },
+    {
+      key: 'aiTriageEnabled',
+      label: 'Tri intelligent de la liste',
+      description: "Analyse la liste des messages pour afficher les insights IA et filtres intelligents.",
+    },
+  ];
 
   readonly signatureEditor = viewChild<RichEditorComponent>('signatureEditor');
   readonly signatureSourceMode = signal(false);
@@ -217,6 +272,14 @@ export class SettingsComponent {
       this.aiProvider.set(user?.aiProvider ?? 'openai');
       this.aiApiUrl.set(user?.aiApiUrl ?? '');
       this.hideAiHintsPreference.set(!!user?.hideAiHints);
+      this.aiComposeEnabled.set(user?.aiComposeEnabled ?? true);
+      this.aiSummaryEnabled.set(user?.aiSummaryEnabled ?? true);
+      this.aiReplySuggestionsEnabled.set(user?.aiReplySuggestionsEnabled ?? true);
+      this.aiActionExtractionEnabled.set(user?.aiActionExtractionEnabled ?? true);
+      this.aiPhishingEnabled.set(user?.aiPhishingEnabled ?? true);
+      this.aiCategorizationEnabled.set(user?.aiCategorizationEnabled ?? true);
+      this.aiTranslationEnabled.set(user?.aiTranslationEnabled ?? true);
+      this.aiTriageEnabled.set(user?.aiTriageEnabled ?? true);
     });
 
     effect(() => {
@@ -984,6 +1047,14 @@ export class SettingsComponent {
         aiProvider: provider,
         aiApiUrl: provider === 'other' ? apiUrl : '',
         hideAiHints: this.hideAiHintsPreference(),
+        aiComposeEnabled: this.aiComposeEnabled(),
+        aiSummaryEnabled: this.aiSummaryEnabled(),
+        aiReplySuggestionsEnabled: this.aiReplySuggestionsEnabled(),
+        aiActionExtractionEnabled: this.aiActionExtractionEnabled(),
+        aiPhishingEnabled: this.aiPhishingEnabled(),
+        aiCategorizationEnabled: this.aiCategorizationEnabled(),
+        aiTranslationEnabled: this.aiTranslationEnabled(),
+        aiTriageEnabled: this.aiTriageEnabled(),
         isAiEnabled: apiKey ? true : current.isAiEnabled
       });
       this.aiApiKey.set('');
@@ -1051,6 +1122,78 @@ export class SettingsComponent {
       console.error('Failed to update AI hint visibility', e);
     } finally {
       this.savingAiSettings.set(false);
+    }
+  }
+
+  aiFeatureEnabled(key: AiFeaturePreferenceKey): boolean {
+    switch (key) {
+      case 'aiComposeEnabled':
+        return this.aiComposeEnabled();
+      case 'aiSummaryEnabled':
+        return this.aiSummaryEnabled();
+      case 'aiReplySuggestionsEnabled':
+        return this.aiReplySuggestionsEnabled();
+      case 'aiActionExtractionEnabled':
+        return this.aiActionExtractionEnabled();
+      case 'aiPhishingEnabled':
+        return this.aiPhishingEnabled();
+      case 'aiCategorizationEnabled':
+        return this.aiCategorizationEnabled();
+      case 'aiTranslationEnabled':
+        return this.aiTranslationEnabled();
+      case 'aiTriageEnabled':
+        return this.aiTriageEnabled();
+    }
+  }
+
+  async toggleAiFeature(key: AiFeaturePreferenceKey): Promise<void> {
+    const current = this.authService.user();
+    const nextValue = !this.aiFeatureEnabled(key);
+    this.setAiFeatureSignal(key, nextValue);
+    if (!current?.hasAiApiKey) return;
+
+    this.savingAiSettings.set(true);
+
+    try {
+      await this.authService.updateSettings({
+        ...current,
+        [key]: nextValue,
+      });
+    } catch (e) {
+      this.setAiFeatureSignal(key, !nextValue);
+      console.error(`Failed to toggle ${key}`, e);
+      this.toastService.show('error', "Erreur lors de la mise a jour d'une fonctionnalite IA.");
+    } finally {
+      this.savingAiSettings.set(false);
+    }
+  }
+
+  private setAiFeatureSignal(key: AiFeaturePreferenceKey, value: boolean): void {
+    switch (key) {
+      case 'aiComposeEnabled':
+        this.aiComposeEnabled.set(value);
+        break;
+      case 'aiSummaryEnabled':
+        this.aiSummaryEnabled.set(value);
+        break;
+      case 'aiReplySuggestionsEnabled':
+        this.aiReplySuggestionsEnabled.set(value);
+        break;
+      case 'aiActionExtractionEnabled':
+        this.aiActionExtractionEnabled.set(value);
+        break;
+      case 'aiPhishingEnabled':
+        this.aiPhishingEnabled.set(value);
+        break;
+      case 'aiCategorizationEnabled':
+        this.aiCategorizationEnabled.set(value);
+        break;
+      case 'aiTranslationEnabled':
+        this.aiTranslationEnabled.set(value);
+        break;
+      case 'aiTriageEnabled':
+        this.aiTriageEnabled.set(value);
+        break;
     }
   }
 

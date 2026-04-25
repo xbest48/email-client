@@ -1,5 +1,6 @@
 import { Entity, Column, PrimaryGeneratedColumn, ManyToOne } from 'typeorm';
 import { User } from '../users/user.entity';
+import { encryptedTextTransformer } from '../users/encrypted-column.transformer';
 
 @Entity()
 export class PgpKey {
@@ -9,7 +10,7 @@ export class PgpKey {
   @Column()
   userId: string;
 
-  @Column('text')
+  @Column('text', { transformer: encryptedTextTransformer })
   publicKey: string;
 
   @Column('text')
@@ -30,10 +31,10 @@ export class PgpContactKey {
   @Column()
   userId: string;
 
-  @Column()
+  @Column({ type: 'text', transformer: encryptedTextTransformer })
   email: string;
 
-  @Column('text')
+  @Column('text', { transformer: encryptedTextTransformer })
   publicKey: string;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' })

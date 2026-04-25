@@ -7,6 +7,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { User } from '../users/user.entity';
+import { encryptedTextTransformer } from '../users/encrypted-column.transformer';
 
 @Entity()
 export class EmailAiInsight {
@@ -31,7 +32,7 @@ export class EmailAiInsight {
   @Column()
   contentHash: string;
 
-  @Column({ type: 'text', default: 'Autre' })
+  @Column({ type: 'text', default: 'Autre', transformer: encryptedTextTransformer })
   category: string;
 
   @Column({ type: 'text', nullable: true })
@@ -43,7 +44,7 @@ export class EmailAiInsight {
   @Column({ type: 'text', nullable: true })
   phishingLevel: 'low' | 'medium' | 'high' | null;
 
-  @Column({ type: 'text', default: '' })
+  @Column({ type: 'text', default: '', transformer: encryptedTextTransformer })
   reason: string;
 
   @CreateDateColumn()

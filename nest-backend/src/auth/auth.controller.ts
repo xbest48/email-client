@@ -173,6 +173,14 @@ export class AuthController {
       aiProvider: user.aiProvider || 'openai',
       aiApiUrl: user.aiApiUrl || '',
       isAiEnabled: user.isAiEnabled,
+      aiComposeEnabled: user.aiComposeEnabled ?? true,
+      aiSummaryEnabled: user.aiSummaryEnabled ?? true,
+      aiReplySuggestionsEnabled: user.aiReplySuggestionsEnabled ?? true,
+      aiActionExtractionEnabled: user.aiActionExtractionEnabled ?? true,
+      aiPhishingEnabled: user.aiPhishingEnabled ?? true,
+      aiCategorizationEnabled: user.aiCategorizationEnabled ?? true,
+      aiTranslationEnabled: user.aiTranslationEnabled ?? true,
+      aiTriageEnabled: user.aiTriageEnabled ?? true,
       hideAiHints: user.hideAiHints,
       desktopNotificationsEnabled: user.desktopNotificationsEnabled ?? true,
       darkEmailRendering: user.darkEmailRendering ?? 'force-dark',
@@ -194,6 +202,14 @@ export class AuthController {
       aiProvider,
       aiApiUrl,
       isAiEnabled,
+      aiComposeEnabled,
+      aiSummaryEnabled,
+      aiReplySuggestionsEnabled,
+      aiActionExtractionEnabled,
+      aiPhishingEnabled,
+      aiCategorizationEnabled,
+      aiTranslationEnabled,
+      aiTriageEnabled,
       hideAiHints,
       desktopNotificationsEnabled,
       darkEmailRendering,
@@ -219,6 +235,14 @@ export class AuthController {
     if (isAiEnabled !== undefined && updateData.isAiEnabled === undefined) {
       updateData.isAiEnabled = !!isAiEnabled;
     }
+    if (aiComposeEnabled !== undefined) updateData.aiComposeEnabled = !!aiComposeEnabled;
+    if (aiSummaryEnabled !== undefined) updateData.aiSummaryEnabled = !!aiSummaryEnabled;
+    if (aiReplySuggestionsEnabled !== undefined) updateData.aiReplySuggestionsEnabled = !!aiReplySuggestionsEnabled;
+    if (aiActionExtractionEnabled !== undefined) updateData.aiActionExtractionEnabled = !!aiActionExtractionEnabled;
+    if (aiPhishingEnabled !== undefined) updateData.aiPhishingEnabled = !!aiPhishingEnabled;
+    if (aiCategorizationEnabled !== undefined) updateData.aiCategorizationEnabled = !!aiCategorizationEnabled;
+    if (aiTranslationEnabled !== undefined) updateData.aiTranslationEnabled = !!aiTranslationEnabled;
+    if (aiTriageEnabled !== undefined) updateData.aiTriageEnabled = !!aiTriageEnabled;
     if (hideAiHints !== undefined) updateData.hideAiHints = !!hideAiHints;
     if (desktopNotificationsEnabled !== undefined) updateData.desktopNotificationsEnabled = !!desktopNotificationsEnabled;
     if (darkEmailRendering === 'preserve' || darkEmailRendering === 'force-dark') {

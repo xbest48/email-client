@@ -1,13 +1,14 @@
 import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, OneToMany } from 'typeorm';
 import { User } from '../users/user.entity';
 import { EmailLabel } from './email-label.entity';
+import { encryptedTextTransformer } from '../users/encrypted-column.transformer';
 
 @Entity()
 export class Label {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column({ type: 'text', transformer: encryptedTextTransformer })
   name: string;
 
   @Column()

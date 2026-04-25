@@ -6,6 +6,15 @@ import { environment } from '../environments/environment';
 export type ImagePolicy = 'ask' | 'always' | 'never';
 export type AiProvider = 'openai' | 'anthropic' | 'google' | 'mistral' | 'other';
 export type DarkEmailRendering = 'preserve' | 'force-dark';
+export type AiFeaturePreferenceKey =
+  | 'aiComposeEnabled'
+  | 'aiSummaryEnabled'
+  | 'aiReplySuggestionsEnabled'
+  | 'aiActionExtractionEnabled'
+  | 'aiPhishingEnabled'
+  | 'aiCategorizationEnabled'
+  | 'aiTranslationEnabled'
+  | 'aiTriageEnabled';
 
 export interface UserProfile {
   id?: string;
@@ -23,6 +32,14 @@ export interface UserProfile {
   aiProvider?: AiProvider;
   aiApiUrl?: string;
   isAiEnabled?: boolean;
+  aiComposeEnabled?: boolean;
+  aiSummaryEnabled?: boolean;
+  aiReplySuggestionsEnabled?: boolean;
+  aiActionExtractionEnabled?: boolean;
+  aiPhishingEnabled?: boolean;
+  aiCategorizationEnabled?: boolean;
+  aiTranslationEnabled?: boolean;
+  aiTriageEnabled?: boolean;
   hideAiHints?: boolean;
   desktopNotificationsEnabled?: boolean;
   darkEmailRendering?: DarkEmailRendering;

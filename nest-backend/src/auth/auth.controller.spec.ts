@@ -41,12 +41,20 @@ describe('AuthController', () => {
   it('should encrypt and persist the OpenAI key', async () => {
     await controller.updateSettings(
       { user: { id: 'user-1' } },
-      { aiApiKey: 'sk-test-key', aiProvider: 'openai', isAiEnabled: true },
+      {
+        aiApiKey: 'sk-test-key',
+        aiProvider: 'openai',
+        isAiEnabled: true,
+        aiComposeEnabled: true,
+        aiSummaryEnabled: false,
+      },
     );
 
     expect(usersService.update).toHaveBeenCalledTimes(1);
     const [, payload] = usersService.update.mock.calls[0];
     expect(payload.isAiEnabled).toBe(true);
+    expect(payload.aiComposeEnabled).toBe(true);
+    expect(payload.aiSummaryEnabled).toBe(false);
     expect(payload.aiApiKey).not.toBe('sk-test-key');
     expect(decrypt(payload.aiApiKey)).toBe('sk-test-key');
     expect(payload.aiProvider).toBe('openai');

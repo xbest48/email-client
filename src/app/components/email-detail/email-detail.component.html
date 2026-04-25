@@ -38,47 +38,59 @@
           @if (showAiMenu()) {
             <div class="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-20"
                  role="menu" aria-label="Actions IA">
-              <button type="button" (click)="summarize()"
-                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                      role="menuitem">
-                Resumer l'e-mail
-              </button>
-              <button type="button" (click)="generateReplies()"
-                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                      role="menuitem">
-                Proposer des reponses
-              </button>
-              <button type="button" (click)="extractActions()"
-                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                      role="menuitem">
-                Extraire les actions
-              </button>
-              <button type="button" (click)="categorize()"
-                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                      role="menuitem">
-                Categoriser ce message
-              </button>
-              <button type="button" (click)="detectPhishing()"
-                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                      role="menuitem">
-                Analyser le risque phishing
-              </button>
-              <div class="border-t border-gray-100 dark:border-gray-700 my-1"></div>
-              <button type="button" (click)="translate('fr')"
-                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                      role="menuitem">
-                Traduire en francais
-              </button>
-              <button type="button" (click)="translate('en')"
-                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                      role="menuitem">
-                Translate to English
-              </button>
-              <button type="button" (click)="translate('es')"
-                      class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                      role="menuitem">
-                Traducir al espanol
-              </button>
+              @if (aiFeatureAccess().summary) {
+                <button type="button" (click)="summarize()"
+                        class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                        role="menuitem">
+                  Resumer l'e-mail
+                </button>
+              }
+              @if (aiFeatureAccess().replies) {
+                <button type="button" (click)="generateReplies()"
+                        class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                        role="menuitem">
+                  Proposer des reponses
+                </button>
+              }
+              @if (aiFeatureAccess().actions) {
+                <button type="button" (click)="extractActions()"
+                        class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                        role="menuitem">
+                  Extraire les actions
+                </button>
+              }
+              @if (aiFeatureAccess().categorization) {
+                <button type="button" (click)="categorize()"
+                        class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                        role="menuitem">
+                  Categoriser ce message
+                </button>
+              }
+              @if (aiFeatureAccess().phishing) {
+                <button type="button" (click)="detectPhishing()"
+                        class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                        role="menuitem">
+                  Analyser le risque phishing
+                </button>
+              }
+              @if (aiFeatureAccess().translation) {
+                <div class="border-t border-gray-100 dark:border-gray-700 my-1"></div>
+                <button type="button" (click)="translate('fr')"
+                        class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                        role="menuitem">
+                  Traduire en francais
+                </button>
+                <button type="button" (click)="translate('en')"
+                        class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                        role="menuitem">
+                  Translate to English
+                </button>
+                <button type="button" (click)="translate('es')"
+                        class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                        role="menuitem">
+                  Traducir al espanol
+                </button>
+              }
             </div>
           }
         </div>

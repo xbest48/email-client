@@ -1,5 +1,7 @@
 :host {
   display: block;
+  height: 100%;
+  min-height: 0;
   min-width: 0;
   max-width: 100%;
   overflow-x: hidden;
@@ -28,6 +30,12 @@
 
 .email-list-row-shell {
   position: relative;
+}
+
+.email-list-scroll {
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
 @media (max-width: 640px) {

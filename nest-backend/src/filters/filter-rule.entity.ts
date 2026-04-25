@@ -1,5 +1,6 @@
 import { Entity, Column, PrimaryGeneratedColumn, ManyToOne } from 'typeorm';
 import { User } from '../users/user.entity';
+import { encryptedTextTransformer } from '../users/encrypted-column.transformer';
 
 @Entity()
 export class FilterRule {
@@ -9,7 +10,7 @@ export class FilterRule {
   @Column()
   userId: string;
 
-  @Column()
+  @Column({ type: 'text', transformer: encryptedTextTransformer })
   name: string;
 
   @Column()
@@ -18,13 +19,13 @@ export class FilterRule {
   @Column()
   conditionOperator: 'contains' | 'equals' | 'startsWith';
 
-  @Column()
+  @Column({ type: 'text', transformer: encryptedTextTransformer })
   conditionValue: string;
 
   @Column()
   actionType: 'move' | 'label' | 'star' | 'markRead';
 
-  @Column()
+  @Column({ type: 'text', transformer: encryptedTextTransformer })
   actionValue: string;
 
   @Column({ default: true })

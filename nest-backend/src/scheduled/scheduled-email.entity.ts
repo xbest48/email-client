@@ -1,5 +1,6 @@
 import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, CreateDateColumn } from 'typeorm';
 import { User } from '../users/user.entity';
+import { encryptedTextTransformer } from '../users/encrypted-column.transformer';
 
 @Entity()
 export class ScheduledEmail {
@@ -12,19 +13,19 @@ export class ScheduledEmail {
   @Column()
   accountId: string;
 
-  @Column()
+  @Column({ type: 'text', transformer: encryptedTextTransformer })
   to: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'text', nullable: true, transformer: encryptedTextTransformer })
   cc: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'text', nullable: true, transformer: encryptedTextTransformer })
   bcc: string;
 
-  @Column()
+  @Column({ type: 'text', transformer: encryptedTextTransformer })
   subject: string;
 
-  @Column({ type: 'text' })
+  @Column({ type: 'text', transformer: encryptedTextTransformer })
   body: string;
 
   @Column()

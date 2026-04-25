@@ -56,8 +56,13 @@ export class ComposeComponent implements OnInit, OnDestroy {
   readonly aiLoading = signal(false);
   readonly aiError = signal<string | null>(null);
   readonly dismissAiHint = signal(false);
+  readonly aiComposeEnabled = computed(() =>
+    !!this.authService.user()?.hasAiApiKey
+    && !!this.authService.user()?.isAiEnabled
+    && (this.authService.user()?.aiComposeEnabled ?? true)
+  );
   readonly canUseAi = computed(() =>
-    !!this.authService.user()?.hasAiApiKey && !!this.authService.user()?.isAiEnabled
+    this.aiComposeEnabled()
   );
   readonly aiSettingsHint = computed(() => {
     const user = this.authService.user();
@@ -68,6 +73,9 @@ export class ComposeComponent implements OnInit, OnDestroy {
     }
     if (!user.hasAiApiKey) {
       return "Pour utiliser l'IA ici, configurez une cle API dans Reglages > Intelligence Artificielle.";
+    }
+    if (!(user.aiComposeEnabled ?? true)) {
+      return "L'assistant de redaction est desactive. Activez-le dans Reglages > Intelligence Artificielle.";
     }
     return null;
   });

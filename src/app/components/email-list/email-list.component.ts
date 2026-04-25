@@ -67,8 +67,10 @@ export class EmailListComponent implements OnInit, OnDestroy {
   readonly mobileActionMenu = signal<Email | null>(null);
   readonly mobileSelectionMode = signal(false);
   readonly dismissAiHint = signal(false);
-  readonly aiEnabled = computed(() =>
-    !!this.authService.user()?.hasAiApiKey && !!this.authService.user()?.isAiEnabled
+  readonly aiTriageEnabled = computed(() =>
+    !!this.authService.user()?.hasAiApiKey
+    && !!this.authService.user()?.isAiEnabled
+    && (this.authService.user()?.aiTriageEnabled ?? true)
   );
   readonly aiSettingsHint = computed(() => {
     const user = this.authService.user();
@@ -79,6 +81,9 @@ export class EmailListComponent implements OnInit, OnDestroy {
     }
     if (!user.hasAiApiKey) {
       return "Configurez une cle API dans Reglages > Intelligence Artificielle pour activer le tri intelligent.";
+    }
+    if (!(user.aiTriageEnabled ?? true)) {
+      return "Le tri intelligent est desactive pour cette boite. Activez-le dans Reglages > Intelligence Artificielle.";
     }
     return null;
   });
@@ -139,7 +144,7 @@ export class EmailListComponent implements OnInit, OnDestroy {
     });
 
     effect(() => {
-      if (!this.aiEnabled()) {
+      if (!this.aiTriageEnabled()) {
         this.aiInsights.set(new Map());
         this.triageInFlight.clear();
         this.triagePendingCount.set(0);
@@ -922,7 +927,7 @@ export class EmailListComponent implements OnInit, OnDestroy {
   }
 
   toggleTaskPanel(): void {
-    if (!this.aiEnabled()) {
+    if (!this.aiTriageEnabled()) {
       this.showTaskPanel.set(false);
       return;
     }

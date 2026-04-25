@@ -7,6 +7,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { User } from './user.entity';
+import { encryptedTextTransformer } from './encrypted-column.transformer';
 
 @Entity()
 export class AuthSession {
@@ -25,10 +26,10 @@ export class AuthSession {
   @Column({ default: false })
   rememberMe: boolean;
 
-  @Column({ nullable: true })
+  @Column({ type: 'text', nullable: true, transformer: encryptedTextTransformer })
   userAgent?: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'text', nullable: true, transformer: encryptedTextTransformer })
   ipAddress?: string;
 
   @Column({ type: 'datetime', nullable: true })

@@ -1,6 +1,7 @@
 import { Entity, Column, PrimaryGeneratedColumn, OneToMany } from 'typeorm';
 import { Account } from '../accounts/account.entity';
 import { AuthSession } from './auth-session.entity';
+import { encryptedTextTransformer } from './encrypted-column.transformer';
 
 @Entity()
 export class User {
@@ -13,13 +14,13 @@ export class User {
   @Column()
   passwordHash: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'text', nullable: true, transformer: encryptedTextTransformer })
   twoFactorSecret?: string;
 
   @Column({ default: false })
   isTwoFactorEnabled: boolean;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'text', nullable: true, transformer: encryptedTextTransformer })
   currentChallenge?: string | null; // Used for WebAuthn
 
   @Column({ nullable: true })
@@ -40,10 +41,10 @@ export class User {
   @Column({ default: 'ask' })
   imagePolicy: 'ask' | 'always' | 'never';
 
-  @Column({ type: 'text', default: '[]' })
+  @Column({ type: 'text', default: '[]', transformer: encryptedTextTransformer })
   imageAllowedDomains: string;
 
-  @Column({ type: 'text', default: '[]' })
+  @Column({ type: 'text', default: '[]', transformer: encryptedTextTransformer })
   imageBlockedDomains: string;
 
   @Column({ nullable: true })
@@ -55,11 +56,35 @@ export class User {
   @Column({ default: 'openai' })
   aiProvider: 'openai' | 'anthropic' | 'google' | 'mistral' | 'other';
 
-  @Column({ nullable: true })
+  @Column({ type: 'text', nullable: true, transformer: encryptedTextTransformer })
   aiApiUrl?: string;
 
   @Column({ default: false })
   isAiEnabled: boolean;
+
+  @Column({ default: true })
+  aiComposeEnabled: boolean;
+
+  @Column({ default: true })
+  aiSummaryEnabled: boolean;
+
+  @Column({ default: true })
+  aiReplySuggestionsEnabled: boolean;
+
+  @Column({ default: true })
+  aiActionExtractionEnabled: boolean;
+
+  @Column({ default: true })
+  aiPhishingEnabled: boolean;
+
+  @Column({ default: true })
+  aiCategorizationEnabled: boolean;
+
+  @Column({ default: true })
+  aiTranslationEnabled: boolean;
+
+  @Column({ default: true })
+  aiTriageEnabled: boolean;
 
   @Column({ default: false })
   hideAiHints: boolean;
@@ -82,7 +107,7 @@ export class User {
    * frontend can sync arbitrary UI preferences without requiring DB migrations
    * for each new field.  Accounts are excluded — they have their own table.
    */
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'text', nullable: true, transformer: encryptedTextTransformer })
   appSettings?: string;
 
   @OneToMany(() => Account, account => account.user)

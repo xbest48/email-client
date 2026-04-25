@@ -63,8 +63,28 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
 
   // AI Signals
   readonly dismissAiHint = signal(false);
+  readonly aiFeatureAccess = computed(() => {
+    const user = this.authService.user();
+    const globallyEnabled = !!user?.hasAiApiKey && !!user?.isAiEnabled;
+    return {
+      menu: globallyEnabled && (
+        (user?.aiSummaryEnabled ?? true)
+        || (user?.aiReplySuggestionsEnabled ?? true)
+        || (user?.aiActionExtractionEnabled ?? true)
+        || (user?.aiCategorizationEnabled ?? true)
+        || (user?.aiPhishingEnabled ?? true)
+        || (user?.aiTranslationEnabled ?? true)
+      ),
+      summary: globallyEnabled && (user?.aiSummaryEnabled ?? true),
+      replies: globallyEnabled && (user?.aiReplySuggestionsEnabled ?? true),
+      actions: globallyEnabled && (user?.aiActionExtractionEnabled ?? true),
+      phishing: globallyEnabled && (user?.aiPhishingEnabled ?? true),
+      categorization: globallyEnabled && (user?.aiCategorizationEnabled ?? true),
+      translation: globallyEnabled && (user?.aiTranslationEnabled ?? true),
+    };
+  });
   readonly aiEnabled = computed(() =>
-    !!this.authService.user()?.hasAiApiKey && !!this.authService.user()?.isAiEnabled
+    this.aiFeatureAccess().menu
   );
   readonly aiSettingsHint = computed(() => {
     const user = this.authService.user();
@@ -75,6 +95,9 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     }
     if (!user.hasAiApiKey) {
       return "Ajoutez une cle API dans Reglages > Intelligence Artificielle pour utiliser le resume, la traduction et les suggestions.";
+    }
+    if (!this.aiFeatureAccess().menu) {
+      return "Les outils IA de lecture sont desactives. Activez-les dans Reglages > Intelligence Artificielle.";
     }
     return null;
   });
@@ -200,6 +223,16 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     });
 
     effect(() => {
+      const access = this.aiFeatureAccess();
+      if (!access.summary) this.aiSummary.set(null);
+      if (!access.replies) this.aiReplies.set([]);
+      if (!access.actions) this.aiActionItems.set([]);
+      if (!access.phishing) this.aiPhishing.set(null);
+      if (!access.categorization) this.aiCategory.set(null);
+      if (!access.translation) this.aiTranslation.set(null);
+    });
+
+    effect(() => {
       this.authService.user();
       this.dismissAiHint.set(false);
     });
@@ -225,7 +258,7 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
           this.emailService.markAsRead(msg);
           this.loadLabels(folder, parseInt(uid, 10));
           this.loadThread(folder, parseInt(uid, 10));
-          if (this.aiEnabled()) {
+          if (this.aiFeatureAccess().phishing) {
             void this.detectPhishing(true);
           }
         }
@@ -652,6 +685,7 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
 
   async summarize(): Promise<void> {
     this.showAiMenu.set(false);
+    if (!this.aiFeatureAccess().summary) return;
     const content = this.getEmailText();
     if (!content) return;
     this.aiLoading.set(true);
@@ -668,6 +702,7 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
 
   async generateReplies(): Promise<void> {
     this.showAiMenu.set(false);
+    if (!this.aiFeatureAccess().replies) return;
     const content = this.getEmailText();
     if (!content) return;
     this.aiLoading.set(true);
@@ -697,6 +732,7 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
 
   async extractActions(): Promise<void> {
     this.showAiMenu.set(false);
+    if (!this.aiFeatureAccess().actions) return;
     const content = this.getEmailText();
     if (!content) return;
     this.aiLoading.set(true);
@@ -715,6 +751,7 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     if (!silent) {
       this.showAiMenu.set(false);
     }
+    if (!this.aiFeatureAccess().phishing) return;
     const content = this.getEmailText();
     const mail = this.email();
     if (!content) return;
@@ -738,6 +775,7 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
 
   async categorize(): Promise<void> {
     this.showAiMenu.set(false);
+    if (!this.aiFeatureAccess().categorization) return;
     const content = this.getEmailText();
     const mail = this.email();
     if (!content) return;
@@ -759,6 +797,7 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
 
   async translate(targetLanguage: string = 'fr'): Promise<void> {
     this.showAiMenu.set(false);
+    if (!this.aiFeatureAccess().translation) return;
     const content = this.getEmailText();
     if (!content) return;
     this.aiLoading.set(true);

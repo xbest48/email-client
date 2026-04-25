@@ -59,7 +59,9 @@ export class PgpService {
 
   async saveContactKey(userId: string, email: string, publicKey: string): Promise<PgpContactKey> {
     this.validatePgpKey(publicKey, 'public');
-    const existing = await this.contactKeyRepo.findOne({ where: { userId, email } });
+    const normalizedEmail = email.trim().toLowerCase();
+    const existing = (await this.contactKeyRepo.find({ where: { userId } }))
+      .find((contactKey) => contactKey.email.trim().toLowerCase() === normalizedEmail);
     if (existing) {
       existing.publicKey = publicKey;
       return this.contactKeyRepo.save(existing);
@@ -70,7 +72,12 @@ export class PgpService {
   }
 
   async removeContactKey(userId: string, email: string): Promise<void> {
-    await this.contactKeyRepo.delete({ userId, email });
+    const normalizedEmail = email.trim().toLowerCase();
+    const existing = (await this.contactKeyRepo.find({ where: { userId } }))
+      .find((contactKey) => contactKey.email.trim().toLowerCase() === normalizedEmail);
+    if (existing) {
+      await this.contactKeyRepo.delete({ id: existing.id, userId });
+    }
   }
 
   private validatePgpKey(key: string, kind: 'public' | 'private'): void {

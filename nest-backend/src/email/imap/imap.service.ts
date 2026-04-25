@@ -555,58 +555,42 @@ export class ImapService implements OnModuleDestroy {
       }, { uid: true });
 
       const parsed = await simpleParser(targetMsg.source);
-      const targetMessageId = targetMsg.envelope.messageId || '';
-      const references: string[] = [];
-
-      if (parsed.references) {
-        if (Array.isArray(parsed.references)) {
-          references.push(...parsed.references);
-        } else {
-          references.push(parsed.references);
-        }
-      }
-      if (parsed.inReplyTo) {
-        const inReplyToId = typeof parsed.inReplyTo === 'string' ? parsed.inReplyTo : String(parsed.inReplyTo);
-        if (!references.includes(inReplyToId)) {
-          references.push(inReplyToId);
-        }
-      }
-      if (targetMessageId && !references.includes(targetMessageId)) {
-        references.push(targetMessageId);
-      }
+      const targetMessageId = this.normalizeMessageId(targetMsg.envelope.messageId || '');
+      const references = this.extractThreadMessageIds(parsed, targetMessageId);
+      const threadMessageIds = new Set(references);
 
       const allRelatedUids = new Set<number>();
       allRelatedUids.add(uid);
 
-      // 2. Search by References/In-Reply-To headers
+      // Search strictly by Message-ID / References / In-Reply-To. A subject-only
+      // fallback was far too broad and mixed unrelated emails sharing the same
+      // subject line.
       for (const ref of references) {
+        const variants = this.buildHeaderSearchVariants(ref);
         try {
-          const headerResults: any = await client.search({ header: { 'References': ref } }, { uid: true });
-          if (headerResults) headerResults.forEach((u: number) => allRelatedUids.add(u));
+          for (const variant of variants) {
+            const headerResults: any = await client.search({ header: { 'References': variant } }, { uid: true });
+            if (headerResults) headerResults.forEach((u: number) => allRelatedUids.add(u));
+          }
         } catch { /* ignore */ }
 
         try {
-          const inReplyResults: any = await client.search({ header: { 'In-Reply-To': ref } }, { uid: true });
-          if (inReplyResults) inReplyResults.forEach((u: number) => allRelatedUids.add(u));
+          for (const variant of variants) {
+            const inReplyResults: any = await client.search({ header: { 'In-Reply-To': variant } }, { uid: true });
+            if (inReplyResults) inReplyResults.forEach((u: number) => allRelatedUids.add(u));
+          }
         } catch { /* ignore */ }
 
         try {
-          const msgIdResults: any = await client.search({ header: { 'Message-ID': ref } }, { uid: true });
-          if (msgIdResults) msgIdResults.forEach((u: number) => allRelatedUids.add(u));
-        } catch { /* ignore */ }
-      }
-
-      // 3. Fallback: search by normalized subject
-      const rawSubject = targetMsg.envelope.subject || '';
-      const normalizedSubject = rawSubject.replace(/^(Re|Fwd|Fw|Tr)\s*:\s*/gi, '').trim();
-      if (normalizedSubject) {
-        try {
-          const subjectResults: any = await client.search({ subject: normalizedSubject }, { uid: true });
-          if (subjectResults) subjectResults.forEach((u: number) => allRelatedUids.add(u));
+          for (const variant of variants) {
+            const msgIdResults: any = await client.search({ header: { 'Message-ID': variant } }, { uid: true });
+            if (msgIdResults) msgIdResults.forEach((u: number) => allRelatedUids.add(u));
+          }
         } catch { /* ignore */ }
       }
 
-      // 4. Fetch all related emails
+      // Fetch all candidates, then keep only messages that are actually linked
+      // by Message-ID / References / In-Reply-To.
       const uids = Array.from(allRelatedUids);
       if (uids.length <= 1) {
         return [];
@@ -622,10 +606,19 @@ export class ImapService implements OnModuleDestroy {
         source: true,
       }, { uid: true })) {
         const msgParsed = await simpleParser((msg as any).source);
+        const candidateMessageId = this.normalizeMessageId((msg as any).envelope.messageId || '');
+        const candidateRefs = this.extractThreadMessageIds(msgParsed, candidateMessageId);
+        const isThreadMember = candidateRefs.some((id) => threadMessageIds.has(id))
+          || (candidateMessageId && threadMessageIds.has(candidateMessageId));
+
+        if ((msg as any).uid !== uid && !isThreadMember) {
+          continue;
+        }
+
         threadEmails.push({
           uid: (msg as any).uid,
           folder,
-          messageId: (msg as any).envelope.messageId,
+          messageId: candidateMessageId,
           subject: (msg as any).envelope.subject || '(sans objet)',
           from: this.formatAddress((msg as any).envelope.from),
           to: this.formatAddresses((msg as any).envelope.to),
@@ -828,6 +821,47 @@ export class ImapService implements OnModuleDestroy {
       return bodyStructure.childNodes.some((node: any) => this.checkAttachments(node));
     }
     return false;
+  }
+
+  private normalizeMessageId(value: unknown): string {
+    return String(value ?? '').trim().replace(/^<+|>+$/g, '');
+  }
+
+  private extractThreadMessageIds(parsed: { references?: unknown; inReplyTo?: unknown }, currentMessageId = ''): string[] {
+    const ids = new Set<string>();
+    const addValue = (value: unknown) => {
+      const normalized = this.normalizeMessageId(value);
+      if (normalized) {
+        ids.add(normalized);
+      }
+    };
+
+    if (Array.isArray(parsed.references)) {
+      for (const value of parsed.references) {
+        addValue(value);
+      }
+    } else if (parsed.references) {
+      const raw = String(parsed.references);
+      const matches = raw.match(/<[^>]+>|[^\s]+/g) ?? [];
+      for (const value of matches) {
+        addValue(value);
+      }
+    }
+
+    if (parsed.inReplyTo) {
+      addValue(parsed.inReplyTo);
+    }
+
+    addValue(currentMessageId);
+    return [...ids];
+  }
+
+  private buildHeaderSearchVariants(messageId: string): string[] {
+    const normalized = this.normalizeMessageId(messageId);
+    if (!normalized) return [];
+    return normalized.startsWith('<') && normalized.endsWith('>')
+      ? [normalized, this.normalizeMessageId(normalized)]
+      : [normalized, `<${normalized}>`];
   }
 
   private buildSearchCriteria(query: string) {

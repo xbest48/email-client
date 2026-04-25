@@ -83,6 +83,15 @@ interface GeminiResponse {
 }
 
 type AiProvider = 'openai' | 'anthropic' | 'google' | 'mistral' | 'other';
+type AiFeature =
+  | 'compose'
+  | 'summary'
+  | 'replySuggestions'
+  | 'actionExtraction'
+  | 'phishing'
+  | 'categorization'
+  | 'translation'
+  | 'triage';
 
 interface ProviderConfig {
   provider: AiProvider;
@@ -124,6 +133,7 @@ export class AiService {
     const toneLabel = tone?.trim() || 'natural';
     return this.requestText(
       userId,
+      'compose',
       [
         'Tu aides a rediger des emails professionnels.',
         "Retourne uniquement le corps de l'email en HTML simple et propre.",
@@ -147,6 +157,7 @@ export class AiService {
   async summarize(userId: string, emailContent: string): Promise<string> {
     return this.requestText(
       userId,
+      'summary',
       [
         "Tu resumes des emails pour une interface de messagerie en francais.",
         'Fais un resume tres concis en 3 a 5 puces maximum.',
@@ -160,6 +171,7 @@ export class AiService {
   async reply(userId: string, emailContent: string): Promise<string[]> {
     const result = await this.requestJson<{ replies?: string[] }>(
       userId,
+      'replySuggestions',
       [
         'Analyse le message et propose 3 reponses courtes.',
         'Retourne uniquement un objet JSON avec une cle "replies".',
@@ -174,6 +186,7 @@ export class AiService {
     const today = new Date().toISOString().slice(0, 10);
     const result = await this.requestJson<{ items?: AiActionItem[] }>(
       userId,
+      'actionExtraction',
       [
         "Extrait les actions a faire d'un email.",
         'Retourne uniquement un objet JSON avec une cle "items".',
@@ -202,6 +215,7 @@ export class AiService {
   async translate(userId: string, emailContent: string, targetLanguage: string): Promise<string> {
     return this.requestText(
       userId,
+      'translation',
       [
         'Traduis le texte de facon naturelle et contextuelle.',
         'Conserve les informations techniques, la structure et le ton.',
@@ -234,6 +248,7 @@ export class AiService {
 
     const result = await this.requestJson<AiCategoryResult>(
       userId,
+      'categorization',
       [
         'Classe cet email dans une categorie utile pour une boite mail.',
         'Categories recommandees: Factures, Newsletter, Urgent, Personnel, Travail, Promotion, Social, Support, Autre.',
@@ -267,7 +282,8 @@ export class AiService {
   ): Promise<AiPhishingResult> {
     const normalizedIdentity = this.normalizeIdentity(identity);
     const normalizedAccountId = this.normalizeAccountId(accountId);
-    const contentHash = this.hashContent(emailContent);
+    const currentMessageContent = this.stripQuotedReplyContent(emailContent);
+    const contentHash = this.hashContent(currentMessageContent);
     const cached = await this.findCachedInsight(userId, normalizedAccountId, normalizedIdentity);
 
     if (cached && cached.contentHash === contentHash && cached.phishingLevel) {
@@ -280,13 +296,15 @@ export class AiService {
 
     const result = await this.requestJson<AiPhishingResult>(
       userId,
+      'phishing',
       [
         "Analyse le message pour detecter des signaux d'hameconnage ou de manipulation.",
+        "Concentre-toi sur le dernier message envoye par l'expediteur et ignore l'historique cite, les anciennes reponses et les signatures transferees.",
         'Retourne uniquement un objet JSON avec level, reason, indicators.',
         'level doit etre low, medium ou high.',
         'indicators doit etre un tableau court de signaux concrets.',
       ].join(' '),
-      emailContent,
+      currentMessageContent,
     );
 
     const normalizedResult = {
@@ -363,6 +381,7 @@ export class AiService {
 
     const result = await this.requestJson<{ results?: EmailTriageResult[] }>(
       userId,
+      'triage',
       [
         "Analyse une liste d'emails pour un tri intelligent.",
         'Pour chaque email, retourne: id, category, urgency, confidence, phishingLevel, reason.',
@@ -518,13 +537,59 @@ export class AiService {
     return this.normalizePhishingLevel(value);
   }
 
+  private stripQuotedReplyContent(emailContent: string): string {
+    const normalized = (emailContent || '')
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
+      .replace(/<blockquote[\s\S]*?<\/blockquote>/gi, ' ')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/\u00a0/g, ' ');
+
+    const replyMarkers = [
+      /^on .+wrote:$/i,
+      /^le .+a ecrit :$/i,
+      /^de\s*:.*$/i,
+      /^envoye\s*:.*$/i,
+      /^from\s*:.*$/i,
+      /^sent\s*:.*$/i,
+      /^subject\s*:.*$/i,
+      /^objet\s*:.*$/i,
+      /^-{2,}\s*original message\s*-{2,}$/i,
+      /^-{2,}\s*message d'origine\s*-{2,}$/i,
+      /^_{2,}$/i,
+    ];
+
+    const cleanedLines: string[] = [];
+    for (const rawLine of normalized.split('\n')) {
+      const line = rawLine.trim();
+      if (!line) {
+        cleanedLines.push('');
+        continue;
+      }
+      if (line.startsWith('>')) {
+        continue;
+      }
+      if (replyMarkers.some((pattern) => pattern.test(line))) {
+        break;
+      }
+      cleanedLines.push(line);
+    }
+
+    const cleaned = cleanedLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+    return cleaned || normalized.trim();
+  }
+
   private async requestText(
     userId: string,
+    feature: AiFeature,
     systemPrompt: string,
     userPrompt: string,
     temperature = 0.4,
   ): Promise<string> {
-    const config = await this.getProviderConfig(userId);
+    const config = await this.getProviderConfig(userId, feature);
     switch (config.provider) {
       case 'anthropic':
         return this.requestAnthropicText(config, systemPrompt, userPrompt, temperature);
@@ -561,9 +626,10 @@ export class AiService {
     }
   }
 
-  private async requestJson<T>(userId: string, systemPrompt: string, userPrompt: string): Promise<T> {
+  private async requestJson<T>(userId: string, feature: AiFeature, systemPrompt: string, userPrompt: string): Promise<T> {
     const raw = await this.requestText(
       userId,
+      feature,
       `${systemPrompt} Reponds en JSON strict uniquement, sans markdown ni texte hors JSON.`,
       userPrompt,
       0.2,
@@ -758,7 +824,7 @@ export class AiService {
     return text;
   }
 
-  private async getProviderConfig(userId: string): Promise<ProviderConfig> {
+  private async getProviderConfig(userId: string, feature: AiFeature): Promise<ProviderConfig> {
     const user = await this.usersService.findById(userId);
     const encryptedKey = user?.aiApiKey || user?.openAiApiKey;
     if (!encryptedKey) {
@@ -767,6 +833,7 @@ export class AiService {
     if (!user.isAiEnabled) {
       throw new ForbiddenException("Les fonctionnalites IA sont desactivees pour cet utilisateur.");
     }
+    this.assertFeatureEnabled(user, feature);
 
     const provider = (user.aiProvider || 'openai') as AiProvider;
     const apiUrl = user.aiApiUrl?.trim() || null;
@@ -783,6 +850,58 @@ export class AiService {
         apiKey: encryptedKey,
         apiUrl,
       };
+    }
+  }
+
+  private assertFeatureEnabled(user: any, feature: AiFeature): void {
+    const enabled = (() => {
+      switch (feature) {
+        case 'compose':
+          return user.aiComposeEnabled ?? true;
+        case 'summary':
+          return user.aiSummaryEnabled ?? true;
+        case 'replySuggestions':
+          return user.aiReplySuggestionsEnabled ?? true;
+        case 'actionExtraction':
+          return user.aiActionExtractionEnabled ?? true;
+        case 'phishing':
+          return user.aiPhishingEnabled ?? true;
+        case 'categorization':
+          return user.aiCategorizationEnabled ?? true;
+        case 'translation':
+          return user.aiTranslationEnabled ?? true;
+        case 'triage':
+          return user.aiTriageEnabled ?? true;
+        default:
+          return true;
+      }
+    })();
+
+    if (!enabled) {
+      throw new ForbiddenException(this.getFeatureDisabledMessage(feature));
+    }
+  }
+
+  private getFeatureDisabledMessage(feature: AiFeature): string {
+    switch (feature) {
+      case 'compose':
+        return "L'assistant de redaction IA est desactive pour cet utilisateur.";
+      case 'summary':
+        return 'Le resume IA est desactive pour cet utilisateur.';
+      case 'replySuggestions':
+        return 'Les suggestions de reponse IA sont desactivees pour cet utilisateur.';
+      case 'actionExtraction':
+        return "L'extraction d'actions IA est desactivee pour cet utilisateur.";
+      case 'phishing':
+        return "L'analyse phishing IA est desactivee pour cet utilisateur.";
+      case 'categorization':
+        return 'La categorisation IA est desactivee pour cet utilisateur.';
+      case 'translation':
+        return 'La traduction IA est desactivee pour cet utilisateur.';
+      case 'triage':
+        return 'Le tri intelligent IA est desactive pour cet utilisateur.';
+      default:
+        return 'Cette fonctionnalite IA est desactivee pour cet utilisateur.';
     }
   }
 }
