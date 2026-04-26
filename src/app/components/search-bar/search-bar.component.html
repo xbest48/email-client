@@ -20,7 +20,7 @@
         placeholder="Rechercher des emails..."
         class="w-full pl-10 pr-12 py-2.5 bg-gray-100 hover:bg-gray-200/70 focus:bg-white
                border border-transparent focus:border-gray-300
-               rounded-xl text-sm text-gray-800 placeholder-gray-500
+               rounded-xl text-base sm:text-sm text-gray-800 placeholder-gray-500
                transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:shadow-sm"
         autocomplete="off">
 
@@ -56,19 +56,19 @@
         <div>
           <label for="filter-from" class="block text-xs font-medium text-gray-600 mb-1">De</label>
           <input id="filter-from" type="text" [(ngModel)]="filterFrom" name="filterFrom"
-                 class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400/50"
+                 class="w-full px-3 py-2 text-base sm:text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400/50"
                  placeholder="expediteur@email.com">
         </div>
         <div>
           <label for="filter-to" class="block text-xs font-medium text-gray-600 mb-1">A</label>
           <input id="filter-to" type="text" [(ngModel)]="filterTo" name="filterTo"
-                 class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400/50"
+                 class="w-full px-3 py-2 text-base sm:text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400/50"
                  placeholder="destinataire@email.com">
         </div>
         <div>
           <label for="filter-subject" class="block text-xs font-medium text-gray-600 mb-1">Objet</label>
           <input id="filter-subject" type="text" [(ngModel)]="filterSubject" name="filterSubject"
-                 class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400/50"
+                 class="w-full px-3 py-2 text-base sm:text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400/50"
                  placeholder="Mot-cle dans l'objet">
         </div>
         <div>
@@ -89,23 +89,23 @@
         <div>
           <label for="filter-after" class="block text-xs font-medium text-gray-600 mb-1">Apres le</label>
           <input id="filter-after" type="date" [(ngModel)]="filterAfter" name="filterAfter"
-                 class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400/50">
+                 class="w-full px-3 py-2 text-base sm:text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400/50">
         </div>
         <div>
           <label for="filter-before" class="block text-xs font-medium text-gray-600 mb-1">Avant le</label>
           <input id="filter-before" type="date" [(ngModel)]="filterBefore" name="filterBefore"
-                 class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400/50">
+                 class="w-full px-3 py-2 text-base sm:text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400/50">
         </div>
         <div>
           <label for="filter-min-size" class="block text-xs font-medium text-gray-600 mb-1">Taille min (Ko)</label>
           <input id="filter-min-size" type="number" [(ngModel)]="filterMinSize" name="filterMinSize" min="0"
-                 class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400/50"
+                 class="w-full px-3 py-2 text-base sm:text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400/50"
                  placeholder="ex: 100">
         </div>
         <div>
           <label for="filter-max-size" class="block text-xs font-medium text-gray-600 mb-1">Taille max (Ko)</label>
           <input id="filter-max-size" type="number" [(ngModel)]="filterMaxSize" name="filterMaxSize" min="0"
-                 class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400/50"
+                 class="w-full px-3 py-2 text-base sm:text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400/50"
                  placeholder="ex: 5000">
         </div>
       </div>

@@ -63,22 +63,35 @@ export class SandboxedHtmlDirective {
    */
   private baseStyles(dark: boolean, mode: 'preserve' | 'force-dark'): string {
     const common = `
-      :host { display: block; border-radius: 12px; }
+      :host {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        overflow: hidden;
+        border-radius: 12px;
+        contain: layout paint;
+      }
       .email-body {
         width: 100%;
         padding: 16px;
         max-width: 100%;
+        min-width: 0;
         overflow-x: hidden;
         overflow-wrap: break-word;
         word-break: break-word;
         box-sizing: border-box;
       }
-      .email-body * { box-sizing: border-box; max-width: 100%; }
+      .email-body * {
+        box-sizing: border-box;
+        max-width: 100% !important;
+        min-width: 0;
+      }
       .email-body img,
       .email-body video,
       .email-body iframe {
-        max-width: 100%;
-        height: auto;
+        max-width: 100% !important;
+        height: auto !important;
       }
       .email-body table {
         max-width: 100% !important;
@@ -96,10 +109,22 @@ export class SandboxedHtmlDirective {
         overflow-wrap: anywhere;
         word-break: break-word;
       }
+      /* Newsletters often hide preview text or set wide containers via inline
+         style. Override the most common patterns that cause "blank" rendering
+         on mobile. */
+      .email-body [style*="display:none"],
+      .email-body [style*="display: none"],
+      .email-body [hidden] {
+        display: none !important;
+      }
       @media (max-width: 640px) {
         .email-body {
           padding: 12px;
         }
+        /* Force ALL tables and their cells to 100% width on mobile so that
+           fixed-pixel newsletter layouts (e.g. <table width="600">) don't
+           overflow or render at half-width. We also stack nested table cells
+           vertically to prevent multi-column layouts from being squashed. */
         .email-body table,
         .email-body tbody,
         .email-body thead,
@@ -109,6 +134,28 @@ export class SandboxedHtmlDirective {
         .email-body th {
           width: 100% !important;
           max-width: 100% !important;
+          min-width: 0 !important;
+          height: auto !important;
+        }
+        .email-body table { table-layout: auto !important; }
+        /* Nested tables (a common newsletter pattern: outer 600px wrapper
+           containing a 100% inner table) get stacked vertically so the
+           inner content can use the full mobile width. */
+        .email-body table table,
+        .email-body table table tbody,
+        .email-body table table tr,
+        .email-body table table td,
+        .email-body table table th {
+          display: block !important;
+        }
+        .email-body div,
+        .email-body section,
+        .email-body article,
+        .email-body header,
+        .email-body footer,
+        .email-body main {
+          max-width: 100% !important;
+          min-width: 0 !important;
         }
       }
     `;
