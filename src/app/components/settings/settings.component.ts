@@ -5,8 +5,8 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { SettingsService, EmailAccount, EmailSignature, EmailTemplate } from '../../services/settings.service';
 import { RichEditorComponent } from '../rich-editor/rich-editor.component';
-import { ActiveSession, AiFeaturePreferenceKey, AiProvider, AuthService, DarkEmailRendering } from '../../services/auth.service';
-import { NotificationService } from '../../services/notification.service';
+import { ActiveSession, AiFeaturePreferenceKey, AiProvider, AuthService, DarkEmailRendering, PushPayloadMode } from '../../services/auth.service';
+import { PushNotificationService } from '../../services/push-notification.service';
 import { ToastService } from '../../services/toast.service';
 import { LabelService, Label } from '../../services/label.service';
 import { FilterService, FilterRule } from '../../services/filter.service';
@@ -62,7 +62,7 @@ export class SettingsComponent {
   protected readonly pgpService = inject(PgpService);
   protected readonly emailService = inject(EmailService);
   protected readonly themeService = inject(ThemeService);
-  protected readonly notificationService = inject(NotificationService);
+  protected readonly pushNotificationService = inject(PushNotificationService);
   private readonly toastService = inject(ToastService);
   private readonly confirmDialog = inject(ConfirmDialogService);
   private readonly router = inject(Router);
@@ -206,7 +206,12 @@ export class SettingsComponent {
   readonly mobileSwipeRightMoveFolder = signal(this.settingsService.mobileSwipeRightMoveFolder);
   readonly blockTrackingPixels = computed(() => this.authService.user()?.blockTrackingPixels ?? false);
   readonly undoSendDelay = computed(() => this.authService.user()?.undoSendDelay ?? 0);
-  readonly desktopNotificationsEnabled = computed(() => this.authService.user()?.desktopNotificationsEnabled ?? false);
+  readonly pushPayloadMode = computed<PushPayloadMode>(() => this.authService.user()?.pushPayloadMode ?? 'subject');
+  readonly pushPayloadModeOptions: ReadonlyArray<{ value: PushPayloadMode; label: string; description: string }> = [
+    { value: 'subject', label: 'Sujet visible', description: "Affiche l'expediteur et l'objet du message." },
+    { value: 'sender-only', label: 'Expediteur seul', description: "Affiche uniquement l'expediteur, sans l'objet." },
+    { value: 'generic', label: 'Generique', description: "N'affiche aucune information personnelle." },
+  ];
   readonly aiProviderOptions: ReadonlyArray<{ value: AiProvider; label: string }> = [
     { value: 'openai', label: 'OpenAI' },
     { value: 'anthropic', label: 'Anthropic' },
@@ -851,52 +856,38 @@ export class SettingsComponent {
     }
   }
 
-  /**
-   * Toggle handler for desktop notifications. Flipping ON from `default`
-   * triggers the browser prompt (we're inside a user gesture). If the user
-   * denies, we flip the saved preference back to OFF so the UI stays honest.
-   */
-  async toggleDesktopNotifications(): Promise<void> {
-    const currentlyOn = this.desktopNotificationsEnabled();
-
-    if (currentlyOn) {
-      await this.notificationService.setUserEnabled(false);
+  async togglePushNotifications(): Promise<void> {
+    if (this.pushNotificationService.subscribed()) {
+      await this.pushNotificationService.disable();
+      this.toastService.show('success', 'Notifications push desactivees.');
       return;
     }
-
-    if (!this.notificationService.supported()) {
-      this.toastService.show('error', 'Votre navigateur ne supporte pas les notifications bureau.');
-      return;
+    const result = await this.pushNotificationService.enable();
+    if (result.ok) {
+      this.toastService.show('success', 'Notifications push activees.');
+    } else {
+      this.toastService.show('error', result.reason ?? "Impossible d'activer les notifications push.");
     }
-
-    let permission = this.notificationService.permission();
-    if (permission === 'default') {
-      permission = await this.notificationService.requestPermission();
-    }
-
-    if (permission !== 'granted') {
-      await this.notificationService.setUserEnabled(false);
-      this.toastService.show(
-        'error',
-        permission === 'denied'
-          ? "Les notifications sont bloquées pour ce site. Autorisez-les dans les paramètres du navigateur pour les activer."
-          : "Autorisation des notifications refusée.",
-      );
-      return;
-    }
-
-    await this.notificationService.setUserEnabled(true);
   }
 
-  testDesktopNotification(): void {
-    const result = this.notificationService.testNotification();
-    if (result.ok) {
-      this.toastService.show(
-        'success',
-        "Notification envoyée. Si elle ne s'affiche pas, vérifiez le mode Ne pas déranger / Concentration de votre système.",
-      );
-    } else {
-      this.toastService.show('error', result.reason ?? "Impossible d'afficher la notification.");
+  async testPushNotification(): Promise<void> {
+    try {
+      const result = await this.pushNotificationService.sendTest();
+      if (result.sent > 0) {
+        this.toastService.show('success', `Notification de test envoyee (${result.sent} appareil${result.sent > 1 ? 's' : ''}).`);
+      } else {
+        this.toastService.show('error', "Aucun appareil enregistre pour les notifications push.");
+      }
+    } catch (err) {
+      this.toastService.show('error', "Impossible d'envoyer la notification de test.");
+    }
+  }
+
+  async setPushPayloadMode(mode: PushPayloadMode): Promise<void> {
+    try {
+      await this.authService.updateSettings({ pushPayloadMode: mode });
+    } catch (err) {
+      this.toastService.show('error', "Impossible de mettre a jour la confidentialite des notifications.");
     }
   }
 

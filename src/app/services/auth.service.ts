@@ -41,9 +41,12 @@ export interface UserProfile {
   aiTranslationEnabled?: boolean;
   aiTriageEnabled?: boolean;
   hideAiHints?: boolean;
-  desktopNotificationsEnabled?: boolean;
+  pushNotificationsEnabled?: boolean;
+  pushPayloadMode?: PushPayloadMode;
   darkEmailRendering?: DarkEmailRendering;
 }
+
+export type PushPayloadMode = 'subject' | 'sender-only' | 'generic';
 
 export interface LoginCredentials {
   email: string;

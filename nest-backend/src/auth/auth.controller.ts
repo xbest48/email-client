@@ -182,7 +182,8 @@ export class AuthController {
       aiTranslationEnabled: user.aiTranslationEnabled ?? true,
       aiTriageEnabled: user.aiTriageEnabled ?? true,
       hideAiHints: user.hideAiHints,
-      desktopNotificationsEnabled: user.desktopNotificationsEnabled ?? true,
+      pushNotificationsEnabled: user.pushNotificationsEnabled ?? false,
+      pushPayloadMode: user.pushPayloadMode ?? 'subject',
       darkEmailRendering: user.darkEmailRendering ?? 'force-dark',
     };
   }
@@ -211,7 +212,8 @@ export class AuthController {
       aiTranslationEnabled,
       aiTriageEnabled,
       hideAiHints,
-      desktopNotificationsEnabled,
+      pushNotificationsEnabled,
+      pushPayloadMode,
       darkEmailRendering,
     } = body;
     const updateData: any = { darkMode, undoSendDelay, blockTrackingPixels };
@@ -244,7 +246,10 @@ export class AuthController {
     if (aiTranslationEnabled !== undefined) updateData.aiTranslationEnabled = !!aiTranslationEnabled;
     if (aiTriageEnabled !== undefined) updateData.aiTriageEnabled = !!aiTriageEnabled;
     if (hideAiHints !== undefined) updateData.hideAiHints = !!hideAiHints;
-    if (desktopNotificationsEnabled !== undefined) updateData.desktopNotificationsEnabled = !!desktopNotificationsEnabled;
+    if (pushNotificationsEnabled !== undefined) updateData.pushNotificationsEnabled = !!pushNotificationsEnabled;
+    if (pushPayloadMode === 'subject' || pushPayloadMode === 'sender-only' || pushPayloadMode === 'generic') {
+      updateData.pushPayloadMode = pushPayloadMode;
+    }
     if (darkEmailRendering === 'preserve' || darkEmailRendering === 'force-dark') {
       updateData.darkEmailRendering = darkEmailRendering;
     }

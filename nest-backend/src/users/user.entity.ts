@@ -89,8 +89,24 @@ export class User {
   @Column({ default: false })
   hideAiHints: boolean;
 
-  @Column({ default: true })
-  desktopNotificationsEnabled: boolean;
+  /**
+   * Master switch for Web Push notifications. When true the backend cron
+   * watcher polls IMAP for new mail and sends pushes to all of this user's
+   * registered subscriptions.
+   */
+  @Column({ default: false })
+  pushNotificationsEnabled: boolean;
+
+  /**
+   * Controls how much of the email's content is exposed in the push payload:
+   * - 'subject':     show "From — Subject" (default)
+   * - 'sender-only': show sender only, body says "Nouveau message"
+   * - 'generic':     no PII at all, "Nouveau message" + "Boite de reception"
+   *
+   * Useful on shared/locked devices where the lock-screen preview is visible.
+   */
+  @Column({ default: 'subject' })
+  pushPayloadMode: 'subject' | 'sender-only' | 'generic';
 
   /**
    * How to render email HTML bodies when the app is in dark mode.

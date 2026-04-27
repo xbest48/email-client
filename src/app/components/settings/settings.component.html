@@ -958,44 +958,67 @@
         </div>
 
         <div class="pt-4 border-t border-gray-100 dark:border-gray-700">
-          <h3 class="text-sm font-semibold text-gray-800 dark:text-white mb-3">Notifications bureau</h3>
+          <h3 class="text-sm font-semibold text-gray-800 dark:text-white mb-3">Notifications push</h3>
           <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
-            Affichez une notification de votre systeme d'exploitation lorsqu'un nouveau message arrive dans votre boite de reception, meme quand l'onglet est en arriere-plan.
+            Recevez une notification meme quand l'application est fermee. Le serveur surveille votre boite et envoie une notification a vos appareils enregistres lorsqu'un nouveau message arrive.
           </p>
 
           <div class="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 space-y-3">
-            @if (!notificationService.supported()) {
+            @if (!pushNotificationService.supported()) {
               <div role="alert" class="text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-lg px-3 py-2">
-                Votre navigateur ne supporte pas les notifications bureau.
+                Votre navigateur ne supporte pas les notifications push.
+              </div>
+            } @else if (pushNotificationService.isIos() && !pushNotificationService.isStandalone()) {
+              <div role="alert" class="text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-lg px-3 py-2">
+                Sur iOS, ajoutez Kyma a votre ecran d'accueil (Partager &rarr; Sur l'ecran d'accueil) avant d'activer les notifications push.
               </div>
             } @else {
               <label class="flex items-center gap-3 cursor-pointer group">
                 <div class="relative flex items-center">
                   <input type="checkbox"
-                         [checked]="desktopNotificationsEnabled()"
-                         (change)="toggleDesktopNotifications()"
-                         name="desktopNotificationsCheckbox"
+                         [checked]="pushNotificationService.subscribed()"
+                         (change)="togglePushNotifications()"
+                         name="pushNotificationsCheckbox"
                          class="sr-only peer">
                   <div class="w-11 h-6 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-amber-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-gray-300 dark:after:border-gray-600 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
                 </div>
                 <div>
-                  <span class="text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">Activer les notifications bureau</span>
-                  <p class="text-xs text-gray-500 dark:text-gray-400">Verifie votre boite toutes les 60 secondes et envoie une notification lors de nouveaux messages.</p>
+                  <span class="text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">Activer les notifications push</span>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">Inscrit cet appareil pour recevoir les nouveaux messages meme appli fermee.</p>
                 </div>
               </label>
 
-              @if (notificationService.permission() === 'denied') {
-                <div role="alert" class="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 rounded-lg px-3 py-2">
-                  Votre navigateur bloque les notifications pour ce site. Autorisez-les dans les parametres du site pour les activer.
-                </div>
-              } @else if (desktopNotificationsEnabled() && notificationService.permission() === 'granted') {
+              <div>
+                <label for="push-payload-mode" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                  Confidentialite du contenu
+                </label>
+                <select id="push-payload-mode"
+                        [ngModel]="pushPayloadMode()"
+                        (ngModelChange)="setPushPayloadMode($event)"
+                        name="pushPayloadMode"
+                        class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg
+                               focus:outline-none focus:ring-2 focus:ring-amber-400/50 bg-white dark:bg-gray-700 dark:text-white">
+                  @for (option of pushPayloadModeOptions; track option.value) {
+                    <option [ngValue]="option.value">{{ option.label }}</option>
+                  }
+                </select>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  @for (option of pushPayloadModeOptions; track option.value) {
+                    @if (option.value === pushPayloadMode()) {
+                      {{ option.description }}
+                    }
+                  }
+                </p>
+              </div>
+
+              @if (pushNotificationService.subscribed()) {
                 <div class="flex items-center gap-2">
                   <button type="button"
-                          (click)="testDesktopNotification()"
+                          (click)="testPushNotification()"
                           class="px-3 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-medium rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400">
                     Envoyer une notification de test
                   </button>
-                  <span class="text-xs text-green-600 dark:text-green-400">Autorisation accordee</span>
+                  <span class="text-xs text-green-600 dark:text-green-400">Cet appareil est enregistre</span>
                 </div>
               }
             }

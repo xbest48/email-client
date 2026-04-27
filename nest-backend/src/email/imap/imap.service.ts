@@ -176,6 +176,76 @@ export class ImapService implements OnModuleDestroy {
     }));
   }
 
+  /**
+   * Best-effort inbox path resolution. Used by background watchers that want
+   * to poll the inbox without depending on what the user has selected as
+   * "active" in the frontend. Falls back to the IMAP-spec default "INBOX".
+   */
+  async findInboxPath(credentials: EmailCredentials): Promise<string> {
+    try {
+      const client = await this.getConnection(credentials);
+      const folders = await client.list();
+      const bySpecial = folders.find((f: any) => f.specialUse === '\\Inbox');
+      if (bySpecial?.path) return bySpecial.path;
+      const byName = folders.find((f: any) => typeof f.path === 'string' && f.path.toLowerCase() === 'inbox');
+      if (byName?.path) return byName.path;
+    } catch {
+      // fall through to canonical default
+    }
+    return 'INBOX';
+  }
+
+  /**
+   * Returns minimal envelope info for messages whose UID is strictly greater
+   * than `sinceUid`. Used by the push watcher to detect new arrivals between
+   * polling ticks. The list is capped to `limit` to keep payloads small even
+   * if the watcher missed many ticks.
+   */
+  async fetchInboxEnvelopesSinceUid(
+    credentials: EmailCredentials,
+    folder: string,
+    sinceUid: number,
+    limit = 10,
+  ): Promise<Array<{ uid: number; from: string; fromName: string; subject: string; date: string | null }>> {
+    const client = await this.getConnection(credentials);
+    let lock;
+    try {
+      lock = await client.getMailboxLock(folder);
+    } catch {
+      return [];
+    }
+
+    try {
+      const next = Math.max(sinceUid + 1, 1);
+      const range = `${next}:*`;
+      const out: Array<{ uid: number; from: string; fromName: string; subject: string; date: string | null }> = [];
+
+      for await (const msg of client.fetch(range, { envelope: true, uid: true }, { uid: true })) {
+        const uid = (msg as any).uid as number;
+        // imapflow returns the highest UID even when the range is empty — guard
+        // against the duplicate by skipping anything not strictly after sinceUid.
+        if (typeof uid !== 'number' || uid <= sinceUid) continue;
+        const env = (msg as any).envelope || {};
+        const from = env.from?.[0] || {};
+        out.push({
+          uid,
+          from: typeof from.address === 'string' ? from.address : '',
+          fromName: typeof from.name === 'string' ? from.name : '',
+          subject: typeof env.subject === 'string' ? env.subject : '',
+          date: env.date instanceof Date ? env.date.toISOString() : null,
+        });
+      }
+
+      out.sort((a, b) => a.uid - b.uid);
+      if (out.length > limit) {
+        return out.slice(out.length - limit);
+      }
+      return out;
+    } finally {
+      this.safeReleaseLock(lock);
+    }
+  }
+
   async getFolderStatus(credentials: EmailCredentials, folder: string) {
     const client = await this.getConnection(credentials);
     try {
