@@ -90,6 +90,7 @@ export class ComposeComponent implements OnInit, OnDestroy {
   private contactTimeout: ReturnType<typeof setTimeout> | null = null;
   private remoteDraft: { folder: string; uid: number | null } | null = null;
   private draftSaveInFlight = false;
+  private draftSavePromise: Promise<void> | null = null;
 
   constructor() {
     effect(() => {
@@ -144,7 +145,17 @@ export class ComposeComponent implements OnInit, OnDestroy {
   private async saveDraft(): Promise<void> {
     if (this.draftSaveInFlight) return;
     this.draftSaveInFlight = true;
+    const run = this.runSaveDraft();
+    this.draftSavePromise = run;
+    try {
+      await run;
+    } finally {
+      this.draftSaveInFlight = false;
+      if (this.draftSavePromise === run) this.draftSavePromise = null;
+    }
+  }
 
+  private async runSaveDraft(): Promise<void> {
     const to = this.to();
     const subject = this.subject();
     const cc = this.cc();
@@ -184,8 +195,20 @@ export class ComposeComponent implements OnInit, OnDestroy {
       this.draftSavedAt.set(new Date().toLocaleTimeString());
     } catch (err) {
       console.error('Failed to save draft', err);
-    } finally {
-      this.draftSaveInFlight = false;
+    }
+  }
+
+  private async stopAutoSaveAndFlush(): Promise<void> {
+    if (this.draftInterval) {
+      clearInterval(this.draftInterval);
+      this.draftInterval = null;
+    }
+    if (this.draftSavePromise) {
+      try {
+        await this.draftSavePromise;
+      } catch {
+        // saveDraft already logs errors; ignore here.
+      }
     }
   }
 
@@ -304,6 +327,8 @@ export class ComposeComponent implements OnInit, OnDestroy {
     }
 
     this.sending.set(true);
+    await this.stopAutoSaveAndFlush();
+    let sendSucceeded = false;
     try {
       let html = editor.getFullHtml();
 
@@ -321,6 +346,7 @@ export class ComposeComponent implements OnInit, OnDestroy {
       } else {
         await this.emailService.sendEmail(to, this.subject(), html, this.cc(), this.bcc(), '', '', 0, files, readReceipt);
       }
+      sendSucceeded = true;
       this.settingsService.clearDraft();
       if (this.remoteDraft?.folder && this.remoteDraft.uid) {
         try {
@@ -336,6 +362,9 @@ export class ComposeComponent implements OnInit, OnDestroy {
       this.sendError.set("L'envoi du message a echoue.");
     } finally {
       this.sending.set(false);
+      if (!sendSucceeded && !this.draftInterval) {
+        this.draftInterval = setInterval(() => void this.saveDraft(), 3000);
+      }
     }
   }
 
@@ -380,6 +409,8 @@ export class ComposeComponent implements OnInit, OnDestroy {
     }
 
     this.sending.set(true);
+    await this.stopAutoSaveAndFlush();
+    let scheduleSucceeded = false;
     try {
       const html = editor.getFullHtml();
       await this.scheduledService.schedule({
@@ -390,6 +421,7 @@ export class ComposeComponent implements OnInit, OnDestroy {
         bcc: this.bcc() || undefined,
         scheduledAt: new Date(dateStr),
       });
+      scheduleSucceeded = true;
       this.settingsService.clearDraft();
       if (this.remoteDraft?.folder && this.remoteDraft.uid) {
         try {
@@ -405,6 +437,9 @@ export class ComposeComponent implements OnInit, OnDestroy {
       this.sendError.set("La programmation de l'envoi a echoue.");
     } finally {
       this.sending.set(false);
+      if (!scheduleSucceeded && !this.draftInterval) {
+        this.draftInterval = setInterval(() => void this.saveDraft(), 3000);
+      }
     }
   }
 

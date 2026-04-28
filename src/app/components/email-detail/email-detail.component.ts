@@ -300,7 +300,8 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
   async trash(): Promise<void> {
     const mail = this.email();
     if (mail) {
-      await this.emailService.trashEmail(mail);
+      const delay = (this.authService.user()?.undoSendDelay || 0) * 1000;
+      await this.emailService.trashEmail(mail, delay);
       this.goBack();
     }
   }

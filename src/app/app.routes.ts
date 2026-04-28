@@ -38,6 +38,13 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'doc',
+        loadComponent: () =>
+          import('./components/documentation/documentation.component').then(
+            (m) => m.DocumentationComponent
+          ),
+      },
+      {
         path: ':label',
         loadComponent: () =>
           import('./components/email-list/email-list.component').then(

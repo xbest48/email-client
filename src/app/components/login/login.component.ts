@@ -1,5 +1,5 @@
 import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { Router} from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../services/auth.service';
 import { HttpClient } from '@angular/common/http';
@@ -11,7 +11,7 @@ import { KymaLogoComponent } from '../kyma-logo/kyma-logo.component';
 @Component({
   selector: 'app-login',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, KymaLogoComponent],
+  imports: [FormsModule, KymaLogoComponent],
   templateUrl: './login.component.html',
   styleUrl: './login.component.css',
 })

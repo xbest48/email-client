@@ -324,27 +324,162 @@ export class EmailService {
     }
   }
 
-  async trashEmail(email: Email): Promise<void> {
-    if (this.trashFolder) {
-      await this.moveToFolder(email, this.trashFolder);
-    } else {
-      await firstValueFrom(
-        this.http.delete(
-          `${this.apiUrl}/email/${encodeURIComponent(email.folder)}/${email.uid}`,
-          { headers: this.getHeaders(), withCredentials: true }
-        )
-      );
-      this.currentEmails.update((emails) =>
-        emails.filter((e) => !(e.uid === email.uid && e.folder === email.folder))
-      );
-      this.currentTotal.update((total) => Math.max(0, total - 1));
+  async trashEmail(email: Email, delayMs = 0): Promise<void> {
+    if (delayMs > 0) {
+      await this.scheduleTrash([email], delayMs);
+      return;
     }
+
+    await this.executeTrash(email);
     if (this.selectedEmail()?.uid === email.uid) {
       this.selectedEmail.set(null);
     }
   }
 
-  async bulkTrashInBackground(emails: Email[]): Promise<void> {
+  private async executeTrash(email: Email): Promise<void> {
+    if (this.trashFolder) {
+      await this.moveToFolder(email, this.trashFolder);
+      return;
+    }
+
+    await firstValueFrom(
+      this.http.delete(
+        `${this.apiUrl}/email/${encodeURIComponent(email.folder)}/${email.uid}`,
+        { headers: this.getHeaders(), withCredentials: true }
+      )
+    );
+    this.currentEmails.update((emails) =>
+      emails.filter((e) => !(e.uid === email.uid && e.folder === email.folder))
+    );
+    this.currentTotal.update((total) => Math.max(0, total - 1));
+  }
+
+  private async executeTrashWithoutStateUpdate(email: Email): Promise<void> {
+    if (this.trashFolder) {
+      await firstValueFrom(
+        this.http.post(
+          `${this.apiUrl}/email/${encodeURIComponent(email.folder)}/${email.uid}/move`,
+          { destination: this.trashFolder },
+          { headers: this.getHeaders(), withCredentials: true }
+        )
+      );
+      return;
+    }
+
+    await firstValueFrom(
+      this.http.delete(
+        `${this.apiUrl}/email/${encodeURIComponent(email.folder)}/${email.uid}`,
+        { headers: this.getHeaders(), withCredentials: true }
+      )
+    );
+  }
+
+  private async scheduleTrash(emails: Email[], delayMs: number): Promise<void> {
+    if (!emails.length) return;
+
+    const id = Math.random().toString(36).substring(2, 9);
+    const keys = new Set(emails.map(e => `${e.folder}:${e.uid}`));
+    const previousList = this.currentEmails();
+    const removedFromList = previousList
+      .map((email, index) => ({ email, index }))
+      .filter((item) => keys.has(`${item.email.folder}:${item.email.uid}`));
+    const removedCount = removedFromList.length;
+    const selected = this.selectedEmail();
+
+    this.currentEmails.set(previousList.filter(e => !keys.has(`${e.folder}:${e.uid}`)));
+    if (removedCount > 0) {
+      this.currentTotal.update((total) => Math.max(0, total - removedCount));
+    }
+    if (selected && keys.has(`${selected.folder}:${selected.uid}`)) {
+      this.selectedEmail.set(null);
+    }
+    this.adjustFolderStatusesForBulkMove(emails, this.trashFolder || null);
+
+    let canceled = false;
+    const timeoutId = setTimeout(() => {
+      this.pendingDeletes.update(deletes => deletes.filter(item => item.id !== id));
+      void this.runBulkRequests(
+        emails,
+        (email) => this.executeTrashWithoutStateUpdate(email),
+        'Delayed trash failed',
+      );
+    }, delayMs);
+
+    const cancel = () => {
+      if (canceled) return;
+      canceled = true;
+      clearTimeout(timeoutId);
+      this.pendingDeletes.update(deletes => deletes.filter(item => item.id !== id));
+      this.restorePendingTrash(removedFromList, selected, keys, emails, removedCount);
+    };
+
+    this.pendingDeletes.update(deletes => [
+      ...deletes,
+      {
+        id,
+        count: emails.length,
+        subject: emails.length === 1 ? (emails[0].subject || '(sans objet)') : '',
+        timeoutId,
+        cancel,
+      },
+    ]);
+  }
+
+  private restorePendingTrash(
+    removedFromList: { email: Email; index: number }[],
+    selected: Email | null,
+    keys: Set<string>,
+    emails: Email[],
+    removedCount: number,
+  ): void {
+    if (removedFromList.length > 0) {
+      this.currentEmails.update((current) => {
+        const next = [...current];
+        for (const { email, index } of removedFromList) {
+          const alreadyRestored = next.some((item) => item.uid === email.uid && item.folder === email.folder);
+          if (!alreadyRestored) {
+            next.splice(Math.min(index, next.length), 0, email);
+          }
+        }
+        return next;
+      });
+    }
+    if (removedCount > 0) {
+      this.currentTotal.update((total) => total + removedCount);
+    }
+    if (selected && keys.has(`${selected.folder}:${selected.uid}`)) {
+      this.selectedEmail.set(selected);
+    }
+    const sourceStats = new Map<string, { messages: number; unseen: number }>();
+    for (const email of emails) {
+      const current = sourceStats.get(email.folder) ?? { messages: 0, unseen: 0 };
+      current.messages += 1;
+      if (!email.isRead) {
+        current.unseen += 1;
+      }
+      sourceStats.set(email.folder, current);
+    }
+    for (const [folder, stats] of sourceStats.entries()) {
+      this.adjustFolderMessageCount(folder, stats.messages);
+      if (stats.unseen > 0) {
+        this.adjustFolderUnseenCount(folder, stats.unseen);
+      }
+    }
+    if (this.trashFolder) {
+      this.adjustFolderMessageCount(this.trashFolder, -emails.length);
+      const unreadCount = emails.filter((email) => !email.isRead).length;
+      if (unreadCount > 0) {
+        this.adjustFolderUnseenCount(this.trashFolder, -unreadCount);
+      }
+    }
+  }
+
+  async bulkTrashInBackground(emails: Email[], delayMs = 0): Promise<void> {
+    if (delayMs > 0) {
+      await this.scheduleTrash(emails, delayMs);
+      return;
+    }
+
     const keys = new Set(emails.map(e => `${e.folder}:${e.uid}`));
     this.currentEmails.update(list => list.filter(e => !keys.has(`${e.folder}:${e.uid}`)));
     this.currentTotal.update((total) => Math.max(0, total - keys.size));
@@ -421,6 +556,7 @@ export class EmailService {
   }
 
   readonly pendingSends = signal<{ id: string; to: string; subject: string; timeoutId: any; cancel: () => void }[]>([]);
+  readonly pendingDeletes = signal<{ id: string; count: number; subject: string; timeoutId: any; cancel: () => void }[]>([]);
 
   async saveDraftMessage(
     to: string,

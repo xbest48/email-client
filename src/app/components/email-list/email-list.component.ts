@@ -395,9 +395,12 @@ export class EmailListComponent implements OnInit, OnDestroy {
   async bulkTrash(): Promise<void> {
     const ids = this.selectedIds();
     const emailsToTrash = this.visibleEmails().filter((e) => ids.has(this.emailKey(e)));
-    await this.emailService.bulkTrashInBackground(emailsToTrash);
+    const delay = this.undoDeleteDelayMs();
+    await this.emailService.bulkTrashInBackground(emailsToTrash, delay);
     this.selectedIds.set(new Set());
-    await this.refillVisibleEmails();
+    if (delay === 0) {
+      await this.refillVisibleEmails();
+    }
   }
 
   async bulkSpam(): Promise<void> {
@@ -831,8 +834,15 @@ export class EmailListComponent implements OnInit, OnDestroy {
   }
 
   private async trashEmailAndRefill(email: Email): Promise<void> {
-    await this.emailService.trashEmail(email);
-    await this.refillVisibleEmails();
+    const delay = this.undoDeleteDelayMs();
+    await this.emailService.trashEmail(email, delay);
+    if (delay === 0) {
+      await this.refillVisibleEmails();
+    }
+  }
+
+  private undoDeleteDelayMs(): number {
+    return (this.authService.user()?.undoSendDelay || 0) * 1000;
   }
 
   async trashEmail(email: Email): Promise<void> {

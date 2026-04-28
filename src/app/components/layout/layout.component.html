@@ -116,14 +116,30 @@
     <app-shortcuts-help (close)="showShortcuts.set(false)"/>
   }
 
-  <!-- Undo Send Toast/Snackbar -->
-  @if (emailService.pendingSends().length > 0) {
+  <!-- Undo Toast/Snackbar -->
+  @if (emailService.pendingSends().length > 0 || emailService.pendingDeletes().length > 0) {
     <div class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2">
       @for (send of emailService.pendingSends(); track send.id) {
-        <div class="bg-gray-900 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-4 text-sm w-72 max-w-[90vw]">
+        <div class="bg-amber-500 text-gray-950 px-4 py-3 rounded-lg shadow-xl ring-2 ring-amber-200 dark:bg-amber-400 dark:ring-amber-200 flex items-center gap-4 text-sm font-medium w-72 max-w-[90vw]">
           <span class="flex-1 truncate">Envoi a {{ send.to }}...</span>
           <button (click)="send.cancel()"
-                  class="text-amber-400 hover:text-amber-300 font-medium focus:outline-none"
+                  class="rounded-md bg-gray-950 px-2.5 py-1 text-white hover:bg-gray-800 font-semibold focus:outline-none focus:ring-2 focus:ring-white/80"
+                  type="button">
+            Annuler
+          </button>
+        </div>
+      }
+      @for (deleted of emailService.pendingDeletes(); track deleted.id) {
+        <div class="bg-amber-500 text-gray-950 px-4 py-3 rounded-lg shadow-xl ring-2 ring-amber-200 dark:bg-amber-400 dark:ring-amber-200 flex items-center gap-4 text-sm font-medium w-80 max-w-[90vw]">
+          <span class="flex-1 truncate">
+            @if (deleted.count === 1) {
+              Suppression de {{ deleted.subject }}...
+            } @else {
+              Suppression de {{ deleted.count }} messages...
+            }
+          </span>
+          <button (click)="deleted.cancel()"
+                  class="rounded-md bg-gray-950 px-2.5 py-1 text-white hover:bg-gray-800 font-semibold focus:outline-none focus:ring-2 focus:ring-white/80"
                   type="button">
             Annuler
           </button>
