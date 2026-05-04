@@ -107,11 +107,12 @@ export class InboxPushWatcherService implements OnModuleInit, OnModuleDestroy {
       if (this.idle.isWatching(userId, accountSummary.id)) continue;
       try {
         const account = await this.accounts.findOneWithPassword(accountSummary.id, userId);
-        if (!account?.password) continue;
+        if (!account || (!account.password && !account.accessToken)) continue;
 
         const creds: EmailCredentials = {
           email: account.email,
           password: account.password,
+          accessToken: account.accessToken,
           imapHost: account.imapHost,
           imapPort: account.imapPort,
           smtpHost: account.smtpHost,

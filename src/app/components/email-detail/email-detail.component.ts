@@ -592,6 +592,17 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     }
   }
 
+  async downloadAttachment(attachmentId: string, filename: string): Promise<void> {
+    const mail = this.email();
+    if (!mail) return;
+    try {
+      await this.emailService.downloadAttachment(mail.folder, mail.uid, attachmentId, filename);
+    } catch (err) {
+      console.error('Failed to download attachment', err);
+      this.toastService.show('error', 'Impossible de telecharger la piece jointe.');
+    }
+  }
+
   closePreview(): void {
     const preview = this.previewAttachment();
     if (preview?.url?.startsWith('blob:')) {

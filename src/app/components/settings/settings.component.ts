@@ -15,6 +15,7 @@ import { PgpService } from '../../services/pgp.service';
 import { EmailService } from '../../services/email.service';
 import { ConfirmDialogService } from '../../services/confirm-dialog.service';
 import { ApiKeyService, ApiKeyMeta } from '../../services/api-key.service';
+import { OauthMailService } from '../../services/oauth-mail.service';
 import { SandboxedHtmlDirective } from '../../directives/sandboxed-html.directive';
 import { ThemeService, ThemeMode } from '../../services/theme.service';
 import {
@@ -69,6 +70,7 @@ export class SettingsComponent {
   private readonly confirmDialog = inject(ConfirmDialogService);
   private readonly router = inject(Router);
   protected readonly apiKeyService = inject(ApiKeyService);
+  protected readonly oauthMailService = inject(OauthMailService);
 
   readonly themeMode = this.themeService.mode;
   readonly themeModes: ReadonlyArray<{ value: ThemeMode; label: string; description: string }> = [
@@ -118,6 +120,8 @@ export class SettingsComponent {
   readonly revokeOtherSessionsLoading = signal(false);
 
   // Account form
+  readonly oauthConnecting = signal<EmailAccountProvider | null>(null);
+  readonly oauthAvailableProviders = this.oauthMailService.availableProviders;
   readonly showAccountForm = signal(false);
   readonly editingAccountId = signal<string | null>(null);
   readonly accountEmail = signal('');
@@ -367,6 +371,41 @@ export class SettingsComponent {
         void this.loadMcpAccessKeys();
       }
     });
+
+    effect(() => {
+      if (this.activeTab() === 'accounts') {
+        void this.oauthMailService.loadAvailableProviders();
+      }
+    });
+  }
+
+  /**
+   * Launch the popup-based OAuth flow for the selected provider. On success
+   * the new account is appended to the list; we re-fetch from the server so
+   * the UI reflects the canonical record (including the OAuth provider tag).
+   */
+  async connectOauthProvider(provider: EmailAccountProvider): Promise<void> {
+    if (provider !== 'microsoft' && provider !== 'google') return;
+    if (!this.oauthAvailableProviders().includes(provider)) {
+      this.toastService.show(
+        'error',
+        "OAuth n'est pas configure pour ce fournisseur sur ce serveur. Definissez les variables d'environnement requises.",
+      );
+      return;
+    }
+    this.oauthConnecting.set(provider);
+    try {
+      const result = await this.oauthMailService.connect(provider);
+      // Reload the canonical account list from the backend to pick up the
+      // newly-created (or updated) row, then close the form.
+      await this.settingsService.reloadAccounts();
+      this.toastService.show('success', `Compte ${result.email} connecte.`);
+      this.cancelAccountForm();
+    } catch (err: any) {
+      this.toastService.show('error', err?.message || 'Connexion OAuth annulee.');
+    } finally {
+      this.oauthConnecting.set(null);
+    }
   }
 
   onTabsWheel(event: WheelEvent): void {

@@ -81,9 +81,9 @@ export class SecurityNotificationService {
     }
 
     const account = await this.accountsService.findOneWithPassword(accounts[0].id, user.id);
-    if (!account || !account.password) {
+    if (!account || (!account.password && !account.accessToken)) {
       this.logger.warn(
-        `User ${user.id} has accounts but no readable SMTP password — cannot send new-device notification.`,
+        `User ${user.id} has accounts but no usable SMTP credentials — cannot send new-device notification.`,
       );
       return;
     }
@@ -94,6 +94,7 @@ export class SecurityNotificationService {
       {
         email: account.email,
         password: account.password,
+        accessToken: account.accessToken,
         smtpHost: account.smtpHost,
         smtpPort: account.smtpPort,
         imapHost: account.imapHost,

@@ -5,6 +5,12 @@ import { simpleParser } from 'mailparser';
 export interface EmailCredentials {
   email: string;
   password?: string;
+  /**
+   * OAuth2 access token. When set, IMAP/SMTP authenticate with XOAUTH2 and
+   * `password` is ignored. Used for providers that no longer accept Basic Auth
+   * (notably personal Microsoft accounts since Sep 2024).
+   */
+  accessToken?: string;
   imapHost: string;
   imapPort: number;
   smtpHost: string;
@@ -82,14 +88,14 @@ export class ImapService implements OnModuleDestroy {
   }
 
   private async createConnection(credentials: EmailCredentials, key: string): Promise<ImapFlow> {
+    const auth = credentials.accessToken
+      ? { user: credentials.email, accessToken: credentials.accessToken }
+      : { user: credentials.email, pass: credentials.password || '' };
     const client = new ImapFlow({
       host: credentials.imapHost,
       port: credentials.imapPort || 993,
       secure: true,
-      auth: {
-        user: credentials.email,
-        pass: credentials.password || '',
-      },
+      auth,
       logger: false,
     });
 

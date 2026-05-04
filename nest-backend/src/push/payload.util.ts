@@ -36,12 +36,24 @@ export function buildNewMailPayload(
     body = msg.subject?.trim() || '(Sans objet)';
   }
 
+  const targetUrl = `/email/${encodeURIComponent(folder)}/${msg.uid}`;
+
   return {
     title,
     body,
     tag: `kyma-mail-${accountId}-${msg.uid}`,
     data: {
-      url: `/email/${encodeURIComponent(folder)}/${msg.uid}`,
+      // The Angular Service Worker reads `onActionClick.default` to decide
+      // what to do when the user taps the notification. Without this, clicks
+      // do nothing when the app is closed (the SwPush subscription in the
+      // running app never gets a chance to react).
+      // `focusLastFocusedOrOpen` focuses an existing tab (route then handled
+      // client-side by the SwPush click subscription, which calls
+      // router.navigateByUrl) or opens a new tab directly at the target URL.
+      onActionClick: {
+        default: { operation: 'focusLastFocusedOrOpen', url: targetUrl },
+      },
+      url: targetUrl,
       accountId,
       uid: msg.uid,
       folder,

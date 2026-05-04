@@ -4,6 +4,8 @@ import { firstValueFrom } from 'rxjs';
 import { AuthService } from './auth.service';
 import { sanitizeEmailHtml } from '../utils/html-sanitizer';
 
+export type OAuthMailProvider = 'microsoft' | 'google';
+
 export interface EmailAccount {
   id: string;
   email: string;
@@ -13,6 +15,12 @@ export interface EmailAccount {
   imapPort: number;
   smtpHost: string;
   smtpPort: number;
+  /**
+   * Set when the account authenticates via OAuth2 instead of a password.
+   * The frontend uses this to render an "OAuth-connected" badge and avoid
+   * showing the password field for editing.
+   */
+  oauthProvider?: OAuthMailProvider | null;
 }
 
 export interface EmailSignature {
@@ -215,6 +223,20 @@ export class SettingsService {
       });
     } catch (err) {
       console.error('Failed to remove account', err);
+    }
+  }
+
+  /**
+   * Re-fetch the canonical account list from the backend. Used after the
+   * OAuth popup completes so the UI picks up the row that the backend just
+   * upserted (with its OAuth provider tag and any updated tokens).
+   */
+  async reloadAccounts(): Promise<void> {
+    try {
+      const accounts = await this.loadAccountsWithRetry();
+      this.settings.update((s) => ({ ...s, accounts }));
+    } catch (err) {
+      console.error('Failed to reload accounts', err);
     }
   }
 

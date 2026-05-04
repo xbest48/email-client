@@ -19,6 +19,21 @@ export interface SendEmailDto {
 @Injectable()
 export class SmtpService {
   private static readonly MAX_RECIPIENTS = 100;
+
+  private buildSmtpAuth(credentials: EmailCredentials): any {
+    if (credentials.accessToken) {
+      return {
+        type: 'OAuth2',
+        user: credentials.email,
+        accessToken: credentials.accessToken,
+      };
+    }
+    return {
+      user: credentials.email,
+      pass: credentials.password,
+    };
+  }
+
   // Characters that would allow header injection if present in a header value.
   private static readonly HEADER_INJECTION_REGEX = /[\r\n\0]/;
 
@@ -190,10 +205,7 @@ export class SmtpService {
       host: credentials.smtpHost,
       port: credentials.smtpPort || 465,
       secure: credentials.smtpPort === 587 ? false : true,
-      auth: {
-        user: credentials.email,
-        pass: credentials.password,
-      },
+      auth: this.buildSmtpAuth(credentials),
       tls: {
         // SMTP_ALLOW_INVALID_CERTS=true keeps the previous permissive behaviour
         // (handy for self-signed dev servers). By default we now reject invalid
@@ -224,10 +236,7 @@ export class SmtpService {
       host: credentials.smtpHost,
       port: credentials.smtpPort || 465,
       secure: credentials.smtpPort === 587 ? false : true,
-      auth: {
-        user: credentials.email,
-        pass: credentials.password,
-      },
+      auth: this.buildSmtpAuth(credentials),
       tls: {
         // SMTP_ALLOW_INVALID_CERTS=true keeps the previous permissive behaviour
         // (handy for self-signed dev servers). By default we now reject invalid

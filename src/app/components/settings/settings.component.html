@@ -284,6 +284,39 @@
             <p class="text-sm font-medium text-amber-900 dark:text-amber-100">{{ provider.name }} {{ provider.badge }}</p>
             <p class="mt-1 text-xs text-amber-800 dark:text-amber-200">{{ provider.hint }}</p>
           </div>
+          @if (!editingAccountId() && (provider.id === 'microsoft' || provider.id === 'google')) {
+            <div class="mb-4 rounded-xl border border-blue-100 dark:border-blue-900/40 bg-blue-50/80 dark:bg-blue-900/10 px-4 py-3">
+              <p class="text-sm font-medium text-blue-900 dark:text-blue-100">Connexion securisee (recommande)</p>
+              @if (provider.id === 'microsoft') {
+                <p class="mt-1 text-xs text-blue-800 dark:text-blue-200">
+                  Microsoft a desactive l'authentification par mot de passe pour les comptes personnels (live, hotmail, outlook). Connectez-vous via OAuth pour acceder a votre boite.
+                </p>
+              } @else {
+                <p class="mt-1 text-xs text-blue-800 dark:text-blue-200">
+                  Recommande : autorisez Kyma via votre compte Google plutot que d'utiliser un mot de passe d'application.
+                </p>
+              }
+              @if (oauthAvailableProviders().includes(provider.id)) {
+                <button type="button"
+                        (click)="connectOauthProvider(provider.id)"
+                        [disabled]="oauthConnecting() === provider.id"
+                        class="mt-3 inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg
+                               bg-blue-600 text-white hover:bg-blue-700 transition-colors
+                               focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2
+                               disabled:opacity-50">
+                  @if (oauthConnecting() === provider.id) {
+                    Connexion en cours...
+                  } @else {
+                    Se connecter avec {{ provider.name }}
+                  }
+                </button>
+              } @else {
+                <p class="mt-3 text-xs italic text-blue-800/80 dark:text-blue-200/80">
+                  OAuth n'est pas configure sur ce serveur. L'administrateur doit definir les variables d'environnement requises.
+                </p>
+              }
+            </div>
+          }
         }
         <form (submit)="$event.preventDefault(); saveAccount()" class="space-y-3 mb-6">
           <div>
@@ -383,7 +416,14 @@
               <li class="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg space-y-2">
                 <div class="flex items-center justify-between">
                   <div>
-                    <p class="text-sm font-medium text-gray-800 dark:text-white">{{ account.email }}</p>
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <p class="text-sm font-medium text-gray-800 dark:text-white">{{ account.email }}</p>
+                      @if (account.oauthProvider) {
+                        <span class="inline-flex items-center gap-1 rounded-full bg-blue-100 dark:bg-blue-900/40 px-2 py-0.5 text-[11px] font-semibold text-blue-700 dark:text-blue-300">
+                          OAuth {{ account.oauthProvider === 'microsoft' ? 'Microsoft' : 'Google' }}
+                        </span>
+                      }
+                    </div>
                     <p class="text-xs text-gray-500 dark:text-gray-400">{{ account.imapHost }}:{{ account.imapPort }} / {{ account.smtpHost }}:{{ account.smtpPort }}</p>
                   </div>
                   <div class="flex items-center gap-1 shrink-0 ml-3">

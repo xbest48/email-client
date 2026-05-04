@@ -109,6 +109,7 @@ export async function resolveCredentials(
   return {
     email: account.email,
     password: account.password,
+    accessToken: account.accessToken,
     imapHost: account.imapHost,
     imapPort: account.imapPort,
     smtpHost: account.smtpHost,

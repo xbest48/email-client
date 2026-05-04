@@ -69,6 +69,11 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 | `WEBAUTHN_RP_ID` | no | `localhost` | WebAuthn relying-party ID. Must be the registrable domain (e.g. `example.com`, not `https://mail.example.com`). In production, `localhost` is refused. |
 | `WEBAUTHN_ORIGINS` | no | `http://<RP_ID>:4200` | Comma-separated list of full origins accepted during passkey ceremonies. In production all entries must use `https://`. |
 | `SMTP_ALLOW_INVALID_CERTS` | no | `false` | Set to `true` to keep the previous permissive TLS behaviour (accept self-signed certs from the user's SMTP server). Leave `false` for real providers. |
+| `MICROSOFT_OAUTH_CLIENT_ID` | no | — | Azure App Registration client ID used to add personal Outlook / Live / Hotmail accounts via XOAUTH2 (Microsoft disabled Basic Auth for personal accounts in Sep 2024). The app must allow public-client + PKCE; redirect URI = `<your origin>/api/oauth-mail/microsoft/callback`. |
+| `MICROSOFT_OAUTH_TENANT` | no | `common` | Azure tenant id. `common` accepts both personal and work/school accounts; use a tenant GUID to lock to a specific organisation. |
+| `GOOGLE_OAUTH_CLIENT_ID` | no | — | Google Cloud OAuth client ID for Gmail accounts via XOAUTH2 (alternative to app passwords). Redirect URI = `<your origin>/api/oauth-mail/google/callback`. |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | no | — | Required alongside `GOOGLE_OAUTH_CLIENT_ID` (Google's OAuth flow uses a confidential client). |
+| `OAUTH_MAIL_REDIRECT_URI` | no | derived from request | Override the redirect URI base. The provider name and `/callback` are appended automatically (e.g. `https://mail.example.com/api/oauth-mail`). Useful when the public origin differs from the request host. |
 
 ### Example: local development
 
@@ -138,6 +143,29 @@ the database. Required fields:
 
 Passwords are encrypted with `ENCRYPTION_KEY` before reaching the database;
 they are decrypted in memory only to open an IMAP/SMTP connection.
+
+### OAuth-authenticated accounts (XOAUTH2)
+
+Some providers no longer accept passwords for IMAP/SMTP. Personal
+Microsoft accounts (`live.fr`, `hotmail.com`, `outlook.com`) require OAuth
+since Sep 2024; Gmail also recommends it over app passwords. Kyma supports
+both via XOAUTH2:
+
+1. Register an OAuth client with the provider:
+   - **Microsoft**: Azure portal → Microsoft Entra ID → App registrations.
+     Use account type *"Personal Microsoft accounts and work/school
+     accounts"*. Redirect URI = `<your origin>/api/oauth-mail/microsoft/callback`.
+     Required API permissions (delegated): `IMAP.AccessAsUser.All`,
+     `SMTP.Send`, `offline_access`, `openid`, `email`, `profile`.
+   - **Google**: Google Cloud → APIs & Services → Credentials → OAuth
+     client (web application). Redirect URI =
+     `<your origin>/api/oauth-mail/google/callback`. Enable Gmail API and
+     request the `https://mail.google.com/` scope.
+2. Set the matching env vars (see table above).
+3. From **Settings → Comptes**, choose the provider and click
+   *"Se connecter avec Microsoft / Google"*. The popup runs the consent
+   flow; access + refresh tokens are stored AES-256-GCM encrypted with
+   `ENCRYPTION_KEY` and refreshed automatically when expired.
 
 ---
 

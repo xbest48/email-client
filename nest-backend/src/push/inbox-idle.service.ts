@@ -118,13 +118,14 @@ export class InboxIdleService implements OnModuleInit, OnModuleDestroy {
         for (const summary of list) {
           try {
             const account = await this.accounts.findOneWithPassword(summary.id, userId);
-            if (!account?.password) continue;
+            if (!account || (!account.password && !account.accessToken)) continue;
             desired.set(this.key(userId, summary.id), {
               user,
               accountId: summary.id,
               creds: {
                 email: account.email,
                 password: account.password,
+                accessToken: account.accessToken,
                 imapHost: account.imapHost,
                 imapPort: account.imapPort,
                 smtpHost: account.smtpHost,

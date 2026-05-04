@@ -57,7 +57,7 @@ export class ScheduledService {
     for (const email of dueEmails) {
       try {
         const account = await this.accountsService.findOneWithPassword(email.accountId, email.userId);
-        if (!account || !account.password) {
+        if (!account || (!account.password && !account.accessToken)) {
           email.status = 'failed';
           await this.scheduledEmailRepository.save(email);
           continue;
@@ -66,6 +66,7 @@ export class ScheduledService {
         const creds = {
           email: account.email,
           password: account.password,
+          accessToken: account.accessToken,
           imapHost: account.imapHost,
           imapPort: account.imapPort,
           smtpHost: account.smtpHost,

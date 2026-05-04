@@ -755,14 +755,30 @@ export class EmailService {
     return `${this.apiUrl}/email/${encodeURIComponent(folder)}/${uid}/attachment/${attachmentId}`;
   }
 
-  async fetchAttachmentBlob(folder: string, uid: number, attachmentId: string): Promise<string> {
-    const blob = await firstValueFrom(
+  private async fetchAttachment(folder: string, uid: number, attachmentId: string): Promise<Blob> {
+    return firstValueFrom(
       this.http.get(
         `${this.apiUrl}/email/${encodeURIComponent(folder)}/${uid}/attachment/${attachmentId}`,
         { headers: this.getHeaders(), withCredentials: true, responseType: 'blob' }
       )
     );
+  }
+
+  async fetchAttachmentBlob(folder: string, uid: number, attachmentId: string): Promise<string> {
+    const blob = await this.fetchAttachment(folder, uid, attachmentId);
     return URL.createObjectURL(blob);
+  }
+
+  async downloadAttachment(folder: string, uid: number, attachmentId: string, filename: string): Promise<void> {
+    const blob = await this.fetchAttachment(folder, uid, attachmentId);
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename || 'attachment';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   async fetchThread(folder: string, uid: number): Promise<Email[]> {

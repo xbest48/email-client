@@ -34,11 +34,24 @@ export class EmailController {
     return {
       email: account.email,
       password: account.password,
+      accessToken: account.accessToken,
       imapHost: account.imapHost,
       imapPort: account.imapPort,
       smtpHost: account.smtpHost,
       smtpPort: account.smtpPort,
     } as EmailCredentials;
+  }
+
+  private getContentDisposition(disposition: 'inline' | 'attachment', filename: string): string {
+    const safeFilename = (filename || 'attachment').replace(/[\r\n]+/g, ' ').trim() || 'attachment';
+    const fallbackFilename = safeFilename
+      .replace(/[\\/:*?"<>|]+/g, '_')
+      .replace(/[^\x20-\x7E]/g, '_') || 'attachment';
+    const escapedFallback = fallbackFilename.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const encodedFilename = encodeURIComponent(safeFilename)
+      .replace(/['()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+
+    return `${disposition}; filename="${escapedFallback}"; filename*=UTF-8''${encodedFilename}`;
   }
 
   @Get('folders')
@@ -194,6 +207,7 @@ export class EmailController {
     @Param('folder') folder: string,
     @Param('uid') uid: string,
     @Param('attachmentId') attachmentId: string,
+    @Query('download') download: string | undefined,
     @Res() res: Response,
   ) {
     const creds = await this.getCredentials(req, headers);
@@ -204,8 +218,10 @@ export class EmailController {
       parseInt(attachmentId, 10),
     );
     if (!attachment) throw new BadRequestException('Attachment not found');
+    const disposition = download === '1' || download === 'true' ? 'attachment' : 'inline';
     res.setHeader('Content-Type', attachment.contentType);
-    res.setHeader('Content-Disposition', `inline; filename="${attachment.filename}"`);
+    res.setHeader('Content-Disposition', this.getContentDisposition(disposition, attachment.filename));
+    res.setHeader('Content-Length', String(attachment.content.length));
     res.send(attachment.content);
   }
 

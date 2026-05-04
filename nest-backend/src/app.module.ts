@@ -35,6 +35,7 @@ import { ApiKeysModule } from './api-keys/api-keys.module';
 import { ApiKey } from './api-keys/api-key.entity';
 import { OAuthModule } from './oauth/oauth.module';
 import { OAuthAuthCode } from './oauth/oauth-auth-code.entity';
+import { OauthMailModule } from './oauth-mail/oauth-mail.module';
 
 const IS_PROD = process.env.NODE_ENV === 'production';
 
@@ -87,6 +88,7 @@ const IS_PROD = process.env.NODE_ENV === 'production';
     PushModule,
     ApiKeysModule,
     OAuthModule,
+    OauthMailModule,
     McpModule,
   ],
   controllers: [AppController],
