@@ -1,0 +1,570 @@
+{
+  "result": {
+    "tools": [
+      {
+        "name": "list_folders",
+        "title": "Lister les dossiers IMAP",
+        "description": "Retourne la liste des dossiers (Inbox, Sent, Trash, etc.) du compte.",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "list_emails",
+        "title": "Lister les emails",
+        "description": "Retourne une page d'emails (envelope only) d'un dossier. Utiliser le path retourné par list_folders.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "folder": {
+              "type": "string",
+              "description": "Chemin du dossier IMAP (ex: \"INBOX\")"
+            },
+            "page": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "default": 1
+            },
+            "pageSize": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25
+            }
+          },
+          "required": [
+            "folder"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "search_emails",
+        "title": "Rechercher des emails",
+        "description": "Recherche IMAP plein texte dans un dossier. Le moteur dépend du serveur IMAP.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "folder": {
+              "type": "string"
+            },
+            "query": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "folder",
+            "query"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "read_email",
+        "title": "Lire un email",
+        "description": "Récupère le contenu complet d'un email par son UID.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "folder": {
+              "type": "string"
+            },
+            "uid": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          },
+          "required": [
+            "folder",
+            "uid"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "get_thread",
+        "title": "Récupérer un thread",
+        "description": "Reconstitue le fil de conversation auquel l'email appartient.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "folder": {
+              "type": "string"
+            },
+            "uid": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          },
+          "required": [
+            "folder",
+            "uid"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "send_email",
+        "title": "Envoyer un email",
+        "description": "Envoie un email via SMTP et le copie dans le dossier Sent. Les pièces jointes doivent être encodées en base64.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "to": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "cc": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "bcc": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "subject": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "html": {
+              "type": "string"
+            },
+            "inReplyTo": {
+              "type": "string"
+            },
+            "references": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "requestReadReceipt": {
+              "type": "boolean"
+            },
+            "attachments": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "filename": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "content": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Contenu du fichier encodé en base64 (sans préfixe data:)."
+                  },
+                  "contentType": {
+                    "type": "string",
+                    "minLength": 1,
+                    "default": "application/octet-stream"
+                  },
+                  "cid": {
+                    "type": "string",
+                    "description": "Content-ID pour incorporer l'image en HTML via <img src=\"cid:...\">. Laissez vide pour une pièce jointe classique."
+                  }
+                },
+                "required": [
+                  "filename",
+                  "content"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 20,
+              "description": "Pièces jointes (jusqu'à 20, 25 Mo total). Chaque entrée : { filename, content (base64 du binaire), contentType, cid? }. Pour joindre un fichier partagé par l'utilisateur, encode son contenu en base64 et renseigne `content` — n'invente jamais de contenu fictif."
+            }
+          },
+          "required": [
+            "to",
+            "subject"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "create_draft",
+        "title": "Créer un brouillon",
+        "description": "Construit un email et le sauvegarde dans le dossier Drafts. Les pièces jointes doivent être encodées en base64.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "to": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "cc": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "bcc": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "subject": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "html": {
+              "type": "string"
+            },
+            "inReplyTo": {
+              "type": "string"
+            },
+            "references": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "previousFolder": {
+              "type": "string"
+            },
+            "previousUid": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "attachments": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "filename": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
+                  "content": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Contenu du fichier encodé en base64 (sans préfixe data:)."
+                  },
+                  "contentType": {
+                    "type": "string",
+                    "minLength": 1,
+                    "default": "application/octet-stream"
+                  },
+                  "cid": {
+                    "type": "string",
+                    "description": "Content-ID pour incorporer l'image en HTML via <img src=\"cid:...\">. Laissez vide pour une pièce jointe classique."
+                  }
+                },
+                "required": [
+                  "filename",
+                  "content"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 20,
+              "description": "Pièces jointes (jusqu'à 20, 25 Mo total). Chaque entrée : { filename, content (base64 du binaire), contentType, cid? }. Pour joindre un fichier partagé par l'utilisateur, encode son contenu en base64 et renseigne `content` — n'invente jamais de contenu fictif."
+            }
+          },
+          "required": [
+            "to",
+            "subject"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "set_flag",
+        "title": "Marquer / démarquer un email",
+        "description": "Ajoute ou retire un flag IMAP (ex: \\Seen pour lu/non-lu, \\Flagged pour étoilé).",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "folder": {
+              "type": "string"
+            },
+            "uid": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "flag": {
+              "type": "string",
+              "description": "Nom du flag IMAP, ex: \"\\\\Seen\" ou \"\\\\Flagged\""
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "folder",
+            "uid",
+            "flag",
+            "value"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "move_email",
+        "title": "Déplacer un email vers un dossier",
+        "description": "Déplace un email d'un dossier IMAP vers un autre.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "fromFolder": {
+              "type": "string"
+            },
+            "uid": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "toFolder": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "fromFolder",
+            "uid",
+            "toFolder"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "trash_email",
+        "title": "Mettre un email à la corbeille",
+        "description": "Déplace un email vers le dossier corbeille (ou supprime définitivement si déjà dans la corbeille).",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "folder": {
+              "type": "string"
+            },
+            "uid": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "trashFolder": {
+              "type": "string",
+              "description": "Chemin du dossier corbeille à utiliser. Auto-détecté si omis."
+            }
+          },
+          "required": [
+            "folder",
+            "uid"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "list_labels",
+        "title": "Lister les labels de l'utilisateur",
+        "description": "Retourne tous les labels (locaux à l'application, pas IMAP).",
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "create_label",
+        "title": "Créer un label",
+        "description": "Crée un nouveau label utilisateur.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "color": {
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "description": "Couleur au format #RRGGBB"
+            }
+          },
+          "required": [
+            "name",
+            "color"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "add_label_to_email",
+        "title": "Appliquer un label à un email",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "labelId": {
+              "type": "string"
+            },
+            "folder": {
+              "type": "string"
+            },
+            "uid": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          },
+          "required": [
+            "labelId",
+            "folder",
+            "uid"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      },
+      {
+        "name": "remove_label_from_email",
+        "title": "Retirer un label d'un email",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "labelId": {
+              "type": "string"
+            },
+            "folder": {
+              "type": "string"
+            },
+            "uid": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          },
+          "required": [
+            "labelId",
+            "folder",
+            "uid"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "execution": {
+          "taskSupport": "forbidden"
+        }
+      }
+    ]
+  },
+  "jsonrpc": "2.0",
+  "id": 1
+}

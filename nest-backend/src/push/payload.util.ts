@@ -17,6 +17,7 @@ export function buildNewMailPayload(
   user: User,
   accountId: string,
   msg: NewMailEnvelope,
+  folder = 'INBOX',
 ): PushNotificationPayload {
   const mode = user.pushPayloadMode ?? 'subject';
   const senderLabel = msg.fromName?.trim() || msg.from || 'Expediteur inconnu';
@@ -39,6 +40,11 @@ export function buildNewMailPayload(
     title,
     body,
     tag: `kyma-mail-${accountId}-${msg.uid}`,
-    data: { url: '/inbox', accountId, uid: msg.uid },
+    data: {
+      url: `/email/${encodeURIComponent(folder)}/${msg.uid}`,
+      accountId,
+      uid: msg.uid,
+      folder,
+    },
   };
 }

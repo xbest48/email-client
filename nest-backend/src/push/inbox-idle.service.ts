@@ -364,7 +364,7 @@ export class InboxIdleService implements OnModuleInit, OnModuleDestroy {
     const capped = newMsgs.slice(0, InboxIdleService.MAX_PUSHES_PER_EVENT);
 
     for (const msg of capped) {
-      const payload = buildNewMailPayload(user, conn.accountId, msg);
+      const payload = buildNewMailPayload(user, conn.accountId, msg, conn.inboxPath);
       await this.push.sendToUser(user.id, payload);
     }
 

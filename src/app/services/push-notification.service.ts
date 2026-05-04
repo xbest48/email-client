@@ -53,8 +53,12 @@ export class PushNotificationService {
       // When the user clicks a push, the ngsw SW forwards the event here.
       const click = this.swPush.notificationClicks.subscribe((event) => {
         try { window.focus(); } catch { /* noop */ }
-        const url = (event.notification.data as { url?: string })?.url ?? '/inbox';
-        void this.router.navigate([url]);
+        const data = (event.notification.data ?? {}) as { url?: string; folder?: string; uid?: number };
+        let url = data.url;
+        if (!url && data.folder && data.uid !== undefined) {
+          url = `/email/${encodeURIComponent(data.folder)}/${data.uid}`;
+        }
+        void this.router.navigateByUrl(url ?? '/inbox');
       });
       this.destroyRef.onDestroy(() => click.unsubscribe());
 

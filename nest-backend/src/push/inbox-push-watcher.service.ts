@@ -162,7 +162,7 @@ export class InboxPushWatcherService implements OnModuleInit, OnModuleDestroy {
     }
 
     for (const msg of newMessages) {
-      const payload = buildNewMailPayload(user, accountId, msg);
+      const payload = buildNewMailPayload(user, accountId, msg, inboxPath);
       await this.push.sendToUser(user.id, payload);
     }
 

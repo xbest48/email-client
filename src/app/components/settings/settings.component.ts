@@ -2,6 +2,7 @@ import { environment } from '../../environments/environment';
 import { HttpClient } from '@angular/common/http';
 import { Component, inject, signal, computed, output, ChangeDetectionStrategy, viewChild, ElementRef, afterNextRender, effect } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { DatePipe } from '@angular/common';
 import { Router } from '@angular/router';
 import { SettingsService, EmailAccount, EmailSignature, EmailTemplate } from '../../services/settings.service';
 import { RichEditorComponent } from '../rich-editor/rich-editor.component';
@@ -13,6 +14,7 @@ import { FilterService, FilterRule } from '../../services/filter.service';
 import { PgpService } from '../../services/pgp.service';
 import { EmailService } from '../../services/email.service';
 import { ConfirmDialogService } from '../../services/confirm-dialog.service';
+import { ApiKeyService, ApiKeyMeta } from '../../services/api-key.service';
 import { SandboxedHtmlDirective } from '../../directives/sandboxed-html.directive';
 import { ThemeService, ThemeMode } from '../../services/theme.service';
 import {
@@ -23,7 +25,7 @@ import {
 import * as QRCode from 'qrcode';
 import { startRegistration } from '@simplewebauthn/browser';
 
-type SettingsTab = 'accounts' | 'signatures' | 'security' | 'general' | 'labels' | 'filters' | 'templates' | 'privacy' | 'ai';
+type SettingsTab = 'accounts' | 'signatures' | 'security' | 'general' | 'labels' | 'filters' | 'templates' | 'privacy' | 'ai' | 'mcpAccess';
 type EmailAccountProvider = 'google' | 'microsoft' | 'apple';
 type AiFeatureToggle = {
   key: AiFeaturePreferenceKey;
@@ -48,7 +50,7 @@ type EmailAccountProviderOption = {
 @Component({
   selector: 'app-settings',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RichEditorComponent, SandboxedHtmlDirective],
+  imports: [FormsModule, RichEditorComponent, SandboxedHtmlDirective, DatePipe],
   templateUrl: './settings.component.html',
   styleUrl: './settings.component.css',
 })
@@ -66,6 +68,7 @@ export class SettingsComponent {
   private readonly toastService = inject(ToastService);
   private readonly confirmDialog = inject(ConfirmDialogService);
   private readonly router = inject(Router);
+  protected readonly apiKeyService = inject(ApiKeyService);
 
   readonly themeMode = this.themeService.mode;
   readonly themeModes: ReadonlyArray<{ value: ThemeMode; label: string; description: string }> = [
@@ -356,6 +359,12 @@ export class SettingsComponent {
     effect(() => {
       if (this.activeTab() === 'security' && !this.sessionsLoaded()) {
         void this.loadActiveSessions();
+      }
+    });
+
+    effect(() => {
+      if (this.activeTab() === 'mcpAccess') {
+        void this.loadMcpAccessKeys();
       }
     });
   }
@@ -1296,4 +1305,147 @@ export class SettingsComponent {
     }
   }
 
+  // ==== Accès Claude (jetons API MCP) ====
+
+  readonly mcpAccessKeys = this.apiKeyService.keys;
+  readonly mcpAccessLoading = this.apiKeyService.loading;
+  readonly showMcpKeyForm = signal(false);
+  readonly mcpKeyName = signal('');
+  readonly mcpKeyAccountId = signal<string>('');
+  readonly mcpKeyExpirationChoice = signal<'never' | '30d' | '90d' | '1y'>('never');
+  readonly mcpKeyCreating = signal(false);
+  readonly mcpKeyJustCreatedToken = signal<string | null>(null);
+  readonly mcpKeyJustCreatedClientId = signal<string | null>(null);
+  readonly mcpKeyRevokingId = signal<string | null>(null);
+  readonly mcpServerUrl = computed(() => `${window.location.origin}/api/mcp`);
+
+  readonly mcpKeyExpirationOptions: ReadonlyArray<{
+    value: 'never' | '30d' | '90d' | '1y';
+    label: string;
+  }> = [
+    { value: 'never', label: 'Sans expiration' },
+    { value: '30d', label: '30 jours' },
+    { value: '90d', label: '90 jours' },
+    { value: '1y', label: '1 an' },
+  ];
+
+  readonly mcpAccessAccountsList = computed(() => this.settingsService.accounts);
+
+  accountLabelFor(accountId: string): string {
+    const acc = this.settingsService.accounts.find((a) => a.id === accountId);
+    return acc?.email ?? '(compte supprimé)';
+  }
+
+  isMcpKeyExpired(expiresAt: string | null): boolean {
+    if (!expiresAt) return false;
+    return new Date(expiresAt).getTime() < Date.now();
+  }
+
+  isMcpKeyActive(key: ApiKeyMeta): boolean {
+    if (key.revokedAt) return false;
+    return !this.isMcpKeyExpired(key.expiresAt);
+  }
+
+  mcpKeyStatus(key: ApiKeyMeta): 'active' | 'revoked' | 'expired' {
+    if (key.revokedAt) return 'revoked';
+    if (this.isMcpKeyExpired(key.expiresAt)) return 'expired';
+    return 'active';
+  }
+
+  async loadMcpAccessKeys(): Promise<void> {
+    try {
+      await this.apiKeyService.fetch();
+    } catch (e) {
+      console.error('Failed to load API keys', e);
+      this.toastService.show('error', "Impossible de charger les accès.");
+    }
+  }
+
+  openCreateMcpKey(): void {
+    const accounts = this.settingsService.accounts;
+    if (accounts.length === 0) {
+      this.toastService.show('error', "Ajoutez d'abord un compte email.");
+      return;
+    }
+    this.mcpKeyName.set('');
+    this.mcpKeyAccountId.set(accounts[0].id);
+    this.mcpKeyExpirationChoice.set('never');
+    this.mcpKeyJustCreatedToken.set(null);
+    this.mcpKeyJustCreatedClientId.set(null);
+    this.showMcpKeyForm.set(true);
+  }
+
+  cancelCreateMcpKey(): void {
+    this.showMcpKeyForm.set(false);
+    this.mcpKeyJustCreatedToken.set(null);
+    this.mcpKeyJustCreatedClientId.set(null);
+  }
+
+  private computeExpirationDate(choice: 'never' | '30d' | '90d' | '1y'): string | null {
+    if (choice === 'never') return null;
+    const now = new Date();
+    if (choice === '30d') now.setDate(now.getDate() + 30);
+    else if (choice === '90d') now.setDate(now.getDate() + 90);
+    else if (choice === '1y') now.setFullYear(now.getFullYear() + 1);
+    return now.toISOString();
+  }
+
+  async createMcpKey(): Promise<void> {
+    const name = this.mcpKeyName().trim();
+    const accountId = this.mcpKeyAccountId();
+    if (!name) {
+      this.toastService.show('error', 'Donnez un nom à cet accès.');
+      return;
+    }
+    if (!accountId) {
+      this.toastService.show('error', 'Sélectionnez un compte email.');
+      return;
+    }
+    this.mcpKeyCreating.set(true);
+    try {
+      const created = await this.apiKeyService.create({
+        name,
+        accountId,
+        expiresAt: this.computeExpirationDate(this.mcpKeyExpirationChoice()),
+      });
+      this.mcpKeyJustCreatedToken.set(created.token);
+      this.mcpKeyJustCreatedClientId.set(created.id);
+      this.mcpKeyName.set('');
+    } catch (e) {
+      console.error('Failed to create API key', e);
+      this.toastService.show('error', "Création impossible.");
+    } finally {
+      this.mcpKeyCreating.set(false);
+    }
+  }
+
+  async copyToClipboard(value: string, label: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(value);
+      this.toastService.show('success', `${label} copié.`);
+    } catch {
+      this.toastService.show('error', 'Copie impossible.');
+    }
+  }
+
+  async revokeMcpKey(key: ApiKeyMeta): Promise<void> {
+    const confirmed = await this.confirmDialog.confirm({
+      title: 'Supprimer cet accès ?',
+      message: `L'accès « ${key.name} » sera immédiatement désactivé. Cette action est irréversible.`,
+      confirmLabel: 'Supprimer',
+      cancelLabel: 'Annuler',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+    this.mcpKeyRevokingId.set(key.id);
+    try {
+      await this.apiKeyService.revoke(key.id);
+      this.toastService.show('success', 'Accès supprimé.');
+    } catch (e) {
+      console.error('Failed to revoke API key', e);
+      this.toastService.show('error', 'Suppression impossible.');
+    } finally {
+      this.mcpKeyRevokingId.set(null);
+    }
+  }
 }

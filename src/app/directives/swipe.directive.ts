@@ -76,17 +76,48 @@ export class SwipeDirective {
 
     const diff = this.currentX - this.startX;
     const el = this.el.nativeElement as HTMLElement;
+
+    if (isHorizontalSwipe && diff > this.threshold) {
+      this.animateOut(el, 'right');
+      return;
+    }
+    if (isHorizontalSwipe && diff < -this.threshold) {
+      this.animateOut(el, 'left');
+      return;
+    }
+
     el.style.transform = '';
     el.style.transition = 'transform 0.2s ease';
     this.swipeReset.emit();
+  }
 
-    if (!isHorizontalSwipe) return;
+  private animateOut(el: HTMLElement, direction: 'left' | 'right'): void {
+    const distance = (el.offsetWidth || window.innerWidth) * 1.1;
+    const targetX = direction === 'right' ? distance : -distance;
+    el.style.transition = 'transform 0.25s ease-out, opacity 0.25s ease-out';
+    el.style.transform = `translateX(${targetX}px)`;
+    el.style.opacity = '0';
+    this.swipeProgress.emit({ offset: direction === 'right' ? 120 : -120 });
 
-    if (diff > this.threshold) {
-      this.swipeRight.emit();
-    } else if (diff < -this.threshold) {
-      this.swipeLeft.emit();
-    }
+    let done = false;
+    const cleanup = () => {
+      if (done) return;
+      done = true;
+      el.removeEventListener('transitionend', cleanup);
+      if (direction === 'right') this.swipeRight.emit();
+      else this.swipeLeft.emit();
+      // Restore the row in case the action does not remove it (e.g. toggleStar,
+      // toggleRead). Use a non-animated reset so the row reappears in place
+      // rather than visibly sliding back across the viewport.
+      el.style.transition = 'none';
+      el.style.transform = '';
+      el.style.opacity = '';
+      this.swipeReset.emit();
+    };
+    el.addEventListener('transitionend', cleanup, { once: true });
+    // Safety net in case transitionend never fires (e.g. element unmounted
+    // mid-animation, prefers-reduced-motion disabled the transition).
+    setTimeout(cleanup, 320);
   }
 
   private cancelSwipe(): void {

@@ -30,6 +30,11 @@ import { EmailAiInsight } from './ai/email-ai-insight.entity';
 import { PushModule } from './push/push.module';
 import { PushSubscription } from './push/push-subscription.entity';
 import { InboxWatchState } from './push/inbox-watch-state.entity';
+import { McpModule } from './mcp/mcp.module';
+import { ApiKeysModule } from './api-keys/api-keys.module';
+import { ApiKey } from './api-keys/api-key.entity';
+import { OAuthModule } from './oauth/oauth.module';
+import { OAuthAuthCode } from './oauth/oauth-auth-code.entity';
 
 const IS_PROD = process.env.NODE_ENV === 'production';
 
@@ -54,6 +59,8 @@ const IS_PROD = process.env.NODE_ENV === 'production';
         EmailAiInsight,
         PushSubscription,
         InboxWatchState,
+        ApiKey,
+        OAuthAuthCode,
       ],
       // WARNING: synchronize: true is convenient but DROPS columns when the
       // TypeORM schema diverges from the DB. Opt in explicitly via env.
@@ -78,6 +85,9 @@ const IS_PROD = process.env.NODE_ENV === 'production';
     ContactsModule,
     PgpModule,
     PushModule,
+    ApiKeysModule,
+    OAuthModule,
+    McpModule,
   ],
   controllers: [AppController],
   providers: [

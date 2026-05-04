@@ -136,6 +136,11 @@ export class EmailListComponent implements OnInit, OnDestroy {
   );
 
   private shortcutSub?: Subscription;
+  private readonly onVisibilityChange = (): void => {
+    if (document.visibilityState !== 'visible') return;
+    if (!this.authService.isAuthenticated()) return;
+    void this.emailService.fetchEmails(this.currentFolder, this.currentQuery);
+  };
 
   constructor() {
     effect(() => {
@@ -280,6 +285,8 @@ export class EmailListComponent implements OnInit, OnDestroy {
       }
     });
 
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
+
     this.shortcutSub = this.shortcutService.actions.subscribe(async (action) => {
       const emails = this.emails();
       const idx = this.focusedIndex();
@@ -315,6 +322,7 @@ export class EmailListComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.shortcutSub?.unsubscribe();
     this.clearLabelsSubmenuTimers();
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
   }
 
   refresh(): void {

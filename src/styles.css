@@ -79,6 +79,16 @@ html, body {
   color: #a3a3a3;
 }
 
+/* Prevent iOS Safari from zooming focused form fields on mobile. */
+@media (max-width: 640px) {
+  input,
+  textarea,
+  select,
+  [contenteditable="true"] {
+    font-size: 16px !important;
+  }
+}
+
 .dark .bg-white {
   background-color: #1f1f1f !important;
 }
