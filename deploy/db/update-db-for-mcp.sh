@@ -38,9 +38,20 @@ db.serialize(() => {
 db.close();
 EOF
 
+node <<'EOF'
+const db = new (require("sqlite3").Database)(process.env.DB_PATH || "/home/kyma-mail/settings.sqlite");
+db.serialize(() => {
+  db.run(`ALTER TABLE "account" ADD COLUMN "oauthProvider" text`,         (e) => console.log("oauthProvider:",       e || "ok"));
+  db.run(`ALTER TABLE "account" ADD COLUMN "oauthAccessToken" text`,      (e) => console.log("oauthAccessToken:",    e || "ok"));
+  db.run(`ALTER TABLE "account" ADD COLUMN "oauthRefreshToken" text`,     (e) => console.log("oauthRefreshToken:",   e || "ok"));
+  db.run(`ALTER TABLE "account" ADD COLUMN "oauthTokenExpiresAt" datetime`, (e) => console.log("oauthTokenExpiresAt:", e || "ok"));
+});
+db.close();
+EOF
 
-curl -s -X POST https://kymamail.fr/api/mcp \
-  -H "Authorization: Bearer mcp_26cd0ce8_a7f4e5509004f7644fdabb1de977c98e5d64d774fa8d4f96eeb39be8f852ab1f" \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+
+# curl -s -X POST https://kymamail.fr/api/mcp \
+#   -H "Authorization: Bearer mcp_26cd0ce8_a7f4e5509004f7644fdabb1de977c98e5d64d774fa8d4f96eeb39be8f852ab1f" \
+#   -H "Content-Type: application/json" \
+#   -H "Accept: application/json, text/event-stream" \
+#   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
