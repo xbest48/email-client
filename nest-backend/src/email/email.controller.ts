@@ -301,7 +301,18 @@ export class EmailController {
   }
 
   @Post('draft')
-  async saveDraft(@Request() req: any, @Headers() headers: any, @Body() dto: SendEmailDto & { previousFolder?: string; previousUid?: number }) {
+  @UseInterceptors(FilesInterceptor('files', 20, {
+    limits: {
+      fieldSize: 25 * 1024 * 1024,
+      fileSize: 25 * 1024 * 1024,
+    },
+  }))
+  async saveDraft(
+    @Request() req: any,
+    @Headers() headers: any,
+    @Body() dto: SendEmailDto & { previousFolder?: string; previousUid?: number },
+    @UploadedFiles() files?: Express.Multer.File[],
+  ) {
     const creds = await this.getCredentials(req, headers);
 
     if (!dto.senderName) {
@@ -312,6 +323,14 @@ export class EmailController {
           dto.senderName = account.displayName;
         }
       }
+    }
+
+    if (files?.length) {
+      dto.attachments = files.map((f) => ({
+        filename: f.originalname,
+        content: f.buffer,
+        contentType: f.mimetype,
+      }));
     }
 
     const rawMessage = await this.smtpService.buildRawMessage(creds, dto);

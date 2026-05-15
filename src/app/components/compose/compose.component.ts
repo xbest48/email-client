@@ -125,11 +125,36 @@ export class ComposeComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     // Consume any pre-fill posted by another component (e.g. the "compose to
-    // sender" button in the email detail view). We clear the signal after
-    // applying so a subsequent manual open doesn't re-apply a stale value.
+    // sender" button in the email detail view, or the "edit draft" button).
+    // We clear the signal after applying so a subsequent manual open doesn't
+    // re-apply a stale value.
     const prefill = this.emailService.composePrefill();
     if (prefill) {
       if (prefill.to) this.to.set(prefill.to);
+      if (prefill.cc) {
+        this.cc.set(prefill.cc);
+        this.showCc.set(true);
+      }
+      if (prefill.bcc) {
+        this.bcc.set(prefill.bcc);
+        this.showCc.set(true);
+      }
+      if (prefill.subject) this.subject.set(prefill.subject);
+      if (prefill.htmlBody !== undefined) {
+        this.htmlBody.set(prefill.htmlBody);
+        // The editor reads its initial content via [content] binding and
+        // doesn't react to later signal updates, so push the HTML into it
+        // imperatively after the view is initialized.
+        queueMicrotask(() => this.bodyEditor()?.setHtml(prefill.htmlBody!));
+      }
+      if (prefill.attachments?.length) {
+        this.attachments.set([...prefill.attachments]);
+      }
+      if (prefill.draft) {
+        // Take ownership of the existing IMAP draft so auto-save replaces it
+        // in place instead of spawning a new "Drafts" entry.
+        this.remoteDraft = { folder: prefill.draft.folder, uid: prefill.draft.uid };
+      }
       this.emailService.composePrefill.set(null);
     }
 
@@ -163,9 +188,10 @@ export class ComposeComponent implements OnInit, OnDestroy {
     const editor = this.bodyEditor();
     const html = this.stripDetachedSignature(editor ? editor.getHtml() : this.htmlBody());
     const fullHtml = editor ? editor.getFullHtml() : html;
+    const attachments = this.attachments();
 
     try {
-      if (!to && !cc && !bcc && !subject && !html) {
+      if (!to && !cc && !bcc && !subject && !html && attachments.length === 0) {
         this.settingsService.clearDraft();
         if (this.remoteDraft?.folder && this.remoteDraft.uid) {
           await this.emailService.deleteDraftMessage(this.remoteDraft.folder, this.remoteDraft.uid);
@@ -191,6 +217,7 @@ export class ComposeComponent implements OnInit, OnDestroy {
         cc,
         bcc,
         this.remoteDraft,
+        attachments,
       );
       this.draftSavedAt.set(new Date().toLocaleTimeString());
     } catch (err) {

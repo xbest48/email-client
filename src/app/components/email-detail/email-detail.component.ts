@@ -1,5 +1,5 @@
 import { Component, inject, signal, computed, ChangeDetectionStrategy, OnInit, OnDestroy, viewChild, effect } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { Subscription } from 'rxjs';
 import { EmailService } from '../../services/email.service';
@@ -27,6 +27,7 @@ import { RichEditorComponent } from '../rich-editor/rich-editor.component';
 export class EmailDetailComponent implements OnInit, OnDestroy {
   protected readonly emailService = inject(EmailService);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   protected readonly authService = inject(AuthService);
   protected readonly snoozeService = inject(SnoozeService);
   protected readonly labelService = inject(LabelService);
@@ -212,6 +213,17 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     return mail ? this.pgpService.isPgpMessage(mail.body || mail.htmlBody) : false;
   });
 
+  readonly isDraftEmail = computed(() => {
+    const mail = this.email();
+    if (!mail) return false;
+    const normalizedFolder = mail.folder.trim().toLowerCase();
+    return this.emailService.folders().some(
+      (folder) => folder.path === mail.folder && folder.specialUse === '\\Drafts'
+    ) || normalizedFolder === 'drafts' || normalizedFolder === 'brouillons';
+  });
+
+  readonly sendingDraft = signal(false);
+
   private shortcutSub?: Subscription;
   private readonly collapsedRecipientCount = 2;
 
@@ -294,7 +306,116 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
 
   goBack(): void {
     this.emailService.selectedEmail.set(null);
-    window.history.back();
+    if (window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+    void this.router.navigateByUrl('/inbox', { replaceUrl: true });
+  }
+
+  /**
+   * Reopen the current draft in the compose modal so the user can finish it.
+   * The compose component takes ownership of the existing IMAP message via
+   * `composePrefill.draft`, so its periodic auto-save replaces it in place
+   * instead of leaving a duplicate "Drafts" entry. Existing attachments are
+   * downloaded and re-attached as `File` objects so they survive the next
+   * draft save (otherwise the IMAP append would drop them).
+   */
+  async editDraft(): Promise<void> {
+    const mail = this.email();
+    if (!mail) return;
+    const formatAddresses = (list: EmailAddress[]): string =>
+      list.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(', ');
+    const attachments = await this.collectDraftAttachments(mail);
+    this.emailService.composePrefill.set({
+      to: formatAddresses(mail.to),
+      cc: mail.cc.length ? formatAddresses(mail.cc) : undefined,
+      bcc: mail.bcc.length ? formatAddresses(mail.bcc) : undefined,
+      subject: mail.subject,
+      htmlBody: mail.htmlBody || mail.body || '',
+      attachments,
+      draft: { folder: mail.folder, uid: mail.uid },
+    });
+    this.goBack();
+  }
+
+  /**
+   * Download every non-inline attachment of the given message and wrap it as
+   * a `File`. Failures are reported via toast but don't block the action: a
+   * partial set of attachments is better than dropping the user's draft
+   * altogether.
+   */
+  private async collectDraftAttachments(mail: Email): Promise<File[]> {
+    const list = mail.attachments ?? [];
+    if (!list.length) return [];
+    const files: File[] = [];
+    for (const att of list) {
+      try {
+        const file = await this.emailService.fetchAttachmentFile(
+          mail.folder,
+          mail.uid,
+          att.id,
+          att.filename,
+          att.mimeType,
+        );
+        files.push(file);
+      } catch (err) {
+        console.warn(`Failed to download attachment ${att.filename}`, err);
+        this.toastService.show(
+          'error',
+          `Impossible de recuperer la piece jointe "${att.filename}".`,
+        );
+      }
+    }
+    return files;
+  }
+
+  /**
+   * Send the current draft as-is. We reuse the regular send pipeline (so the
+   * undo-send delay, Sent-folder append, etc. all kick in) and then delete
+   * the draft message from the Drafts folder so it doesn't linger after the
+   * email is sent.
+   */
+  async sendDraft(): Promise<void> {
+    const mail = this.email();
+    if (!mail || this.sendingDraft()) return;
+    if (!mail.to.length) {
+      this.toastService.show('error', "Le brouillon n'a pas de destinataire.");
+      return;
+    }
+    this.sendingDraft.set(true);
+    try {
+      const formatAddresses = (list: EmailAddress[]): string =>
+        list.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(', ');
+      const delayMs = (this.authService.user()?.undoSendDelay || 0) * 1000;
+      const attachments = await this.collectDraftAttachments(mail);
+      await this.emailService.sendEmail(
+        formatAddresses(mail.to),
+        mail.subject,
+        mail.htmlBody || mail.body || '',
+        mail.cc.length ? formatAddresses(mail.cc) : '',
+        mail.bcc.length ? formatAddresses(mail.bcc) : '',
+        '',
+        '',
+        delayMs,
+        attachments,
+        false,
+      );
+      // Remove the draft from the Drafts folder once the send is queued (or
+      // sent immediately when no undo delay is configured).
+      try {
+        await this.emailService.deleteDraftMessage(mail.folder, mail.uid);
+      } catch {
+        // Best-effort: the message may already have been removed by the IMAP
+        // server when we appended it as Sent.
+      }
+      this.toastService.show('success', 'Brouillon envoye.');
+      this.goBack();
+    } catch (err: any) {
+      this.toastService.show('error', err?.message || "Echec de l'envoi du brouillon.");
+    } finally {
+      this.sendingDraft.set(false);
+    }
   }
 
   async trash(): Promise<void> {

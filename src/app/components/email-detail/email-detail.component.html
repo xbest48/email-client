@@ -20,6 +20,34 @@
 
       <div class="flex-1"></div>
 
+      @if (isDraftEmail()) {
+        <button
+          (click)="editDraft()"
+          class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-amber-700 hover:text-amber-800 hover:bg-amber-50 dark:text-amber-300 dark:hover:text-amber-200 dark:hover:bg-amber-900/20 rounded-lg transition-colors
+                 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          type="button"
+          aria-label="Modifier le brouillon"
+          title="Modifier le brouillon">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+          </svg>
+          <span class="hidden sm:inline">Modifier</span>
+        </button>
+        <button
+          (click)="sendDraft()"
+          [disabled]="sendingDraft()"
+          class="inline-flex items-center gap-2 px-3 py-2 text-sm font-semibold text-white bg-amber-500 hover:bg-amber-600 rounded-lg transition-colors
+                 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 disabled:opacity-50"
+          type="button"
+          aria-label="Envoyer le brouillon"
+          title="Envoyer le brouillon">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+          </svg>
+          <span class="hidden sm:inline">{{ sendingDraft() ? 'Envoi...' : 'Envoyer' }}</span>
+        </button>
+      }
+
       @if (aiEnabled()) {
         <div class="relative">
           <button

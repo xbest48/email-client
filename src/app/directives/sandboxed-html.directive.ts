@@ -77,10 +77,15 @@ export class SandboxedHtmlDirective {
         padding: 16px;
         max-width: 100%;
         min-width: 0;
-        overflow-x: hidden;
+        /* "auto" rather than "hidden": emails wider than the card become
+           scrollable instead of being clipped (which used to leave the
+           reader staring at an empty grey area when a multi-column table
+           overflowed). */
+        overflow-x: auto;
         overflow-wrap: break-word;
         word-break: break-word;
         box-sizing: border-box;
+        text-align: left;
       }
       .email-body * {
         box-sizing: border-box;
@@ -95,7 +100,25 @@ export class SandboxedHtmlDirective {
       }
       .email-body table {
         max-width: 100% !important;
-        table-layout: fixed;
+        /* "auto" (was "fixed") lets cells with no content collapse to 0
+           width instead of stealing 50% from the cell that actually holds
+           the message — the most common breakage when an email has its
+           hero-image cell stripped by the privacy filter. */
+        table-layout: auto;
+      }
+      /* Newsletter wrappers (<center>, align="center") collapse fine on
+         their own, but their inner tables sometimes have align="right"
+         which pushes everything to one edge with the rest of the card
+         empty. Force normal centered behaviour. */
+      .email-body center,
+      .email-body table[align="center"] {
+        margin-left: auto !important;
+        margin-right: auto !important;
+        float: none !important;
+      }
+      .email-body table[align="right"] {
+        float: none !important;
+        margin-left: auto !important;
       }
       .email-body td,
       .email-body th {
@@ -206,6 +229,30 @@ export class SandboxedHtmlDirective {
     // image would render fine in compose but not in the settings preview
     // /edit). Data URLs are slightly heavier on reparse, but shadow-root
     // content is short-lived and the compatibility is bulletproof.
+
+    // Newsletter HTML almost universally hard-codes pixel widths on its
+    // outer tables and on each cell (a relic of "design for Outlook" where
+    // CSS was unreliable). Combined with our `max-width: 100%` shrink, that
+    // produces the broken side-by-side layout reported when a hero-image
+    // cell is stripped by the image-block policy: the empty cell still
+    // claims its 50%/300px etc. and the text cell is squeezed into the
+    // remaining sliver. Drop those constraints on layout-only elements;
+    // images keep their dimensions so they render at the intended size.
+    const layoutSelectors = 'table, tr, td, th, tbody, thead, tfoot, colgroup, col';
+    for (const el of Array.from(template.content.querySelectorAll(layoutSelectors))) {
+      el.removeAttribute('width');
+      el.removeAttribute('height');
+      const inline = el.getAttribute('style');
+      if (inline) {
+        const stripped = inline
+          .replace(/(?:^|;)\s*(?:min-|max-)?width\s*:[^;]*/gi, '')
+          .replace(/(?:^|;)\s*(?:min-|max-)?height\s*:[^;]*/gi, '')
+          .replace(/^\s*;+/, '')
+          .trim();
+        if (stripped) el.setAttribute('style', stripped);
+        else el.removeAttribute('style');
+      }
+    }
 
     for (const anchor of Array.from(template.content.querySelectorAll('a[href]'))) {
       const href = anchor.getAttribute('href')?.trim();

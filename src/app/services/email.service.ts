@@ -26,13 +26,24 @@ export class EmailService {
   readonly savedListState = signal<{ folder: string; query: string; page: number } | null>(null);
   readonly blockedMailboxAccountId = signal<string | null>(null);
   /**
-   * One-shot hint used to pre-fill the compose modal (currently only the
-   * recipient). Setting it opens the modal via an effect in LayoutComponent,
-   * and ComposeComponent reads & clears it on init. Each set creates a new
-   * object reference so the effect fires even when opening to the same
-   * address twice in a row.
+   * One-shot hint used to pre-fill the compose modal. Setting it opens the
+   * modal via an effect in LayoutComponent, and ComposeComponent reads &
+   * clears it on init. Each set creates a new object reference so the
+   * effect fires even when opening to the same address twice in a row.
+   *
+   * When `draft` is set, compose treats the existing IMAP message as the
+   * remote draft to update on subsequent auto-saves (instead of creating a
+   * new draft message).
    */
-  readonly composePrefill = signal<{ to?: string } | null>(null);
+  readonly composePrefill = signal<{
+    to?: string;
+    cc?: string;
+    bcc?: string;
+    subject?: string;
+    htmlBody?: string;
+    attachments?: File[];
+    draft?: { folder: string; uid: number };
+  } | null>(null);
 
   private trashFolder = '';
   private fetchRequestId = 0;
@@ -236,6 +247,12 @@ export class EmailService {
   }
 
   async fetchEmail(folder: string, uid: number): Promise<Email | null> {
+    // Wait for the accounts list to land — without this guard, deep-link
+    // navigations (notably a notification tap that boots the app straight
+    // into /email/<folder>/<uid>) race past the settings load and
+    // `activeAccountId` is still null, so we'd return null and the email
+    // detail view would stay stuck on the spinner.
+    await this.settingsService.loadPromise;
     if (!this.getActiveUsableAccountId()) return null;
     try {
       const email = await firstValueFrom(
@@ -565,7 +582,31 @@ export class EmailService {
     cc = '',
     bcc = '',
     previous?: { folder: string; uid: number | null } | null,
+    attachments: File[] = [],
   ): Promise<{ folder: string; uid: number | null }> {
+    if (attachments.length > 0) {
+      // Use multipart so files travel as binary buffers; mirrors the /send
+      // pipeline so attachments survive the round-trip into the IMAP draft.
+      const formData = new FormData();
+      if (to) formData.append('to', to);
+      formData.append('subject', subject);
+      formData.append('html', html);
+      if (cc) formData.append('cc', cc);
+      if (bcc) formData.append('bcc', bcc);
+      if (previous?.folder) formData.append('previousFolder', previous.folder);
+      if (previous?.uid) formData.append('previousUid', String(previous.uid));
+      for (const file of attachments) {
+        formData.append('files', file, file.name);
+      }
+      return await firstValueFrom(
+        this.http.post<{ folder: string; uid: number | null }>(
+          `${this.apiUrl}/draft`,
+          formData,
+          { headers: this.getHeaders(), withCredentials: true },
+        )
+      );
+    }
+
     return await firstValueFrom(
       this.http.post<{ folder: string; uid: number | null }>(
         `${this.apiUrl}/draft`,
@@ -767,6 +808,24 @@ export class EmailService {
   async fetchAttachmentBlob(folder: string, uid: number, attachmentId: string): Promise<string> {
     const blob = await this.fetchAttachment(folder, uid, attachmentId);
     return URL.createObjectURL(blob);
+  }
+
+  /**
+   * Download an attachment and wrap it as a `File` so it can be re-uploaded
+   * (e.g. when editing or sending an existing draft, where the original
+   * attachments must survive the round-trip).
+   */
+  async fetchAttachmentFile(
+    folder: string,
+    uid: number,
+    attachmentId: string,
+    filename: string,
+    mimeType: string,
+  ): Promise<File> {
+    const blob = await this.fetchAttachment(folder, uid, attachmentId);
+    return new File([blob], filename || 'attachment', {
+      type: mimeType || blob.type || 'application/octet-stream',
+    });
   }
 
   async downloadAttachment(folder: string, uid: number, attachmentId: string, filename: string): Promise<void> {
