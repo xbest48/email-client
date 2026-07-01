@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed, ChangeDetectionStrategy, OnInit, OnDestroy, viewChild, effect } from '@angular/core';
+import { Component, inject, signal, computed, ChangeDetectionStrategy, OnInit, OnDestroy, viewChild, effect, ElementRef } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { Subscription } from 'rxjs';
@@ -47,7 +47,10 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
   readonly replyBcc = signal('');
   readonly replySubject = signal('');
   readonly replyBody = signal('');
+  readonly replyAttachments = signal<File[]>([]);
+  readonly replyDragOver = signal(false);
   readonly replyEditor = viewChild<RichEditorComponent>('replyEditor');
+  readonly replyFileInputRef = viewChild<ElementRef<HTMLInputElement>>('replyFileInput');
   readonly allowExternalImages = signal(false);
   readonly showSnoozeMenu = signal(false);
   readonly showLabelMenu = signal(false);
@@ -489,6 +492,7 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     }
 
     this.replyMode.set(mode);
+    this.replyAttachments.set([]);
 
     const editor = this.replyEditor();
     if (editor) {
@@ -503,6 +507,8 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     this.replyBcc.set('');
     this.replySubject.set('');
     this.replyBody.set('');
+    this.replyAttachments.set([]);
+    this.replyDragOver.set(false);
     this.replyEditor()?.clear();
   }
 
@@ -528,12 +534,50 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
       bcc,
       isReply ? mail.messageId || '' : '',
       isReply ? mail.messageId || '' : '',
+      0,
+      this.replyAttachments(),
     );
     this.closeReplyComposer();
   }
 
   onReplyChange(html: string): void {
     this.replyBody.set(html);
+  }
+
+  onReplyFileSelect(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files) this.addReplyFiles(input.files);
+    input.value = '';
+  }
+
+  onReplyDragOver(event: DragEvent): void {
+    event.preventDefault();
+    this.replyDragOver.set(true);
+  }
+
+  onReplyDragLeave(): void {
+    this.replyDragOver.set(false);
+  }
+
+  onReplyDrop(event: DragEvent): void {
+    event.preventDefault();
+    this.replyDragOver.set(false);
+    const files = event.dataTransfer?.files;
+    if (files) this.addReplyFiles(files);
+  }
+
+  private addReplyFiles(fileList: FileList): void {
+    this.replyAttachments.update((files) => [...files, ...Array.from(fileList)]);
+  }
+
+  removeReplyAttachment(index: number): void {
+    this.replyAttachments.update((files) => files.filter((_, i) => i !== index));
+  }
+
+  formatReplyFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} o`;
+    if (bytes < 1048576) return `${Math.round(bytes / 1024)} Ko`;
+    return `${(bytes / 1048576).toFixed(1)} Mo`;
   }
 
   printEmail(): void {

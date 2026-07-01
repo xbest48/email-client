@@ -1,6 +1,7 @@
 import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { ThemeService } from './services/theme.service';
+import { PushNotificationService } from './services/push-notification.service';
 import { ConfirmDialogComponent } from './components/confirm-dialog/confirm-dialog.component';
 import { ToastStackComponent } from './components/toast-stack/toast-stack.component';
 
@@ -18,6 +19,9 @@ export class AppComponent {
   // ThemeService manages the light/dark/system theme via an internal effect,
   // so injecting it here is enough to ensure it is instantiated at bootstrap.
   private readonly themeService = inject(ThemeService);
+  // Keep the push click listener alive for the whole app, not only after the
+  // Settings screen has instantiated PushNotificationService.
+  private readonly pushNotificationService = inject(PushNotificationService);
 
   onDocumentContextMenu(event: MouseEvent): void {
     const target = event.target;

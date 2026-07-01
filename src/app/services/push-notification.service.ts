@@ -53,7 +53,20 @@ export class PushNotificationService {
       // When the user clicks a push, the ngsw SW forwards the event here.
       const click = this.swPush.notificationClicks.subscribe((event) => {
         try { window.focus(); } catch { /* noop */ }
-        const data = (event.notification.data ?? {}) as { url?: string; folder?: string; uid?: number };
+        const data = (event.notification.data ?? {}) as {
+          url?: string;
+          folder?: string;
+          uid?: number;
+          onActionClick?: {
+            default?: { operation?: string };
+          };
+        };
+        // New notifications are navigated by ngsw itself via
+        // `navigateLastFocusedOrOpen`. Keep this client-side path for older
+        // notifications that only focused the existing tab.
+        if (data.onActionClick?.default?.operation === 'navigateLastFocusedOrOpen') {
+          return;
+        }
         let url = data.url;
         if (!url && data.folder && data.uid !== undefined) {
           url = `/email/${encodeURIComponent(data.folder)}/${data.uid}`;

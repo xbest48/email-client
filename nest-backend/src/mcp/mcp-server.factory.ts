@@ -27,8 +27,15 @@ const SERVER_INSTRUCTIONS = [
   "(IMAP/SMTP). Toutes les opérations sont scopées au compte email dont l'identifiant",
   "est fourni par le contexte de la session MCP.",
   '',
-  "PIÈCES JOINTES — `send_email` et `create_draft` acceptent un champ `attachments`",
-  "(tableau, max 20 éléments, 25 Mo au total). Chaque entrée doit contenir :",
+  "LIRE UN MESSAGE — `read_email(folder, uid)` retourne le contenu complet",
+  "(subject, from/to/cc/bcc, body texte, htmlBody, flags, attachments metadata).",
+  "Les attachments retournés n'incluent que la métadonnée (id, filename, mimeType,",
+  "size). Pour récupérer le contenu binaire d'une pièce jointe, appeler ensuite",
+  "`read_attachment(folder, uid, attachmentId)` qui retourne le fichier encodé en",
+  "base64 (plafond 25 Mo).",
+  '',
+  "ENVOYER DES PIÈCES JOINTES — `send_email` et `create_draft` acceptent un champ",
+  "`attachments` (tableau, max 20 éléments, 25 Mo au total). Chaque entrée :",
   "  • `filename` (string) : nom du fichier visible par le destinataire",
   "  • `content` (string) : contenu binaire encodé en base64 standard",
   "  • `contentType` (string) : type MIME (ex: 'application/pdf', 'image/png')",
@@ -199,6 +206,55 @@ export function createMcpServer(deps: McpDeps, ctx: McpToolContext): McpServer {
       try {
         const res = await withCreds((c) => deps.imap.fetchEmail(c, folder, uid));
         return ok(res);
+      } catch (e) {
+        return fail((e as Error).message);
+      }
+    },
+  );
+
+  server.registerTool(
+    'read_attachment',
+    {
+      title: "Lire une piece jointe",
+      description:
+        "Retourne le contenu binaire d'une piece jointe d'un email en base64, " +
+        "prêt à être analysé (PDF, image, etc.). " +
+        "L'attachmentId est celui retourné par read_email (index dans le tableau attachments).",
+      inputSchema: {
+        folder: z.string().describe('Chemin du dossier IMAP contenant le message'),
+        uid: z.number().int().positive(),
+        attachmentId: z
+          .string()
+          .describe("Identifiant renvoyé par read_email (ex: \"0\", \"1\"...)"),
+      },
+    },
+    async ({ folder, uid, attachmentId }) => {
+      try {
+        const index = Number.parseInt(attachmentId, 10);
+        if (!Number.isFinite(index) || index < 0) {
+          return fail(`attachmentId invalide: ${attachmentId}`);
+        }
+        const att = await withCreds((c) => deps.imap.fetchAttachment(c, folder, uid, index));
+        if (!att) {
+          return fail(`Piece jointe #${index} introuvable pour uid=${uid}.`);
+        }
+        // Return-payload safeguard: an MCP client that pumps a 25 MB base64
+        // blob into its LLM context will explode a conversation. Cap the
+        // response and let the caller decide how to proceed (e.g. re-fetch
+        // via a direct download endpoint).
+        if (att.content.length > MAX_ATTACHMENT_BYTES) {
+          return fail(
+            `Piece jointe trop volumineuse pour être renvoyee via MCP ` +
+              `(${(att.content.length / 1024 / 1024).toFixed(1)} Mo, max ` +
+              `${MAX_ATTACHMENT_BYTES / 1024 / 1024} Mo).`,
+          );
+        }
+        return ok({
+          filename: att.filename,
+          contentType: att.contentType,
+          size: att.content.length,
+          contentBase64: att.content.toString('base64'),
+        });
       } catch (e) {
         return fail((e as Error).message);
       }

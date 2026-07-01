@@ -47,11 +47,10 @@ export function buildNewMailPayload(
       // what to do when the user taps the notification. Without this, clicks
       // do nothing when the app is closed (the SwPush subscription in the
       // running app never gets a chance to react).
-      // `focusLastFocusedOrOpen` focuses an existing tab (route then handled
-      // client-side by the SwPush click subscription, which calls
-      // router.navigateByUrl) or opens a new tab directly at the target URL.
+      // `navigateLastFocusedOrOpen` navigates an existing tab to the message,
+      // or opens a new tab directly at the target URL when the app is closed.
       onActionClick: {
-        default: { operation: 'focusLastFocusedOrOpen', url: targetUrl },
+        default: { operation: 'navigateLastFocusedOrOpen', url: targetUrl },
       },
       url: targetUrl,
       accountId,
