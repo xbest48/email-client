@@ -138,21 +138,18 @@
       <!-- To with autocomplete -->
       <div class="relative flex items-center border-b border-gray-100 dark:border-gray-700 px-4">
         <label for="compose-to" class="text-sm text-gray-500 w-8 shrink-0">A</label>
-        <input
-          #toInput
-          id="compose-to"
-          type="email"
-          [(ngModel)]="to"
-          (ngModelChange)="onToInput()"
-          (blur)="showToSuggestions.set(false)"
-          name="to"
-          class="flex-1 py-2.5 text-sm text-gray-800 dark:text-gray-200 bg-transparent focus:outline-none"
+        <app-recipient-chips
+          #toChips
+          class="flex-1 min-w-0"
+          inputId="compose-to"
           placeholder="destinataire@email.com"
-          required
-          autocomplete="off">
-        @if (showToSuggestions() && toSuggestions().length) {
+          [value]="to()"
+          (valueChange)="to.set($event); sendError.set(null)"
+          (textChange)="onRecipientInput('to', $event)"
+          (inputBlur)="hideRecipientSuggestions('to')"/>
+        @if (suggestionField() === 'to' && recipientSuggestions().length) {
           <div class="absolute left-8 top-full w-[calc(100%-2rem)] bg-white dark:bg-gray-800 rounded-b-xl shadow-xl border border-gray-200 dark:border-gray-700 z-30 max-h-40 overflow-y-auto">
-            @for (contact of toSuggestions(); track contact.id) {
+            @for (contact of recipientSuggestions(); track contact.id) {
               <button type="button" (mousedown)="selectContact(contact)"
                       class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                 <span class="text-gray-800 dark:text-gray-200">{{ contact.name || contact.email }}</span>
@@ -176,25 +173,55 @@
       }
 
       @if (showCc()) {
-        <div class="flex items-center border-b border-gray-100 dark:border-gray-700 px-4">
+        <div class="relative flex items-center border-b border-gray-100 dark:border-gray-700 px-4">
           <label for="compose-cc" class="text-sm text-gray-500 w-8 shrink-0">Cc</label>
-          <input
-            id="compose-cc"
-            type="text"
-            [(ngModel)]="cc"
-            name="cc"
-            class="flex-1 py-2.5 text-sm text-gray-800 dark:text-gray-200 bg-transparent focus:outline-none"
-            placeholder="cc@email.com">
+          <app-recipient-chips
+            #ccChips
+            class="flex-1 min-w-0"
+            inputId="compose-cc"
+            placeholder="cc@email.com"
+            [value]="cc()"
+            (valueChange)="cc.set($event)"
+            (textChange)="onRecipientInput('cc', $event)"
+            (inputBlur)="hideRecipientSuggestions('cc')"/>
+          @if (suggestionField() === 'cc' && recipientSuggestions().length) {
+            <div class="absolute left-8 top-full w-[calc(100%-2rem)] bg-white dark:bg-gray-800 rounded-b-xl shadow-xl border border-gray-200 dark:border-gray-700 z-30 max-h-40 overflow-y-auto">
+              @for (contact of recipientSuggestions(); track contact.id) {
+                <button type="button" (mousedown)="selectContact(contact)"
+                        class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                  <span class="text-gray-800 dark:text-gray-200">{{ contact.name || contact.email }}</span>
+                  @if (contact.name) {
+                    <span class="text-gray-400 text-xs ml-1">&lt;{{ contact.email }}&gt;</span>
+                  }
+                </button>
+              }
+            </div>
+          }
         </div>
-        <div class="flex items-center border-b border-gray-100 dark:border-gray-700 px-4">
+        <div class="relative flex items-center border-b border-gray-100 dark:border-gray-700 px-4">
           <label for="compose-bcc" class="text-sm text-gray-500 w-8 shrink-0">Cci</label>
-          <input
-            id="compose-bcc"
-            type="text"
-            [(ngModel)]="bcc"
-            name="bcc"
-            class="flex-1 py-2.5 text-sm text-gray-800 dark:text-gray-200 bg-transparent focus:outline-none"
-            placeholder="cci@email.com">
+          <app-recipient-chips
+            #bccChips
+            class="flex-1 min-w-0"
+            inputId="compose-bcc"
+            placeholder="cci@email.com"
+            [value]="bcc()"
+            (valueChange)="bcc.set($event)"
+            (textChange)="onRecipientInput('bcc', $event)"
+            (inputBlur)="hideRecipientSuggestions('bcc')"/>
+          @if (suggestionField() === 'bcc' && recipientSuggestions().length) {
+            <div class="absolute left-8 top-full w-[calc(100%-2rem)] bg-white dark:bg-gray-800 rounded-b-xl shadow-xl border border-gray-200 dark:border-gray-700 z-30 max-h-40 overflow-y-auto">
+              @for (contact of recipientSuggestions(); track contact.id) {
+                <button type="button" (mousedown)="selectContact(contact)"
+                        class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                  <span class="text-gray-800 dark:text-gray-200">{{ contact.name || contact.email }}</span>
+                  @if (contact.name) {
+                    <span class="text-gray-400 text-xs ml-1">&lt;{{ contact.email }}&gt;</span>
+                  }
+                </button>
+              }
+            </div>
+          }
         </div>
       }
 

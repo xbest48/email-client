@@ -137,6 +137,73 @@ html, body {
   display: block;
 }
 
+/* Rich text editor — restore the formatting that Tailwind's Preflight strips.
+   The `@tailwindcss/typography` plugin isn't installed, so the `prose`
+   utilities on the editor are inert and lists/headings lose their markers and
+   indentation. The editor body is populated with raw innerHTML, so these rules
+   must be global: Angular's emulated component styles don't reach nodes that
+   were inserted imperatively (only the injected signature lives in a shadow
+   root and keeps its own styling). */
+.rich-editor [contenteditable] ul {
+  list-style: disc;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+
+.rich-editor [contenteditable] ol {
+  list-style: decimal;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+
+.rich-editor [contenteditable] li {
+  margin: 0.125rem 0;
+}
+
+.rich-editor [contenteditable] b,
+.rich-editor [contenteditable] strong {
+  font-weight: 700;
+}
+
+.rich-editor [contenteditable] i,
+.rich-editor [contenteditable] em {
+  font-style: italic;
+}
+
+.rich-editor [contenteditable] u {
+  text-decoration: underline;
+}
+
+.rich-editor [contenteditable] a {
+  color: #d97706;
+  text-decoration: underline;
+}
+
+.rich-editor [contenteditable] blockquote {
+  border-left: 3px solid #d1d5db;
+  padding-left: 0.75rem;
+  margin: 0.5rem 0;
+  color: #6b7280;
+}
+
+.rich-editor [contenteditable] h1 {
+  font-size: 1.5em;
+  font-weight: 700;
+  margin: 0.5rem 0;
+}
+
+.rich-editor [contenteditable] h2 {
+  font-size: 1.3em;
+  font-weight: 700;
+  margin: 0.5rem 0;
+}
+
+.rich-editor [contenteditable] h3 {
+  font-size: 1.15em;
+  font-weight: 600;
+  margin: 0.5rem 0;
+}
+
 /* Loading spinner */
 .animate-spin {
   animation: spin 1s linear infinite;

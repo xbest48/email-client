@@ -9,11 +9,12 @@ import { PgpService } from '../../services/pgp.service';
 import { ConfirmDialogService } from '../../services/confirm-dialog.service';
 import { AiService } from '../../services/ai.service';
 import { RichEditorComponent } from '../rich-editor/rich-editor.component';
+import { RecipientChipsComponent } from '../recipient-chips/recipient-chips.component';
 
 @Component({
   selector: 'app-compose',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RichEditorComponent],
+  imports: [FormsModule, RichEditorComponent, RecipientChipsComponent],
   templateUrl: './compose.component.html',
   styleUrl: './compose.component.css',
 })
@@ -34,6 +35,10 @@ export class ComposeComponent implements OnInit, OnDestroy {
   readonly bcc = signal('');
   readonly subject = signal('');
   readonly htmlBody = signal('');
+  // Threading headers, set when compose is opened as a reply so the sent
+  // message stays attached to the original conversation.
+  private inReplyTo = '';
+  private references = '';
   readonly showCc = signal(false);
   readonly minimized = signal(false);
   // Compose opens maximized by default — most users want the extra room, and
@@ -47,8 +52,9 @@ export class ComposeComponent implements OnInit, OnDestroy {
   readonly encryptPgp = signal(false);
   readonly dragOver = signal(false);
   readonly attachments = signal<File[]>([]);
-  readonly toSuggestions = signal<Contact[]>([]);
-  readonly showToSuggestions = signal(false);
+  readonly recipientSuggestions = signal<Contact[]>([]);
+  /** Which recipient field (to/cc/bcc) currently owns the suggestions dropdown. */
+  readonly suggestionField = signal<'to' | 'cc' | 'bcc' | null>(null);
   readonly draftSavedAt = signal<string | null>(null);
   readonly sendError = signal<string | null>(null);
   readonly showAiAssistant = signal(false);
@@ -82,7 +88,9 @@ export class ComposeComponent implements OnInit, OnDestroy {
 
   readonly bodyEditor = viewChild<RichEditorComponent>('bodyEditor');
   readonly fileInputRef = viewChild<ElementRef<HTMLInputElement>>('fileInput');
-  readonly toInputRef = viewChild<ElementRef<HTMLInputElement>>('toInput');
+  readonly toChipsRef = viewChild<RecipientChipsComponent>('toChips');
+  readonly ccChipsRef = viewChild<RecipientChipsComponent>('ccChips');
+  readonly bccChipsRef = viewChild<RecipientChipsComponent>('bccChips');
 
   readonly templates = computed(() => this.settingsService.templates);
 
@@ -150,6 +158,8 @@ export class ComposeComponent implements OnInit, OnDestroy {
       if (prefill.attachments?.length) {
         this.attachments.set([...prefill.attachments]);
       }
+      if (prefill.inReplyTo) this.inReplyTo = prefill.inReplyTo;
+      if (prefill.references) this.references = prefill.references;
       if (prefill.draft) {
         // Take ownership of the existing IMAP draft so auto-save replaces it
         // in place instead of spawning a new "Drafts" entry.
@@ -245,25 +255,38 @@ export class ComposeComponent implements OnInit, OnDestroy {
     this.htmlBody.set(html);
   }
 
-  // Contact autocomplete
-  onToInput(): void {
+  // Contact autocomplete — `query` is the free text currently typed in the
+  // chips input (already-validated chips are excluded from the search). The
+  // same dropdown mechanism serves the three recipient fields; `field`
+  // remembers which one triggered the search so the picked contact lands in
+  // the right chips input.
+  onRecipientInput(field: 'to' | 'cc' | 'bcc', query: string): void {
     this.sendError.set(null);
-    const query = this.to();
     if (this.contactTimeout) clearTimeout(this.contactTimeout);
     if (query.length < 2) {
-      this.showToSuggestions.set(false);
+      if (this.suggestionField() === field) this.suggestionField.set(null);
       return;
     }
     this.contactTimeout = setTimeout(async () => {
       const results = await this.contactService.search(query);
-      this.toSuggestions.set(results);
-      this.showToSuggestions.set(results.length > 0);
+      this.recipientSuggestions.set(results);
+      this.suggestionField.set(results.length > 0 ? field : null);
     }, 300);
   }
 
+  hideRecipientSuggestions(field: 'to' | 'cc' | 'bcc'): void {
+    if (this.suggestionField() === field) this.suggestionField.set(null);
+  }
+
   selectContact(contact: Contact): void {
-    this.to.set(contact.email);
-    this.showToSuggestions.set(false);
+    const field = this.suggestionField();
+    const chips = field === 'cc'
+      ? this.ccChipsRef()
+      : field === 'bcc'
+        ? this.bccChipsRef()
+        : this.toChipsRef();
+    chips?.addChip(contact.email);
+    this.suggestionField.set(null);
   }
 
   // Templates
@@ -326,12 +349,12 @@ export class ComposeComponent implements OnInit, OnDestroy {
     const editor = this.bodyEditor();
     if (!to) {
       this.sendError.set('Ajoutez au moins un destinataire.');
-      this.toInputRef()?.nativeElement.focus();
+      this.toChipsRef()?.focusInput();
       return;
     }
     if (!this.areRecipientsValid(to)) {
       this.sendError.set('L’adresse du destinataire semble invalide.');
-      this.toInputRef()?.nativeElement.focus();
+      this.toChipsRef()?.focusInput();
       return;
     }
     if (!editor) {
@@ -369,9 +392,9 @@ export class ComposeComponent implements OnInit, OnDestroy {
       const files = this.attachments();
       const readReceipt = this.requestReadReceipt();
       if (delay > 0) {
-        this.emailService.sendEmail(to, this.subject(), html, this.cc(), this.bcc(), '', '', delay * 1000, files, readReceipt);
+        this.emailService.sendEmail(to, this.subject(), html, this.cc(), this.bcc(), this.inReplyTo, this.references, delay * 1000, files, readReceipt);
       } else {
-        await this.emailService.sendEmail(to, this.subject(), html, this.cc(), this.bcc(), '', '', 0, files, readReceipt);
+        await this.emailService.sendEmail(to, this.subject(), html, this.cc(), this.bcc(), this.inReplyTo, this.references, 0, files, readReceipt);
       }
       sendSucceeded = true;
       this.settingsService.clearDraft();
@@ -404,12 +427,12 @@ export class ComposeComponent implements OnInit, OnDestroy {
     const to = this.to().trim();
     if (!to) {
       this.sendError.set('Ajoutez au moins un destinataire.');
-      this.toInputRef()?.nativeElement.focus();
+      this.toChipsRef()?.focusInput();
       return;
     }
     if (!this.areRecipientsValid(to)) {
       this.sendError.set('L’adresse du destinataire semble invalide.');
-      this.toInputRef()?.nativeElement.focus();
+      this.toChipsRef()?.focusInput();
       return;
     }
     if (!editor) {

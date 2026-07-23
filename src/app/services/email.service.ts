@@ -34,6 +34,10 @@ export class EmailService {
    * When `draft` is set, compose treats the existing IMAP message as the
    * remote draft to update on subsequent auto-saves (instead of creating a
    * new draft message).
+   *
+   * `inReplyTo` / `references` carry the threading headers when the modal is
+   * opened as a reply, so the outgoing message stays attached to the original
+   * conversation.
    */
   readonly composePrefill = signal<{
     to?: string;
@@ -43,6 +47,8 @@ export class EmailService {
     htmlBody?: string;
     attachments?: File[];
     draft?: { folder: string; uid: number };
+    inReplyTo?: string;
+    references?: string;
   } | null>(null);
 
   private trashFolder = '';

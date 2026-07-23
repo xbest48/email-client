@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed, ChangeDetectionStrategy, OnInit, OnDestroy, viewChild, effect, ElementRef } from '@angular/core';
+import { Component, inject, signal, computed, ChangeDetectionStrategy, OnInit, OnDestroy, effect } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { Subscription } from 'rxjs';
@@ -15,12 +15,11 @@ import { SettingsService } from '../../services/settings.service';
 import { AiActionItem, AiCategoryResult, AiPhishingResult, AiService } from '../../services/ai.service';
 import { TaskService } from '../../services/task.service';
 import { ToastService } from '../../services/toast.service';
-import { RichEditorComponent } from '../rich-editor/rich-editor.component';
 
 @Component({
   selector: 'app-email-detail',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RelativeTimePipe, SandboxedHtmlDirective, RichEditorComponent],
+  imports: [RelativeTimePipe, SandboxedHtmlDirective],
   templateUrl: './email-detail.component.html',
   styleUrl: './email-detail.component.css',
 })
@@ -40,17 +39,6 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
   private readonly toastService = inject(ToastService);
 
   readonly email = signal<Email | null>(null);
-  readonly replyMode = signal<'reply' | 'replyAll' | 'forward' | null>(null);
-  readonly showReply = computed(() => this.replyMode() !== null);
-  readonly replyTo = signal('');
-  readonly replyCc = signal('');
-  readonly replyBcc = signal('');
-  readonly replySubject = signal('');
-  readonly replyBody = signal('');
-  readonly replyAttachments = signal<File[]>([]);
-  readonly replyDragOver = signal(false);
-  readonly replyEditor = viewChild<RichEditorComponent>('replyEditor');
-  readonly replyFileInputRef = viewChild<ElementRef<HTMLInputElement>>('replyFileInput');
   readonly allowExternalImages = signal(false);
   readonly showSnoozeMenu = signal(false);
   readonly showLabelMenu = signal(false);
@@ -466,118 +454,46 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * Open the shared compose modal pre-filled for a reply / reply-all /
+   * forward, mirroring the "new message" experience instead of a separate
+   * inline composer. Threading headers are carried through the prefill so
+   * replies stay attached to the original conversation.
+   */
   openReply(mode: 'reply' | 'replyAll' | 'forward'): void {
     const mail = this.email();
     if (!mail) return;
 
+    let to = '';
+    let cc = '';
+    let bcc = '';
+    let subject: string;
+    let htmlBody = '';
+
     if (mode === 'forward') {
-      this.replyTo.set('');
-      this.replyCc.set('');
-      this.replyBcc.set('');
-      this.replySubject.set(this.withSubjectPrefix(mail.subject, 'Fwd:'));
-      this.replyBody.set(this.buildForwardBody(mail));
+      subject = this.withSubjectPrefix(mail.subject, 'Fwd:');
+      htmlBody = this.buildForwardBody(mail);
     } else if (mode === 'replyAll') {
       const recipients = this.buildReplyAllRecipients(mail);
-      this.replyTo.set(recipients.to);
-      this.replyCc.set(recipients.cc);
-      this.replyBcc.set(recipients.bcc);
-      this.replySubject.set(this.withSubjectPrefix(mail.subject, 'Re:'));
-      this.replyBody.set('');
+      to = recipients.to;
+      cc = recipients.cc;
+      bcc = recipients.bcc;
+      subject = this.withSubjectPrefix(mail.subject, 'Re:');
     } else {
-      this.replyTo.set(mail.from.email);
-      this.replyCc.set('');
-      this.replyBcc.set('');
-      this.replySubject.set(this.withSubjectPrefix(mail.subject, 'Re:'));
-      this.replyBody.set('');
+      to = mail.from.email;
+      subject = this.withSubjectPrefix(mail.subject, 'Re:');
     }
-
-    this.replyMode.set(mode);
-    this.replyAttachments.set([]);
-
-    const editor = this.replyEditor();
-    if (editor) {
-      editor.setHtml(this.replyBody());
-    }
-  }
-
-  closeReplyComposer(): void {
-    this.replyMode.set(null);
-    this.replyTo.set('');
-    this.replyCc.set('');
-    this.replyBcc.set('');
-    this.replySubject.set('');
-    this.replyBody.set('');
-    this.replyAttachments.set([]);
-    this.replyDragOver.set(false);
-    this.replyEditor()?.clear();
-  }
-
-  async sendReply(): Promise<void> {
-    const mail = this.email();
-    const editor = this.replyEditor();
-    const mode = this.replyMode();
-    const body = (editor ? editor.getFullHtml() : this.replyBody()).trim();
-    if (!mail || !body || !mode) return;
-
-    const to = this.replyTo().trim();
-    const cc = this.replyCc().trim();
-    const bcc = this.replyBcc().trim();
-    const subject = this.replySubject().trim();
-    if (!to) return;
 
     const isReply = mode === 'reply' || mode === 'replyAll';
-    await this.emailService.sendEmail(
+    this.emailService.composePrefill.set({
       to,
+      cc: cc || undefined,
+      bcc: bcc || undefined,
       subject,
-      body,
-      cc,
-      bcc,
-      isReply ? mail.messageId || '' : '',
-      isReply ? mail.messageId || '' : '',
-      0,
-      this.replyAttachments(),
-    );
-    this.closeReplyComposer();
-  }
-
-  onReplyChange(html: string): void {
-    this.replyBody.set(html);
-  }
-
-  onReplyFileSelect(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    if (input.files) this.addReplyFiles(input.files);
-    input.value = '';
-  }
-
-  onReplyDragOver(event: DragEvent): void {
-    event.preventDefault();
-    this.replyDragOver.set(true);
-  }
-
-  onReplyDragLeave(): void {
-    this.replyDragOver.set(false);
-  }
-
-  onReplyDrop(event: DragEvent): void {
-    event.preventDefault();
-    this.replyDragOver.set(false);
-    const files = event.dataTransfer?.files;
-    if (files) this.addReplyFiles(files);
-  }
-
-  private addReplyFiles(fileList: FileList): void {
-    this.replyAttachments.update((files) => [...files, ...Array.from(fileList)]);
-  }
-
-  removeReplyAttachment(index: number): void {
-    this.replyAttachments.update((files) => files.filter((_, i) => i !== index));
-  }
-
-  formatReplyFileSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} o`;
-    if (bytes < 1048576) return `${Math.round(bytes / 1024)} Ko`;
-    return `${(bytes / 1048576).toFixed(1)} Mo`;
+      htmlBody,
+      inReplyTo: isReply ? mail.messageId || undefined : undefined,
+      references: isReply ? mail.messageId || undefined : undefined,
+    });
   }
 
   printEmail(): void {
@@ -831,18 +747,6 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     this.recipientsExpanded.update((expanded) => !expanded);
   }
 
-  replyModeLabel(): string {
-    switch (this.replyMode()) {
-      case 'replyAll':
-        return 'Repondre a tous';
-      case 'forward':
-        return 'Transferer';
-      case 'reply':
-      default:
-        return 'Repondre';
-    }
-  }
-
   formatSize(bytes: number): string {
     if (bytes < 1024) return `${bytes} o`;
     if (bytes < 1048576) return `${Math.round(bytes / 1024)} Ko`;
@@ -895,16 +799,16 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
   }
 
   applyReply(text: string): void {
+    const mail = this.email();
+    if (!mail) return;
     this.aiReplies.set([]);
-    if (!this.replyTo().trim()) {
-      this.openReply('reply');
-    }
-    this.replyBody.set(text);
-    this.replyMode.set('reply');
-    setTimeout(() => {
-      const editor = this.replyEditor();
-      if (editor) editor.setHtml(text);
-    }, 100);
+    this.emailService.composePrefill.set({
+      to: mail.from.email,
+      subject: this.withSubjectPrefix(mail.subject, 'Re:'),
+      htmlBody: this.escapeHtml(text).replace(/\n/g, '<br>'),
+      inReplyTo: mail.messageId || undefined,
+      references: mail.messageId || undefined,
+    });
   }
 
   async extractActions(): Promise<void> {
