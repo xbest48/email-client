@@ -8,6 +8,7 @@ import { ContactService, Contact } from '../../services/contact.service';
 import { PgpService } from '../../services/pgp.service';
 import { ConfirmDialogService } from '../../services/confirm-dialog.service';
 import { AiService } from '../../services/ai.service';
+import { ToastService } from '../../services/toast.service';
 import { RichEditorComponent } from '../rich-editor/rich-editor.component';
 import { RecipientChipsComponent } from '../recipient-chips/recipient-chips.component';
 
@@ -27,6 +28,7 @@ export class ComposeComponent implements OnInit, OnDestroy {
   protected readonly pgpService = inject(PgpService);
   private readonly confirmDialog = inject(ConfirmDialogService);
   private readonly aiService = inject(AiService);
+  private readonly toastService = inject(ToastService);
 
   readonly close = output<void>();
 
@@ -406,10 +408,12 @@ export class ComposeComponent implements OnInit, OnDestroy {
         }
       }
       this.remoteDraft = null;
+      this.toastService.show('success', delay > 0 ? "Message en cours d'envoi." : 'Message envoye.');
       this.close.emit();
     } catch (err) {
       console.error('Failed to send email', err);
-      this.sendError.set("L'envoi du message a echoue.");
+      this.sendError.set("L'envoi du message a echoue. Reessayez.");
+      this.toastService.show('error', "L'envoi du message a echoue.");
     } finally {
       this.sending.set(false);
       if (!sendSucceeded && !this.draftInterval) {
@@ -481,10 +485,12 @@ export class ComposeComponent implements OnInit, OnDestroy {
         }
       }
       this.remoteDraft = null;
+      this.toastService.show('success', "Envoi programme.");
       this.close.emit();
     } catch (err) {
       console.error('Failed to schedule email', err);
       this.sendError.set("La programmation de l'envoi a echoue.");
+      this.toastService.show('error', "La programmation de l'envoi a echoue.");
     } finally {
       this.sending.set(false);
       if (!scheduleSucceeded && !this.draftInterval) {
