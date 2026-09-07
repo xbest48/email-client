@@ -100,7 +100,7 @@ export class ComposeComponent implements OnInit, OnDestroy {
     const fullHtml = editor ? editor.getFullHtml() : html;
 
     try {
-      if (!to && !cc && !bcc && !subject && !html) {
+      if (!to && !cc && !bcc && !subject && this.isMeaningfullyEmpty(html) && !this.attachments().length) {
         this.settingsService.clearDraft();
         if (this.remoteDraft?.folder && this.remoteDraft.uid) {
           await this.emailService.deleteDraftMessage(this.remoteDraft.folder, this.remoteDraft.uid);
@@ -357,9 +357,72 @@ export class ComposeComponent implements OnInit, OnDestroy {
     this.maximized.set(!this.maximized());
   }
 
-  onClose(): void {
-    void this.saveDraft();
+  async onClose(): Promise<void> {
+    if (!this.hasComposedData()) {
+      await this.deleteRemoteDraftIfExists();
+      this.settingsService.clearDraft();
+      this.close.emit();
+      return;
+    }
+
+    const result = await this.confirmDialog.confirm({
+      title: 'Sauvegarder le brouillon ?',
+      message: 'Voulez-vous sauvegarder ce message en brouillon avant de fermer ?',
+      confirmLabel: 'Sauvegarder',
+      discardLabel: 'Fermer sans sauvegarder',
+      cancelLabel: 'Annuler',
+    });
+
+    if (result === false) return; // Annuler → garder le composeur ouvert
+
+    if (result === true) {
+      await this.saveDraft();
+    } else {
+      // null → fermer sans sauvegarder
+      await this.deleteRemoteDraftIfExists();
+      this.settingsService.clearDraft();
+    }
     this.close.emit();
+  }
+
+  async onDiscard(): Promise<void> {
+    const confirmed = await this.confirmDialog.confirm({
+      title: 'Supprimer le brouillon',
+      message: 'Voulez-vous supprimer ce brouillon ? Cette action est irréversible.',
+      confirmLabel: 'Supprimer',
+      cancelLabel: 'Annuler',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+
+    await this.deleteRemoteDraftIfExists();
+    this.settingsService.clearDraft();
+    this.close.emit();
+  }
+
+  private hasComposedData(): boolean {
+    const editor = this.bodyEditor();
+    const html = this.stripDetachedSignature(editor ? editor.getHtml() : this.htmlBody());
+    return !!(
+      this.to().trim() ||
+      this.cc().trim() ||
+      this.bcc().trim() ||
+      this.subject().trim() ||
+      !this.isMeaningfullyEmpty(html) ||
+      this.attachments().length > 0
+    );
+  }
+
+  private async deleteRemoteDraftIfExists(): Promise<void> {
+    if (this.remoteDraft?.folder && this.remoteDraft.uid) {
+      try {
+        await this.emailService.deleteDraftMessage(this.remoteDraft.folder, this.remoteDraft.uid);
+      } catch (err) {
+        console.warn('Failed to delete remote draft', err);
+      }
+    }
+    this.remoteDraft = null;
+    this.draftSavedAt.set(null);
   }
 
   private stripDetachedSignature(html: string, signatureHtml = this.settingsService.getDefaultSignature()?.html ?? ''): string {

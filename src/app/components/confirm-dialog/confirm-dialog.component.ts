@@ -1,9 +1,10 @@
-import { ChangeDetectionStrategy, Component, HostListener, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { ConfirmDialogService } from '../../services/confirm-dialog.service';
 
 @Component({
   selector: 'app-confirm-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { '(document:keydown.escape)': 'onEscape()' },
   template: `
     @if (confirmDialog.dialog(); as dialog) {
       <div
@@ -45,6 +46,14 @@ import { ConfirmDialogService } from '../../services/confirm-dialog.service';
                 class="rounded-xl px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white">
                 {{ dialog.cancelLabel }}
               </button>
+              @if (dialog.discardLabel) {
+                <button
+                  type="button"
+                  (click)="discard()"
+                  class="rounded-xl px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 hover:text-red-700 focus:outline-none focus:ring-2 focus:ring-red-400 dark:text-red-400 dark:hover:bg-red-900/30 dark:hover:text-red-300">
+                  {{ dialog.discardLabel }}
+                </button>
+              }
             }
             <button
               type="button"
@@ -69,7 +78,6 @@ import { ConfirmDialogService } from '../../services/confirm-dialog.service';
 export class ConfirmDialogComponent {
   readonly confirmDialog = inject(ConfirmDialogService);
 
-  @HostListener('document:keydown.escape')
   onEscape(): void {
     if (this.confirmDialog.dialog()) {
       this.cancel();
@@ -78,6 +86,10 @@ export class ConfirmDialogComponent {
 
   confirm(): void {
     this.confirmDialog.resolve(true);
+  }
+
+  discard(): void {
+    this.confirmDialog.resolve(null);
   }
 
   cancel(): void {

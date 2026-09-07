@@ -5,6 +5,8 @@ export interface ConfirmDialogOptions {
   message: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  /** Optional third action label. When set the dialog shows a third button that resolves the promise with `null`. */
+  discardLabel?: string;
   tone?: 'default' | 'danger' | 'success' | 'error' | 'info' | 'warning';
 }
 
@@ -14,6 +16,7 @@ interface ConfirmDialogState {
   message: string;
   confirmLabel: string;
   cancelLabel: string;
+  discardLabel: string;
   tone: 'default' | 'danger' | 'success' | 'error' | 'info' | 'warning';
 }
 
@@ -21,9 +24,15 @@ interface ConfirmDialogState {
 export class ConfirmDialogService {
   readonly dialog = signal<ConfirmDialogState | null>(null);
 
-  private pendingResolver?: (confirmed: boolean) => void;
+  private pendingResolver?: (result: boolean | null) => void;
 
-  confirm(options: ConfirmDialogOptions | string): Promise<boolean> {
+  /**
+   * Shows a confirmation dialog.
+   * Returns `true` when the user clicks the confirm button,
+   * `null` when the user clicks the optional discard button (discardLabel),
+   * and `false` when the user cancels (cancel button, backdrop, or Escape).
+   */
+  confirm(options: ConfirmDialogOptions | string): Promise<boolean | null> {
     if (this.pendingResolver) {
       this.pendingResolver(false);
     }
@@ -38,10 +47,11 @@ export class ConfirmDialogService {
       message: normalized.message,
       confirmLabel: normalized.confirmLabel ?? 'Confirmer',
       cancelLabel: normalized.cancelLabel ?? 'Annuler',
+      discardLabel: normalized.discardLabel ?? '',
       tone: normalized.tone ?? 'default',
     });
 
-    return new Promise<boolean>((resolve) => {
+    return new Promise<boolean | null>((resolve) => {
       this.pendingResolver = resolve;
     });
   }
@@ -61,6 +71,7 @@ export class ConfirmDialogService {
       message: normalized.message,
       confirmLabel: normalized.confirmLabel ?? 'OK',
       cancelLabel: '',
+      discardLabel: '',
       tone: normalized.tone ?? 'info',
     });
 
@@ -69,10 +80,10 @@ export class ConfirmDialogService {
     });
   }
 
-  resolve(confirmed: boolean): void {
+  resolve(result: boolean | null): void {
     const resolver = this.pendingResolver;
     this.pendingResolver = undefined;
     this.dialog.set(null);
-    resolver?.(confirmed);
+    resolver?.(result);
   }
 }
