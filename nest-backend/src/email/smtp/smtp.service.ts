@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import * as crypto from 'crypto';
 import * as nodemailer from 'nodemailer';
 import { EmailCredentials } from '../imap/imap.service';
 
@@ -15,6 +16,10 @@ export interface SendEmailDto {
   attachments?: { filename: string; content: Buffer; contentType: string; cid?: string }[];
   senderName?: string;
 }
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const replaceBase64Images: (html: string, getCid: (mimeType: string, base64: string) => string) => string =
+  require('nodemailer-plugin-inline-base64/src/replaceBase64Images');
 
 @Injectable()
 export class SmtpService {
@@ -56,19 +61,20 @@ export class SmtpService {
   }
 
   private buildMailOptions(credentials: EmailCredentials, dto: SendEmailDto): nodemailer.SendMailOptions {
-    const prepared = this.prepareInlineCssDataImages(dto.html, dto.attachments);
+    const { html: processedHtml, cidAttachments } = this.convertDataUrlsToCid(dto.html);
     const senderName = dto.senderName
       ? this.sanitizeHeaderValue(dto.senderName, 'senderName').replace(/"/g, '')
       : undefined;
     const subject = this.sanitizeHeaderValue(dto.subject || '', 'subject');
+
+    const allAttachments = [...(dto.attachments ?? []), ...cidAttachments];
 
     const mailOptions: nodemailer.SendMailOptions = {
       from: senderName ? `"${senderName}" <${credentials.email}>` : credentials.email,
       to: this.sanitizeAddressList(dto.to, 'to') || undefined,
       subject,
       text: dto.text,
-      html: prepared.html,
-      attachDataUrls: true,
+      html: processedHtml,
     };
 
     if (dto.cc) mailOptions.cc = this.sanitizeAddressList(dto.cc, 'cc');
@@ -86,8 +92,8 @@ export class SmtpService {
         'Return-Receipt-To': credentials.email,
       };
     }
-    if (prepared.attachments.length) {
-      mailOptions.attachments = prepared.attachments.map((attachment) => ({
+    if (allAttachments.length) {
+      mailOptions.attachments = allAttachments.map((attachment) => ({
         filename: attachment.filename,
         content: attachment.content,
         contentType: attachment.contentType,
@@ -115,91 +121,6 @@ export class SmtpService {
     }
   }
 
-  private prepareInlineCssDataImages(
-    html: string | undefined,
-    attachments: SendEmailDto['attachments'],
-  ): { html: string | undefined; attachments: NonNullable<SendEmailDto['attachments']> } {
-    const preparedAttachments = [...(attachments ?? [])];
-    if (!html) {
-      return { html, attachments: preparedAttachments };
-    }
-
-    const dataUrlCache = new Map<string, string>();
-    let imageIndex = 0;
-
-    const convertDataUrl = (dataUrl: string): string | null => {
-      const trimmed = dataUrl.replace(/\s+/g, '');
-      const cached = dataUrlCache.get(trimmed);
-      if (cached) return cached;
-
-      const inlineImage = this.dataUrlToInlineAttachment(trimmed, imageIndex);
-      if (!inlineImage?.cid) return null;
-
-      imageIndex += 1;
-      dataUrlCache.set(trimmed, inlineImage.cid);
-      preparedAttachments.push(inlineImage);
-      return inlineImage.cid;
-    };
-
-    const updatedHtml = html.replace(
-      /(url\s*\(\s*)(["']?)(data:image\/[^"')]+)\2(\s*\))/gi,
-      (match, urlOpen: string, quote: string, dataUrl: string, urlClose: string) => {
-        const cid = convertDataUrl(dataUrl);
-        return cid ? `${urlOpen}${quote}cid:${cid}${quote}${urlClose}` : match;
-      },
-    );
-
-    return { html: updatedHtml, attachments: preparedAttachments };
-  }
-
-  private dataUrlToInlineAttachment(
-    dataUrl: string,
-    imageIndex: number,
-  ): NonNullable<SendEmailDto['attachments']>[number] | null {
-    const match = dataUrl.match(/^data:([^;,]+)((?:;[^;,]+)*?)(?:,([\s\S]*))$/i);
-    if (!match) return null;
-
-    const mimeType = match[1];
-    const metadata = match[2] ?? '';
-    const payload = match[3] ?? '';
-    const isBase64 = /;base64/i.test(metadata);
-
-    let content: Buffer;
-    try {
-      if (isBase64) {
-        content = Buffer.from(payload.replace(/\s+/g, ''), 'base64');
-      } else {
-        content = Buffer.from(decodeURIComponent(payload), 'utf8');
-      }
-    } catch {
-      return null;
-    }
-
-    const extension = this.mimeTypeToExtension(mimeType);
-    const cid = `inline-image-${Date.now()}-${imageIndex}@mailflow`;
-    return {
-      filename: `inline-image-${imageIndex + 1}.${extension}`,
-      content,
-      contentType: mimeType,
-      cid,
-    };
-  }
-
-  private mimeTypeToExtension(mimeType: string): string {
-    const knownExtensions: Record<string, string> = {
-      'image/png': 'png',
-      'image/jpeg': 'jpg',
-      'image/jpg': 'jpg',
-      'image/gif': 'gif',
-      'image/webp': 'webp',
-      'image/svg+xml': 'svg',
-      'image/bmp': 'bmp',
-      'image/x-icon': 'ico',
-    };
-
-    return knownExtensions[mimeType.toLowerCase()] ?? 'img';
-  }
-
   async sendEmail(credentials: EmailCredentials, dto: SendEmailDto) {
     const transporter = nodemailer.createTransport({
       host: credentials.smtpHost,
@@ -221,6 +142,7 @@ export class SmtpService {
     transporter.close();
 
     // Build raw RFC822 message for IMAP Sent folder append
+    // Re-use the same already-converted mailOptions via buildRawMessage
     const rawMessage = await this.buildRawMessage(credentials, dto);
 
     return {
@@ -252,5 +174,41 @@ export class SmtpService {
     } finally {
       transporter.close();
     }
+  }
+
+  private convertDataUrlsToCid(html: string | undefined): {
+    html: string | undefined;
+    cidAttachments: Array<{ filename: string; content: Buffer; contentType: string; cid: string }>;
+  } {
+    if (!html) return { html, cidAttachments: [] };
+
+    const cidByBase64 = new Map<string, string>();
+    const cidAttachments: Array<{ filename: string; content: Buffer; contentType: string; cid: string }> = [];
+
+    const getOrCreateCid = (mimeType: string, base64: string): string => {
+      const stripped = base64.replace(/\s+/g, '');
+      const existing = cidByBase64.get(stripped);
+      if (existing) return existing;
+
+      const cid = `img-${crypto.randomBytes(8).toString('hex')}@mailflow`;
+      cidByBase64.set(stripped, cid);
+
+      try {
+        const content = Buffer.from(stripped, 'base64');
+        cidAttachments.push({
+          filename: `image.${this.mimeTypeToExtension(mimeType)}`,
+          content,
+          contentType: mimeType,
+          cid,
+        });
+      } catch {
+        // Malformed base64 — skip this attachment, leave original src in HTML
+      }
+
+      return cid;
+    };
+
+    const processedHtml = replaceBase64Images(html, getOrCreateCid);
+    return { html: processedHtml, cidAttachments };
   }
 }

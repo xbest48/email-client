@@ -355,7 +355,7 @@
           toolbarPosition="top"
           [minHeight]="maximized() ? '300px' : '180px'"
           (contentChange)="onBodyChange($event)"
-          class="flex-1 flex flex-col"/>
+          class="flex-1 min-h-0 flex flex-col"/>
       </div>
 
       <!-- Footer -->
@@ -461,7 +461,7 @@
           }
           <button
             type="button"
-            (click)="onClose()"
+            (click)="onDiscard()"
             class="p-2 text-gray-400 hover:text-red-500 rounded-lg hover:bg-gray-100 transition-colors
                    focus:outline-none focus:ring-2 focus:ring-amber-400"
             aria-label="Supprimer le brouillon"
