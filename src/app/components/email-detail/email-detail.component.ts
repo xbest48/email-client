@@ -697,6 +697,25 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     return addresses.map((a) => a.name || a.email).join(', ');
   }
 
+  /** Initials for the sender avatar. */
+  senderInitials(from: EmailAddress): string {
+    const raw = (from?.name || from?.email || '?').trim();
+    if (!raw) return '?';
+    const words = raw.split(/[\s@._-]+/).filter(Boolean);
+    if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+    return raw.slice(0, 2).toUpperCase();
+  }
+
+  /** Deterministic hue derived from the sender, matching the list avatars. */
+  senderHue(from: EmailAddress): number {
+    const key = (from?.email || from?.name || '?').toLowerCase();
+    let hash = 0;
+    for (let i = 0; i < key.length; i++) {
+      hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+    }
+    return hash % 360;
+  }
+
   async copyEmailAddress(address: string): Promise<void> {
     if (!address) return;
 

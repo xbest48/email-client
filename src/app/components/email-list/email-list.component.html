@@ -442,6 +442,14 @@
             </button>
           }
 
+          <!-- Sender avatar -->
+          <div class="flex shrink-0 h-9 w-9 items-center justify-center rounded-full text-xs font-semibold select-none"
+               [style.background-color]="'hsl(' + avatarHue(email) + ' 55% 85%)'"
+               [style.color]="'hsl(' + avatarHue(email) + ' 42% 28%)'"
+               aria-hidden="true">
+            {{ avatarInitials(email) }}
+          </div>
+
           <!-- Sender / Recipients (desktop) -->
           <div class="hidden sm:flex w-36 shrink-0 min-w-0 flex-col gap-0.5" [class.font-semibold]="!email.isRead">
             @if (labelsFor(email); as emailLabels) {

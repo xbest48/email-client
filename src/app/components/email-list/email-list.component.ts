@@ -977,6 +977,37 @@ export class EmailListComponent implements OnInit, OnDestroy {
     return first?.name || first?.email || '(sans destinataire)';
   }
 
+  /** Person whose initials/colour the row avatar represents. */
+  private avatarSource(email: Email): { label: string; key: string } {
+    if (this.isSentFolder()) {
+      const first = email.to.length > 0 ? email.to[0] : null;
+      return { label: first?.name || first?.email || '?', key: (first?.email || first?.name || '').toLowerCase() };
+    }
+    return {
+      label: email.from.name || email.from.email || '?',
+      key: (email.from.email || email.from.name || '').toLowerCase(),
+    };
+  }
+
+  /** One or two uppercase initials for the sender/recipient avatar. */
+  avatarInitials(email: Email): string {
+    const raw = this.avatarSource(email).label.trim();
+    if (!raw) return '?';
+    const words = raw.split(/[\s@._-]+/).filter(Boolean);
+    if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+    return raw.slice(0, 2).toUpperCase();
+  }
+
+  /** Deterministic hue (0–359) derived from the sender, for the avatar tint. */
+  avatarHue(email: Email): number {
+    const key = this.avatarSource(email).key || '?';
+    let hash = 0;
+    for (let i = 0; i < key.length; i++) {
+      hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+    }
+    return hash % 360;
+  }
+
   private isJunkFolderPath(path: string): boolean {
     const normalizedPath = path.trim().toLowerCase();
     return this.emailService.folders().some(
