@@ -63,6 +63,14 @@ export interface AppSettings {
 const STORAGE_KEY = 'mailflow_settings';
 const DRAFT_STORAGE_KEY = 'mailflow_draft';
 
+/**
+ * Accent colours that shipped as the app default in earlier versions. When a
+ * stored setting still carries one of these, it means the user never chose a
+ * custom accent, so we auto-upgrade it to the current brand default (gold).
+ * A colour the user picked on purpose is never in this set and is preserved.
+ */
+const LEGACY_DEFAULT_ACCENTS = new Set(['#403d84']);
+
 const DEFAULT_SETTINGS: AppSettings = {
   pageSize: 50,
   accounts: [],
@@ -70,7 +78,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   templates: [],
   showFolders: true,
   showLabelsSection: true,
-  accentColor: '#403d84',
+  accentColor: '#d4a520',
   mobileSwipeLeftAction: 'trash',
   mobileSwipeLeftMoveFolder: '',
   mobileSwipeRightAction: 'move',
@@ -382,6 +390,7 @@ export class SettingsService {
       );
 
       if (version !== this.loadVersion) return;
+      settings.accentColor = this.migrateAccentColor(settings.accentColor);
       this.settings.set(settings);
       this.applyAccentTheme(settings.accentColor);
       this.save(settings);
@@ -437,6 +446,7 @@ export class SettingsService {
     );
 
     if (version !== this.loadVersion) return;
+    settings.accentColor = this.migrateAccentColor(settings.accentColor);
     this.settings.set(settings);
     this.applyAccentTheme(settings.accentColor);
 
@@ -827,6 +837,15 @@ export class SettingsService {
   private normalizeHexColor(color: string): string | null {
     const match = color.trim().match(/^#([0-9a-fA-F]{6})$/);
     return match ? `#${match[1].toLowerCase()}` : null;
+  }
+
+  /**
+   * Upgrades a legacy default accent colour to the current brand default while
+   * leaving any deliberately-chosen colour untouched.
+   */
+  private migrateAccentColor(color: string | undefined): string {
+    const normalized = this.normalizeHexColor(color ?? '') ?? DEFAULT_SETTINGS.accentColor;
+    return LEGACY_DEFAULT_ACCENTS.has(normalized) ? DEFAULT_SETTINGS.accentColor : normalized;
   }
 
   private mixColor(colorA: string, colorB: string, weightB: number): string {

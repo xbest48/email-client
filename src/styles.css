@@ -1,40 +1,85 @@
 @import "tailwindcss";
 @custom-variant dark (&:is(.dark *));
 
-/* Custom theme */
+/* ============================================================
+   KYMA Mail — Design system (Poseidon-inspired)
+   Fine typography · generous rounded corners · soft shadows
+   ============================================================ */
+
 @theme {
-  --color-amber-50: #f3f3fb;
-  --color-amber-100: #e4e2f5;
-  --color-amber-200: #c9c7ea;
-  --color-amber-300: #aaa6dd;
-  --color-amber-400: #8983ce;
-  --color-amber-500: #403d84;
-  --color-amber-600: #373473;
-  --color-amber-700: #2d2b61;
-  --color-amber-800: #23224f;
-  --color-amber-900: #171636;
+  /* --- Brand / primary: KYMA gold (a rich mustard gold around #D4A520).
+     Bright golds (400/500) always pair with DARK text — see the primary-button
+     contrast rule below — while the deep golds (700/900) are text-on-light
+     accents. Neutrals are grey (Tailwind gray, used app-wide). --- */
+  --color-amber-50: #fbf7ea;
+  --color-amber-100: #f6ecc6;
+  --color-amber-200: #eedc95;
+  --color-amber-300: #e5c85c;
+  --color-amber-400: #dab52c;
+  --color-amber-500: #cca01e;
+  --color-amber-600: #a97f16;
+  --color-amber-700: #855f13;
+  --color-amber-800: #5f4410;
+  --color-amber-900: #3f2e0b;
+
+  /* --- Rounded corners: generous, Poseidon-like --- */
+  --radius-sm: 0.4375rem;   /*  7px */
+  --radius-md: 0.625rem;    /* 10px */
+  --radius-lg: 0.75rem;     /* 12px  (was 8px — the app's most-used radius) */
+  --radius-xl: 1rem;        /* 16px */
+  --radius-2xl: 1.5rem;     /* 24px */
+  --radius-3xl: 2rem;       /* 32px */
+
+  /* --- Typography: lighter, finer weights --- */
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 500;  /* was 600 — thin, refined UI text */
+  --font-weight-bold: 600;      /* was 700 */
+
+  /* --- Soft, diffuse shadows (warm neutral-grey tint) --- */
+  --shadow-2xs: 0 1px 2px 0 rgb(38 34 24 / 0.04);
+  --shadow-xs: 0 1px 2px 0 rgb(38 34 24 / 0.05);
+  --shadow-sm: 0 1px 2px 0 rgb(38 34 24 / 0.05), 0 1px 3px 0 rgb(38 34 24 / 0.04);
+  --shadow-md: 0 2px 6px -1px rgb(38 34 24 / 0.07), 0 4px 14px -2px rgb(38 34 24 / 0.06);
+  --shadow-lg: 0 4px 14px -3px rgb(38 34 24 / 0.08), 0 10px 28px -6px rgb(38 34 24 / 0.07);
+  --shadow-xl: 0 8px 26px -6px rgb(38 34 24 / 0.10), 0 18px 52px -12px rgb(38 34 24 / 0.10);
+  --shadow-2xl: 0 16px 44px -10px rgb(38 34 24 / 0.16), 0 34px 68px -20px rgb(38 34 24 / 0.12);
 }
 
-/* Base styles */
+/* ---------------------------------------------------------------
+   Base
+   --------------------------------------------------------------- */
 html, body {
   height: 100%;
   margin: 0;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI',
+    Roboto, Helvetica, Arial, sans-serif;
+  font-weight: 400;
+  font-optical-sizing: auto;
+  letter-spacing: -0.006em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #f8fafc;
-  color: #111827;
+  text-rendering: optimizeLegibility;
+  background: #f6f6f4;
+  color: #201d16;
+}
+
+/* Slightly tighter tracking on larger text for the refined Poseidon feel */
+h1, h2, h3, .text-lg, .text-xl, .text-2xl, .text-3xl {
+  letter-spacing: -0.018em;
 }
 
 .dark body {
-  background: #171717;
-  color: #e5e5e5;
+  background: #131311;
+  color: #eae8e3;
 }
 
-/* Scrollbar styling */
+/* ---------------------------------------------------------------
+   Scrollbars — thin, rounded, unobtrusive
+   --------------------------------------------------------------- */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -42,41 +87,110 @@ html, body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 3px;
+  background: #d3d1cb;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
+  background: #bcb9b1;
+  background-clip: padding-box;
+  border: 2px solid transparent;
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  background: #525252;
+  background: #3d3c38;
+  background-clip: padding-box;
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: #737373;
+  background: #514f49;
+  background-clip: padding-box;
 }
 
-/* Focus visible styles */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #d3d1cb transparent;
+}
+
+.dark * {
+  scrollbar-color: #3d3c38 transparent;
+}
+
+/* ---------------------------------------------------------------
+   Focus — soft gold ring, generously rounded
+   --------------------------------------------------------------- */
 *:focus-visible {
-  outline: 2px solid #403d84;
+  outline: 2px solid #a97f16;
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 8px;
 }
 
-/* Dark mode readability hardening */
+.dark *:focus-visible {
+  outline-color: #dab52c;
+}
+
+/* ---------------------------------------------------------------
+   Primary (gold) buttons need dark text/icons for AA contrast.
+   Bright gold + white fails WCAG; bright gold + near-black passes and is the
+   intended Poseidon look. Applies wherever a gold background and text-white
+   land on the same element (icons inherit via currentColor). --- */
+.bg-amber-400.text-white,
+.bg-amber-500.text-white,
+.bg-amber-600.text-white,
+.dark .bg-amber-400.text-white,
+.dark .bg-amber-500.text-white,
+.dark .bg-amber-600.text-white {
+  color: #201d16 !important;
+}
+
+/* ---------------------------------------------------------------
+   Dark surfaces — neutral grey depth (pairs with the gold accent)
+   --------------------------------------------------------------- */
+.dark .bg-white {
+  background-color: #1c1c1a !important;
+}
+
+.dark .bg-gray-50 {
+  background-color: #242422 !important;
+}
+
+.dark .bg-gray-100 {
+  background-color: #2b2b28 !important;
+}
+
+.dark .bg-gray-800 {
+  background-color: #1b1b19 !important;
+}
+
+.dark .bg-gray-900 {
+  background-color: #161614 !important;
+}
+
+.dark .text-gray-900 { color: #f5f4f1 !important; }
+.dark .text-gray-800 { color: #eae8e3 !important; }
+.dark .text-gray-700 { color: #d7d5cf !important; }
+.dark .text-gray-600 { color: #adaba3 !important; }
+.dark .text-gray-500 { color: #adaba3 !important; }
+
+.dark .border-gray-200 { border-color: #35342f !important; }
+.dark .border-gray-300 { border-color: #403f39 !important; }
+.dark .border-gray-700 { border-color: #2d2d29 !important; }
+.dark .border-gray-800 { border-color: #262521 !important; }
+
+/* Form controls: readable in both themes */
 .dark input,
 .dark textarea,
 .dark select {
-  background-color: #262626;
-  color: #f5f5f5;
-  border-color: #525252;
+  background-color: #242422;
+  color: #f3f2ee;
+  border-color: #403f39;
 }
 
 .dark input::placeholder,
 .dark textarea::placeholder {
-  color: #a3a3a3;
+  color: #a8a69e;
 }
 
 /* Prevent iOS Safari from zooming focused form fields on mobile. */
@@ -89,43 +203,9 @@ html, body {
   }
 }
 
-.dark .bg-white {
-  background-color: #1f1f1f !important;
-}
-
-.dark .bg-gray-50 {
-  background-color: #262626 !important;
-}
-
-.dark .text-gray-900 {
-  color: #fafafa !important;
-}
-
-.dark .text-gray-800 {
-  color: #e5e5e5 !important;
-}
-
-.dark .text-gray-700 {
-  color: #d4d4d4 !important;
-}
-
-.dark .text-gray-600 {
-  color: #a3a3a3 !important;
-}
-
-.dark .text-gray-500 {
-  color: #a3a3a3 !important;
-}
-
-.dark .border-gray-200 {
-  border-color: #404040 !important;
-}
-
-.dark .border-gray-300 {
-  border-color: #525252 !important;
-}
-
-/* Email HTML content sanitization */
+/* ---------------------------------------------------------------
+   Email HTML content
+   --------------------------------------------------------------- */
 .prose img {
   max-width: 100%;
   height: auto;
@@ -175,7 +255,7 @@ html, body {
 }
 
 .rich-editor [contenteditable] a {
-  color: #d97706;
+  color: #855f13;
   text-decoration: underline;
 }
 
@@ -204,7 +284,9 @@ html, body {
   margin: 0.5rem 0;
 }
 
-/* Loading spinner */
+/* ---------------------------------------------------------------
+   Utilities
+   --------------------------------------------------------------- */
 .animate-spin {
   animation: spin 1s linear infinite;
 }
