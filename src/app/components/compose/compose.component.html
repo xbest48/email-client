@@ -53,15 +53,15 @@
 
   <!-- Header — always pointer-events-auto so the wrapper's pointer-events-none
        (applied in floating / minimized states) doesn't block clicks here. -->
-  <div class="pointer-events-auto flex items-center justify-between px-4 py-3 bg-gray-800 dark:bg-gray-900"
+  <div class="pointer-events-auto flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
        [class.md:rounded-t-2xl]="!maximized()">
-    <h2 class="text-sm font-semibold text-white">Nouveau message</h2>
+    <h2 class="text-sm font-semibold text-gray-800 dark:text-white">Nouveau message</h2>
     <div class="flex items-center gap-1">
       <!-- Templates -->
       <div class="relative">
         <button
           (click)="showTemplates.set(!showTemplates())"
-          class="p-1 text-gray-300 hover:text-white rounded transition-colors
+          class="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-200/60 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors
                  focus:outline-none focus:ring-2 focus:ring-amber-400"
           type="button"
           aria-label="Modeles"
@@ -89,7 +89,7 @@
       <!-- Minimize -->
       <button
         (click)="minimized.set(!minimized())"
-        class="hidden p-1 text-gray-300 hover:text-white rounded transition-colors
+        class="hidden p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-200/60 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors
                md:inline-flex
                focus:outline-none focus:ring-2 focus:ring-amber-400"
         type="button"
@@ -102,7 +102,7 @@
       <!-- Maximize / Restore -->
       <button
         (click)="toggleMaximize()"
-        class="hidden p-1 text-gray-300 hover:text-white rounded transition-colors
+        class="hidden p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-200/60 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors
                md:inline-flex
                focus:outline-none focus:ring-2 focus:ring-amber-400"
         type="button"
@@ -121,7 +121,7 @@
       <!-- Close -->
       <button
         (click)="onClose()"
-        class="p-1 text-gray-300 hover:text-white rounded transition-colors
+        class="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-200/60 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors
                focus:outline-none focus:ring-2 focus:ring-amber-400"
         type="button"
         aria-label="Fermer"
