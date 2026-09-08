@@ -51,12 +51,12 @@ export class SidebarComponent {
   readonly downloadProgress = signal<Map<string, number | null>>(new Map());
 
   readonly defaultNavItems: NavItem[] = [
-    { label: 'Boite de reception', icon: '&#128229;', route: '/inbox', folderPath: 'INBOX', specialUse: '\\Inbox' },
-    { label: 'Suivis', icon: '&#11088;', route: '/starred', folderPath: 'starred', specialUse: '' },
-    { label: 'Messages envoyes', icon: '&#128228;', route: '/sent', folderPath: '', specialUse: '\\Sent' },
-    { label: 'Brouillons', icon: '&#128196;', route: '/drafts', folderPath: '', specialUse: '\\Drafts' },
-    { label: 'Spam', icon: '&#9940;', route: '/spam', folderPath: '', specialUse: '\\Junk' },
-    { label: 'Corbeille', icon: '&#128465;', route: '/trash', folderPath: '', specialUse: '\\Trash' },
+    { label: 'Boite de reception', icon: 'inbox', route: '/inbox', folderPath: 'INBOX', specialUse: '\\Inbox' },
+    { label: 'Suivis', icon: 'star', route: '/starred', folderPath: 'starred', specialUse: '' },
+    { label: 'Messages envoyes', icon: 'sent', route: '/sent', folderPath: '', specialUse: '\\Sent' },
+    { label: 'Brouillons', icon: 'draft', route: '/drafts', folderPath: '', specialUse: '\\Drafts' },
+    { label: 'Spam', icon: 'spam', route: '/spam', folderPath: '', specialUse: '\\Junk' },
+    { label: 'Corbeille', icon: 'trash', route: '/trash', folderPath: '', specialUse: '\\Trash' },
   ];
 
   readonly navItems = computed(() => {
