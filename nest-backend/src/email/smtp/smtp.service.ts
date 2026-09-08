@@ -211,4 +211,34 @@ export class SmtpService {
     const processedHtml = replaceBase64Images(html, getOrCreateCid);
     return { html: processedHtml, cidAttachments };
   }
+
+  /**
+   * Maps an image MIME type to a filename extension for CID attachments.
+   * Falls back to the subtype after `image/`, or `png` when unknown.
+   */
+  private mimeTypeToExtension(mimeType: string): string {
+    const normalized = (mimeType || '').toLowerCase().trim();
+    const map: Record<string, string> = {
+      'image/jpeg': 'jpg',
+      'image/jpg': 'jpg',
+      'image/png': 'png',
+      'image/gif': 'gif',
+      'image/webp': 'webp',
+      'image/svg+xml': 'svg',
+      'image/bmp': 'bmp',
+      'image/x-icon': 'ico',
+      'image/vnd.microsoft.icon': 'ico',
+      'image/tiff': 'tiff',
+      'image/avif': 'avif',
+      'image/heic': 'heic',
+    };
+    if (map[normalized]) return map[normalized];
+
+    const subtype = normalized.split('/')[1];
+    if (subtype) {
+      // e.g. "svg+xml" -> "svg", strip any parameters/suffixes
+      return subtype.split('+')[0].split(';')[0].trim() || 'png';
+    }
+    return 'png';
+  }
 }
