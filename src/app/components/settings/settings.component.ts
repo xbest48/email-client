@@ -191,7 +191,7 @@ export class SettingsComponent {
 
   // General
   readonly pageSize = signal(this.settingsService.pageSize);
-  readonly accentPresetColors = ['#d4a520', '#403d84', '#1d4ed8', '#0781f2', '#c34b22', '#0e8f0a', '#ff477b', '#ffd200', '#b6d0f2', '#ffcbba', '#c6ebc5', '#ffbacd'];
+  readonly accentPresetColors = ['#fdd12f', '#403d84', '#1d4ed8', '#0781f2', '#c34b22', '#0e8f0a', '#ff477b', '#f39200', '#b6d0f2', '#ffcbba', '#c6ebc5', '#ffbacd'];
   readonly selectedAccentColor = signal(this.settingsService.accentColor);
   readonly aiApiKey = signal('');
   readonly aiProvider = signal<AiProvider>('openai');

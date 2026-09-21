@@ -82,7 +82,7 @@
               </span>
               <span class="flex-1 truncate">{{ item.label }}</span>
               @if (getUnreadCount(item.folderPath); as count) {
-                <span class="nav-badge text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full"
+                <span class="nav-badge text-xs font-semibold text-amber-900 bg-amber-100 px-2 py-0.5 rounded-full"
                       [attr.aria-label]="count + ' non lus'">
                   {{ count }}
                 </span>
@@ -132,7 +132,7 @@
             </svg>
           </span>
           <span class="flex-1">Reporter</span>
-          <span class="nav-badge text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full"
+          <span class="nav-badge text-xs font-semibold text-amber-900 bg-amber-100 px-2 py-0.5 rounded-full"
                 [attr.aria-label]="snoozedCount + ' reportes'">
             {{ snoozedCount }}
           </span>

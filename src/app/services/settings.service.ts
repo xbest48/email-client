@@ -69,7 +69,7 @@ const DRAFT_STORAGE_KEY = 'mailflow_draft';
  * custom accent, so we auto-upgrade it to the current brand default (gold).
  * A colour the user picked on purpose is never in this set and is preserved.
  */
-const LEGACY_DEFAULT_ACCENTS = new Set(['#403d84']);
+const LEGACY_DEFAULT_ACCENTS = new Set(['#403d84', '#d4a520']);
 
 const DEFAULT_SETTINGS: AppSettings = {
   pageSize: 50,
@@ -78,7 +78,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   templates: [],
   showFolders: true,
   showLabelsSection: true,
-  accentColor: '#d4a520',
+  accentColor: '#fdd12f',
   mobileSwipeLeftAction: 'trash',
   mobileSwipeLeftMoveFolder: '',
   mobileSwipeRightAction: 'move',

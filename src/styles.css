@@ -2,25 +2,78 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ============================================================
-   KYMA Mail — Design system (Poseidon-inspired)
-   Fine typography · generous rounded corners · soft shadows
+   KYMA Mail — Design system
+   Mon Assistant Numérique charter: Gordita type + yellow/grey palette
    ============================================================ */
 
+/* --- Brand typeface: Gordita (licensed by Mon Assistant Numérique).
+   Self-hosted OTF under /fonts (CSP font-src 'self'). --- */
+@font-face {
+  font-family: 'Gordita';
+  src: url('/fonts/Gordita-Light.otf') format('opentype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Gordita';
+  src: url('/fonts/Gordita-LightItalic.otf') format('opentype');
+  font-weight: 300;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Gordita';
+  src: url('/fonts/Gordita-Regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Gordita';
+  src: url('/fonts/Gordita-RegularItalic.otf') format('opentype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Gordita';
+  src: url('/fonts/Gordita-Medium.otf') format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Gordita';
+  src: url('/fonts/Gordita-Bold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Gordita';
+  src: url('/fonts/Gordita-Black.otf') format('opentype');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 @theme {
-  /* --- Brand / primary: KYMA gold (a rich mustard gold around #D4A520).
-     Bright golds (400/500) always pair with DARK text — see the primary-button
-     contrast rule below — while the deep golds (700/900) are text-on-light
-     accents. Neutrals are grey (Tailwind gray, used app-wide). --- */
-  --color-amber-50: #fbf7ea;
-  --color-amber-100: #f6ecc6;
-  --color-amber-200: #eedc95;
-  --color-amber-300: #e5c85c;
-  --color-amber-400: #dab52c;
-  --color-amber-500: #cca01e;
-  --color-amber-600: #a97f16;
-  --color-amber-700: #855f13;
-  --color-amber-800: #5f4410;
-  --color-amber-900: #3f2e0b;
+  /* --- Brand / primary: Mon Assistant Numérique yellow (#FDD12F).
+     Bright yellows (400/500) always pair with DARK ink (#2E2E2E) — see the
+     primary-button contrast rule below — while the deep yellows (700/900) are
+     text-on-light accents. This fallback ramp mirrors the runtime accent ramp
+     generated from accentColor in settings.service.ts. --- */
+  --color-amber-50: #fffae9;
+  --color-amber-100: #fff5d0;
+  --color-amber-200: #feedae;
+  --color-amber-300: #fee588;
+  --color-amber-400: #fddc5c;
+  --color-amber-500: #fdd12f;
+  --color-amber-600: #e4bc2a;
+  --color-amber-700: #c5a325;
+  --color-amber-800: #a78820;
+  --color-amber-900: #83691a;
 
   /* --- Rounded corners: generous, Poseidon-like --- */
   --radius-sm: 0.4375rem;   /*  7px */
@@ -52,16 +105,16 @@
 html, body {
   height: 100%;
   margin: 0;
-  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI',
+  font-family: 'Gordita', system-ui, -apple-system, 'Segoe UI',
     Roboto, Helvetica, Arial, sans-serif;
-  font-weight: 400;
+  font-weight: 300;
   font-optical-sizing: auto;
   letter-spacing: -0.006em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  background: #f6f6f4;
-  color: #201d16;
+  background: #f3f3f2;
+  color: #2e2e2e;
 }
 
 /* Slightly tighter tracking on larger text for the refined Poseidon feel */
@@ -119,30 +172,30 @@ h1, h2, h3, .text-lg, .text-xl, .text-2xl, .text-3xl {
 }
 
 /* ---------------------------------------------------------------
-   Focus — soft gold ring, generously rounded
+   Focus — dark-yellow ring (M@N: yellow mixed toward black), rounded
    --------------------------------------------------------------- */
 *:focus-visible {
-  outline: 2px solid #a97f16;
+  outline: 2px solid #9c800e;
   outline-offset: 2px;
   border-radius: 8px;
 }
 
 .dark *:focus-visible {
-  outline-color: #dab52c;
+  outline-color: #fddc5c;
 }
 
 /* ---------------------------------------------------------------
-   Primary (gold) buttons need dark text/icons for AA contrast.
-   Bright gold + white fails WCAG; bright gold + near-black passes and is the
-   intended Poseidon look. Applies wherever a gold background and text-white
-   land on the same element (icons inherit via currentColor). --- */
+   Primary (yellow) buttons need dark ink for AA contrast.
+   Bright M@N yellow + white fails WCAG; yellow + near-black (#2E2E2E) passes
+   and is the intended brand look. Applies wherever a yellow background and
+   text-white land on the same element (icons inherit via currentColor). --- */
 .bg-amber-400.text-white,
 .bg-amber-500.text-white,
 .bg-amber-600.text-white,
 .dark .bg-amber-400.text-white,
 .dark .bg-amber-500.text-white,
 .dark .bg-amber-600.text-white {
-  color: #201d16 !important;
+  color: #2e2e2e !important;
 }
 
 /* ---------------------------------------------------------------
