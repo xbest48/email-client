@@ -52,6 +52,16 @@ export class AuthService {
   // should be moved to a shared store (Redis, DB, signed cookie...).
   private readonly pendingDiscoverableChallenges = new Map<string, number>();
   private static readonly DISCOVERABLE_CHALLENGE_TTL_MS = 5 * 60 * 1000;
+  /**
+   * How long the refresh token that was just rotated out stays acceptable.
+   * Covers a refresh whose response never reached the browser (laptop going
+   * to sleep, flaky network): the browser still holds the old cookie and
+   * would otherwise trigger the reuse detection below and lose its session.
+   */
+  private static readonly REFRESH_ROTATION_GRACE_MS = 60 * 1000;
+  private static readonly REFRESH_HASH_PREFIX = 'sha256:';
+  /** sessionId → fingerprint of the previous refresh token and its grace deadline. */
+  private readonly rotatedRefreshTokens = new Map<string, { fingerprint: string; acceptUntil: number }>();
 
   // Single-use store for temporary 2FA tokens. Once a tempToken is consumed
   // (successfully or not), its JTI is blacklisted until it naturally expires.
@@ -182,11 +192,15 @@ export class AuthService {
       throw new UnauthorizedException('Refresh token expired');
     }
 
-    const matches = await bcrypt.compare(refreshToken, session.refreshTokenHash);
-    if (!matches) {
+    const matches = await this.refreshTokenMatchesStoredHash(refreshToken, session.refreshTokenHash);
+    if (!matches && !this.isWithinRotationGrace(session.id, refreshToken)) {
       // Token reuse on a rotated refresh token ⇒ likely theft, revoke session.
+      this.rotatedRefreshTokens.delete(session.id);
       await this.usersService.revokeAuthSession(session.id);
       throw new UnauthorizedException('Invalid refresh token');
+    }
+    if (matches) {
+      this.rememberRotatedRefreshToken(session.id, refreshToken);
     }
 
     const accessToken = this.signAccessToken(user, session.id);
@@ -542,7 +556,9 @@ export class AuthService {
   }
 
   private signRefreshToken(userId: string, sessionId: string, rememberMe: boolean): string {
-    const payload = { sub: userId, sid: sessionId, type: 'refresh', rememberMe };
+    // jti makes every rotated token unique, even when two are issued within
+    // the same second (identical iat/exp would otherwise yield the same JWT).
+    const payload = { sub: userId, sid: sessionId, type: 'refresh', rememberMe, jti: crypto.randomUUID() };
     return this.jwtService.sign(payload, {
       secret: getRefreshTokenSecret(),
       expiresIn: `${this.getRefreshTokenTtlMs(rememberMe)}ms`,
@@ -568,7 +584,7 @@ export class AuthService {
     context?: SessionContext,
   ): Promise<void> {
     const payload = this.verifyRefreshToken(refreshToken);
-    const refreshTokenHash = await bcrypt.hash(refreshToken, BCRYPT_ROUNDS);
+    const refreshTokenHash = AuthService.REFRESH_HASH_PREFIX + this.refreshTokenFingerprint(refreshToken);
     const expiresAt = new Date(Date.now() + this.getRefreshTokenTtlMs(rememberMe));
 
     await this.usersService.updateAuthSession(sessionId, {
@@ -579,6 +595,47 @@ export class AuthService {
       ...(context?.userAgent ? { userAgent: context.userAgent } : {}),
       ...(context?.ipAddress ? { ipAddress: context.ipAddress } : {}),
     });
+  }
+
+  /**
+   * bcrypt only hashes the first 72 bytes of its input. Every refresh JWT of a
+   * given user starts with the same header + `sub` claim well past 72 bytes,
+   * so a bcrypt hash matched *any* refresh token ever issued for the session:
+   * rotation and replay detection were ineffective. Tokens are high-entropy
+   * secrets, so a SHA-256 fingerprint (whole input) is the right tool.
+   * Legacy bcrypt hashes are still accepted so existing sessions survive the
+   * deploy; they are replaced by the new format on their next rotation.
+   */
+  private async refreshTokenMatchesStoredHash(refreshToken: string, storedHash: string): Promise<boolean> {
+    if (storedHash.startsWith(AuthService.REFRESH_HASH_PREFIX)) {
+      const expected = Buffer.from(storedHash.slice(AuthService.REFRESH_HASH_PREFIX.length), 'hex');
+      const presented = Buffer.from(this.refreshTokenFingerprint(refreshToken), 'hex');
+      return expected.length === presented.length && crypto.timingSafeEqual(expected, presented);
+    }
+    return bcrypt.compare(refreshToken, storedHash);
+  }
+
+  private refreshTokenFingerprint(refreshToken: string): string {
+    return crypto.createHash('sha256').update(refreshToken).digest('hex');
+  }
+
+  private rememberRotatedRefreshToken(sessionId: string, refreshToken: string): void {
+    const now = Date.now();
+    for (const [id, entry] of this.rotatedRefreshTokens) {
+      if (entry.acceptUntil <= now) this.rotatedRefreshTokens.delete(id);
+    }
+    this.rotatedRefreshTokens.set(sessionId, {
+      fingerprint: this.refreshTokenFingerprint(refreshToken),
+      acceptUntil: now + AuthService.REFRESH_ROTATION_GRACE_MS,
+    });
+  }
+
+  private isWithinRotationGrace(sessionId: string, refreshToken: string): boolean {
+    const entry = this.rotatedRefreshTokens.get(sessionId);
+    if (!entry || entry.acceptUntil <= Date.now()) return false;
+    const presented = Buffer.from(this.refreshTokenFingerprint(refreshToken), 'hex');
+    const expected = Buffer.from(entry.fingerprint, 'hex');
+    return presented.length === expected.length && crypto.timingSafeEqual(presented, expected);
   }
 
   private getRefreshTokenTtlMs(rememberMe: boolean): number {

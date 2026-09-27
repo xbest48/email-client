@@ -110,8 +110,28 @@ export class AuthService {
       // Only refresh if we think we're logged in — otherwise a refresh would
       // be pointless and might race with an ongoing login flow.
       if (!this.authenticated()) return;
+      // Each refresh rotates the refresh token. Rotating on every tab switch
+      // multiplies the chances of two windows (browser tab + installed app
+      // share the same cookie jar) racing on the same token, which the
+      // backend treats as token theft and answers by revoking the session.
+      if (!this.isAccessTokenExpiringSoon()) return;
       void this.refreshAccessToken();
     });
+  }
+
+  /** True when the in-memory access token is missing or expires within `marginMs`. */
+  private isAccessTokenExpiringSoon(marginMs = 90_000): boolean {
+    const token = this.token();
+    if (!token) return true;
+    try {
+      const payloadPart = token.split('.')[1] ?? '';
+      const json = atob(payloadPart.replace(/-/g, '+').replace(/_/g, '/'));
+      const exp = (JSON.parse(json) as { exp?: unknown }).exp;
+      if (typeof exp !== 'number') return true;
+      return exp * 1000 - Date.now() < marginMs;
+    } catch {
+      return true;
+    }
   }
 
   getInitialLoadPromise(): Promise<void> | null {
@@ -390,6 +410,22 @@ export class AuthService {
   }
 
   private async performRefreshAccessToken(): Promise<boolean> {
+    // Serialise refreshes across every window of this browser profile (tabs
+    // and the installed desktop app share the refresh cookie). Without the
+    // lock, two windows waking up together both send the same refresh token;
+    // the second one is seen as a replayed token and the session is revoked.
+    const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+    if (locks?.request) {
+      try {
+        return await locks.request('kyma-auth-refresh', () => this.requestNewAccessToken());
+      } catch {
+        // Lock manager unavailable (e.g. opaque origin): fall back to a direct call.
+      }
+    }
+    return this.requestNewAccessToken();
+  }
+
+  private async requestNewAccessToken(): Promise<boolean> {
     try {
       const res = await firstValueFrom(
         this.http.post<{ access_token: string }>(
@@ -400,9 +436,20 @@ export class AuthService {
       );
 
       this.setToken(res.access_token);
+      if (this.userProfile()) {
+        this.authenticated.set(true);
+      }
       return true;
-    } catch {
-      this.clearAuthState();
+    } catch (err: unknown) {
+      // Only a definitive rejection of the refresh cookie means the session is
+      // gone. Network errors (machine waking up before Wi-Fi is back), 429 or
+      // 5xx must not log the user out: previously they wiped the in-memory
+      // auth state, leaving the app in a zombie state (no redirect, every
+      // request failing) until it was closed and reopened.
+      const status = err instanceof HttpErrorResponse ? err.status : undefined;
+      if (status === 401 || status === 403) {
+        this.clearAuthState();
+      }
       return false;
     }
   }

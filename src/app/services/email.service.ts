@@ -126,6 +126,12 @@ export class EmailService {
     }
   }
 
+  /** Refresh the unread badges of the sidebar (e.g. when the app regains focus). */
+  refreshFolderStatuses(): void {
+    const folders = this.folders();
+    if (folders.length) this.fetchFolderStatuses(folders);
+  }
+
   private fetchFolderStatuses(folders: ImapFolder[]): void {
     // Deduplicate: if a batch is already running, skip. Two callers (layout +
     // email-list) often race on startup and together would fire N×2 requests.
@@ -171,6 +177,29 @@ export class EmailService {
   }
 
   async fetchEmails(folder: string, query = '', page = 1): Promise<void> {
+    await this.loadEmails(folder, query, page, 1, false);
+  }
+
+  /**
+   * Re-fetch the list currently displayed (e.g. when the app window regains
+   * focus) without collapsing the pages the user already scrolled through:
+   * the N loaded pages are fetched as a single page of N×pageSize.
+   */
+  async refreshEmails(folder: string, query = ''): Promise<void> {
+    const pages = Math.max(1, Math.min(this.currentPage(), EmailService.MAX_REFRESH_PAGES));
+    await this.loadEmails(folder, query, 1, pages, true);
+  }
+
+  /** Upper bound so a refresh never asks the backend for a huge page. */
+  private static readonly MAX_REFRESH_PAGES = 8;
+
+  private async loadEmails(
+    folder: string,
+    query: string,
+    page: number,
+    pagesAtOnce: number,
+    keepListOnError: boolean,
+  ): Promise<void> {
     await this.settingsService.loadPromise;
     if (page === 1) {
       this.lastFetchedFolder = folder;
@@ -188,7 +217,7 @@ export class EmailService {
       const pageSize = this.settingsService.pageSize;
       let params = new HttpParams()
         .set('page', String(page))
-        .set('pageSize', String(pageSize));
+        .set('pageSize', String(pageSize * pagesAtOnce));
       if (query) params = params.set('q', query);
 
       const res = await firstValueFrom(
@@ -202,30 +231,46 @@ export class EmailService {
       this.clearMailboxCredentialError(this.settingsService.activeAccountId());
 
       if (page > 1) {
+        let added = 0;
         this.currentEmails.update((prev) => {
           const existing = new Set(prev.map(e => `${e.folder}:${e.uid}`));
           const newEmails = res.emails.filter(e => !existing.has(`${e.folder}:${e.uid}`));
+          added = newEmails.length;
           return [...prev, ...newEmails];
         });
+        // A page that brings nothing new means the server has nothing more to
+        // give (or ignores pagination). Clamp the total so callers looping on
+        // `hasMoreEmails()` (refill after delete, AI filter auto-load) stop
+        // instead of hammering the API until the rate limiter kicks in.
+        this.currentTotal.set(added === 0 ? this.currentEmails().length : res.total);
       } else {
         this.currentEmails.set(res.emails);
+        this.currentTotal.set(res.total);
       }
-      this.currentTotal.set(res.total);
-      this.currentPage.set(page);
-      this.offlineService.cacheEmails(folder, res.emails);
+      this.currentPage.set(page === 1 ? pagesAtOnce : page);
+      // Search results are a filtered view: caching them under the folder key
+      // would make the offline fallback show them as the folder's content.
+      if (!query) {
+        this.offlineService.cacheEmails(folder, res.emails);
+      }
     } catch (err) {
       if (!this.handleUnreadableMailboxPassword(err)) {
         console.error('Failed to fetch emails', err);
       }
       if (requestId !== this.fetchRequestId) return;
-      if (page === 1) {
-        const cached = await this.offlineService.getCachedEmails(folder);
-        if (cached.length) {
-          this.currentEmails.set(cached);
-          this.currentTotal.set(cached.length);
-        } else {
+      // A background refresh that fails keeps what is on screen.
+      if (page === 1 && !keepListOnError) {
+        if (query) {
+          // Falling back to the cached folder here used to silently replace
+          // the search results by the unfiltered, unsorted folder content.
           this.currentEmails.set([]);
           this.currentTotal.set(0);
+          this.toastService.show('error', 'La recherche a echoue. Reessayez dans un instant.');
+        } else {
+          const cached = await this.offlineService.getCachedEmails(folder);
+          if (requestId !== this.fetchRequestId) return;
+          this.currentEmails.set(cached);
+          this.currentTotal.set(cached.length);
         }
       }
     } finally {

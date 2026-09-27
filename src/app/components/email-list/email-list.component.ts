@@ -1,6 +1,6 @@
 import { Component, inject, signal, computed, ChangeDetectionStrategy, OnInit, OnDestroy, viewChild, ElementRef, effect } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { ActivatedRoute, Params, Router } from '@angular/router';
+import { Subscription, combineLatest } from 'rxjs';
 import { EmailService } from '../../services/email.service';
 import { RelativeTimePipe } from '../../pipes/relative-time.pipe';
 import { Email, ImapFolder } from '../../models/email.model';
@@ -17,6 +17,9 @@ const FOLDER_MAP: Record<string, string> = {
   inbox: 'INBOX',
   starred: 'starred',
 };
+
+/** Minimum delay between two automatic refreshes (focus + visibility fire together). */
+const AUTO_REFRESH_MIN_INTERVAL_MS = 10_000;
 
 const FOLDER_TITLES: Record<string, string> = {
   inbox: 'Boite de reception',
@@ -136,10 +139,13 @@ export class EmailListComponent implements OnInit, OnDestroy {
   );
 
   private shortcutSub?: Subscription;
-  private readonly onVisibilityChange = (): void => {
-    if (document.visibilityState !== 'visible') return;
-    if (!this.authService.isAuthenticated()) return;
-    void this.emailService.fetchEmails(this.currentFolder, this.currentQuery);
+  private routeSub?: Subscription;
+  private routeLoadSeq = 0;
+  /** False until the route has been resolved once (currentFolder is a placeholder before). */
+  private routeReady = false;
+  private lastAutoRefreshAt = 0;
+  private readonly onAppRegainedFocus = (): void => {
+    this.autoRefresh();
   };
 
   constructor() {
@@ -200,95 +206,26 @@ export class EmailListComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    this.route.params.subscribe(async (params) => {
-      // Wait for the initial auth check (including any token refresh) to settle
-      // before firing API calls — prevents 401 noise on tab-discard restore, the
-      // same guard applied in LayoutComponent.ngOnInit().
-      await (this.authService.getInitialLoadPromise() ?? Promise.resolve());
-      if (!this.authService.isAuthenticated()) return;
+    // Params and query params are handled together, in order. They used to be
+    // two independent subscriptions: coming back to a search result list, the
+    // query-param handler ran first, while `currentFolder` still held its
+    // 'INBOX' placeholder, and its response overwrote the restored list of
+    // the actual folder with INBOX search results.
+    this.routeSub = combineLatest([this.route.params, this.route.queryParams]).subscribe(
+      ([params, queryParams]) => void this.onRouteChange(params, queryParams),
+    );
 
-      const label = params['label'] ?? 'inbox';
-      const folderParam = params['folder'];
-
-      if (this.emailService.folders().length === 0) {
-        await this.emailService.fetchFolders();
-      }
-
-      if (folderParam) {
-        this.currentFolder = folderParam;
-        this.title.set(this.getFolderTitle(folderParam));
-        this.isSentFolder.set(false);
-        this.isTrashFolder.set(this.emailService.folders().some((f) => f.path === folderParam && f.specialUse === '\\Trash'));
-        this.isSpamFolder.set(this.isJunkFolderPath(folderParam));
-      } else {
-        this.currentFolder = this.resolveFolder(label);
-        this.title.set(FOLDER_TITLES[label] ?? label);
-        this.isSentFolder.set(label === 'sent');
-        this.isTrashFolder.set(label === 'trash');
-        this.isSpamFolder.set(label === 'spam');
-      }
-
-      this.selectedIds.set(new Set());
-      this.activeAiTagFilter.set(null);
-      this.activeAiTagLabel.set(null);
-      this.aiTagFilterTargetCount.set(null);
-      this.mobileSelectionMode.set(false);
-      this.mobileActionMenu.set(null);
-      this.focusedIndex.set(-1);
-      this.emailService.selectedEmail.set(null);
-      const savedList = this.emailService.savedListState();
-      const canRestoreList = !!savedList
-        && savedList.folder === this.currentFolder
-        && savedList.query === this.currentQuery
-        && this.emailService.currentEmails().length > 0;
-
-      if (canRestoreList) {
-        this.emailService.currentPage.set(savedList.page);
-        this.emailService.savedListState.set(null);
-      } else {
-        // savedListState is a one-shot hint posted by openEmail(). If we can't
-        // use it now (folder changed, query changed, cache empty), it's stale
-        // and must be dropped — otherwise, navigating later back to its folder
-        // would short-circuit the fetch and display whichever emails are
-        // currently cached (e.g. from the folder we visited in between).
-        if (savedList) {
-          this.emailService.savedListState.set(null);
-        }
-        await this.emailService.fetchEmails(this.currentFolder, this.currentQuery);
-      }
-
-      const saved = this.emailService.savedScrollState();
-      if (saved && saved.folder === this.currentFolder) {
-        this.emailService.savedScrollState.set(null);
-        setTimeout(() => {
-          const el = this.scrollContainer()?.nativeElement;
-          if (el) el.scrollTop = saved.scrollTop;
-        });
-      } else if (saved) {
-        // Same story as savedListState: drop stale scroll hints so they don't
-        // leak into a later visit to the original folder.
-        this.emailService.savedScrollState.set(null);
-      }
-    });
-
-    this.route.queryParams.subscribe((qp) => {
-      if (qp['q']) {
-        this.currentQuery = qp['q'];
-        this.title.set('Resultats : ' + qp['q']);
-        void this.emailService.fetchEmails(this.currentFolder, this.currentQuery);
-      } else if (this.currentQuery) {
-        this.currentQuery = '';
-        const routeLabel = this.route.snapshot.params['label'] ?? 'inbox';
-        const routeFolder = this.route.snapshot.params['folder'];
-        this.title.set(routeFolder ? this.getFolderTitle(routeFolder) : (FOLDER_TITLES[routeLabel] ?? routeLabel));
-        void this.emailService.fetchEmails(this.currentFolder, '');
-      }
-    });
-
-    document.addEventListener('visibilitychange', this.onVisibilityChange);
+    // Refresh the displayed mailbox when the user comes back to the app:
+    // `visibilitychange` covers tab switches / minimised windows, `focus`
+    // covers the installed desktop app whose window stays visible behind
+    // another one, `online` covers waking up from sleep.
+    document.addEventListener('visibilitychange', this.onAppRegainedFocus);
+    window.addEventListener('focus', this.onAppRegainedFocus);
+    window.addEventListener('online', this.onAppRegainedFocus);
 
     this.shortcutSub = this.shortcutService.actions.subscribe(async (action) => {
-      const emails = this.emails();
+      // Index into what is actually displayed (an AI tag filter hides rows).
+      const emails = this.visibleEmails();
       const idx = this.focusedIndex();
 
       switch (action) {
@@ -321,8 +258,120 @@ export class EmailListComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.shortcutSub?.unsubscribe();
+    this.routeSub?.unsubscribe();
     this.clearLabelsSubmenuTimers();
-    document.removeEventListener('visibilitychange', this.onVisibilityChange);
+    document.removeEventListener('visibilitychange', this.onAppRegainedFocus);
+    window.removeEventListener('focus', this.onAppRegainedFocus);
+    window.removeEventListener('online', this.onAppRegainedFocus);
+  }
+
+  private async onRouteChange(params: Params, queryParams: Params): Promise<void> {
+    const seq = ++this.routeLoadSeq;
+    // Wait for the initial auth check (including any token refresh) to settle
+    // before firing API calls — prevents 401 noise on tab-discard restore, the
+    // same guard applied in LayoutComponent.ngOnInit().
+    await (this.authService.getInitialLoadPromise() ?? Promise.resolve());
+    if (!this.authService.isAuthenticated()) return;
+
+    if (this.emailService.folders().length === 0) {
+      await this.emailService.fetchFolders();
+    }
+    // A newer navigation happened while we were waiting.
+    if (seq !== this.routeLoadSeq) return;
+
+    const label = params['label'] ?? 'inbox';
+    const folderParam: string | undefined = params['folder'];
+    const nextFolder = folderParam ?? this.resolveFolder(label);
+    const nextQuery: string = queryParams['q'] ?? '';
+    const folderChanged = !this.routeReady || nextFolder !== this.currentFolder;
+
+    this.currentFolder = nextFolder;
+    this.currentQuery = nextQuery;
+    this.routeReady = true;
+
+    if (folderParam) {
+      this.isSentFolder.set(false);
+      this.isTrashFolder.set(this.emailService.folders().some((f) => f.path === folderParam && f.specialUse === '\\Trash'));
+      this.isSpamFolder.set(this.isJunkFolderPath(folderParam));
+    } else {
+      this.isSentFolder.set(label === 'sent');
+      this.isTrashFolder.set(label === 'trash');
+      this.isSpamFolder.set(label === 'spam');
+    }
+    this.title.set(
+      nextQuery
+        ? 'Resultats : ' + nextQuery
+        : folderParam ? this.getFolderTitle(folderParam) : (FOLDER_TITLES[label] ?? label),
+    );
+
+    this.selectedIds.set(new Set());
+    this.focusedIndex.set(-1);
+    this.mobileSelectionMode.set(false);
+    this.mobileActionMenu.set(null);
+
+    if (!folderChanged) {
+      // Same folder, new (or cleared) search.
+      await this.emailService.fetchEmails(this.currentFolder, this.currentQuery);
+      return;
+    }
+
+    this.activeAiTagFilter.set(null);
+    this.activeAiTagLabel.set(null);
+    this.aiTagFilterTargetCount.set(null);
+    this.emailService.selectedEmail.set(null);
+    const savedList = this.emailService.savedListState();
+    const canRestoreList = !!savedList
+      && savedList.folder === this.currentFolder
+      && savedList.query === this.currentQuery
+      && this.emailService.currentEmails().length > 0;
+
+    if (canRestoreList) {
+      this.emailService.currentPage.set(savedList.page);
+      this.emailService.savedListState.set(null);
+    } else {
+      // savedListState is a one-shot hint posted by openEmail(). If we can't
+      // use it now (folder changed, query changed, cache empty), it's stale
+      // and must be dropped — otherwise, navigating later back to its folder
+      // would short-circuit the fetch and display whichever emails are
+      // currently cached (e.g. from the folder we visited in between).
+      if (savedList) {
+        this.emailService.savedListState.set(null);
+      }
+      await this.emailService.fetchEmails(this.currentFolder, this.currentQuery);
+    }
+
+    const saved = this.emailService.savedScrollState();
+    if (saved && saved.folder === this.currentFolder) {
+      this.emailService.savedScrollState.set(null);
+      setTimeout(() => {
+        const el = this.scrollContainer()?.nativeElement;
+        if (el) el.scrollTop = saved.scrollTop;
+      });
+    } else if (saved) {
+      // Same story as savedListState: drop stale scroll hints so they don't
+      // leak into a later visit to the original folder.
+      this.emailService.savedScrollState.set(null);
+    }
+  }
+
+  /**
+   * Silently re-fetch the displayed list (keeping the search and the pages
+   * already loaded) when the app regains focus. Skipped while the user is in
+   * the middle of something the refresh could disturb.
+   */
+  private autoRefresh(): void {
+    if (!this.routeReady || !this.authService.isAuthenticated()) return;
+    if (document.visibilityState !== 'visible') return;
+    if (Date.now() - this.lastAutoRefreshAt < AUTO_REFRESH_MIN_INTERVAL_MS) return;
+    if (this.emailService.loading()) return;
+    // Emails waiting for the undo delay are hidden locally but still on the
+    // server: a refresh would make them reappear.
+    if (this.emailService.pendingDeletes().length > 0) return;
+    if (this.selectedIds().size > 0 || this.contextMenu() || this.mobileSelectionMode()) return;
+
+    this.lastAutoRefreshAt = Date.now();
+    void this.emailService.refreshEmails(this.currentFolder, this.currentQuery);
+    this.emailService.refreshFolderStatuses();
   }
 
   refresh(): void {

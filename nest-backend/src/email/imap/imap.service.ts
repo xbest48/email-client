@@ -366,7 +366,7 @@ export class ImapService implements OnModuleDestroy {
     }
   }
 
-  async searchEmails(credentials: EmailCredentials, folder: string, query: string) {
+  async searchEmails(credentials: EmailCredentials, folder: string, query: string, page = 1, pageSize = 50) {
     const client = await this.getConnection(credentials);
     let lock;
     try {
@@ -381,7 +381,13 @@ export class ImapService implements OnModuleDestroy {
 
       if (!results || results.length === 0) return { emails: [], total: 0 };
 
-      const uids = results.slice(-50).reverse();
+      // UIDs come back in ascending order: page 1 is the newest slice. Without
+      // pagination the backend always returned the same 50 messages while
+      // reporting the full match count, so "load more" never loaded anything.
+      const end = Math.max(results.length - (page - 1) * pageSize, 0);
+      const start = Math.max(end - pageSize, 0);
+      if (end === 0) return { emails: [], total: results.length };
+      const uids = results.slice(start, end);
       const emails = [];
 
       for await (const msg of client.fetch(uids, {

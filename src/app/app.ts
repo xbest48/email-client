@@ -2,6 +2,7 @@ import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { ThemeService } from './services/theme.service';
 import { PushNotificationService } from './services/push-notification.service';
+import { AppUpdateService } from './services/app-update.service';
 import { ConfirmDialogComponent } from './components/confirm-dialog/confirm-dialog.component';
 import { ToastStackComponent } from './components/toast-stack/toast-stack.component';
 
@@ -22,6 +23,8 @@ export class AppComponent {
   // Keep the push click listener alive for the whole app, not only after the
   // Settings screen has instantiated PushNotificationService.
   private readonly pushNotificationService = inject(PushNotificationService);
+  // Picks up new deployments in long-lived windows (installed desktop app).
+  private readonly appUpdateService = inject(AppUpdateService);
 
   onDocumentContextMenu(event: MouseEvent): void {
     const target = event.target;

@@ -78,7 +78,11 @@ export class OfflineService {
       const store = tx.objectStore(EMAILS_STORE);
       const index = store.index('scopeFolder');
       const request = index.getAll(scopeFolder);
-      request.onsuccess = () => resolve(request.result || []);
+      // IndexedDB returns rows in key order ("scope:folder:uid" compared as
+      // strings), not chronologically: sort newest first like the server does.
+      request.onsuccess = () => resolve(
+        ((request.result || []) as Email[]).sort((a, b) => this.dateValue(b) - this.dateValue(a)),
+      );
       request.onerror = () => resolve([]);
     });
   }
@@ -167,6 +171,11 @@ export class OfflineService {
     const tx = this.db.transaction(OUTBOX_STORE, 'readonly');
     const request = tx.objectStore(OUTBOX_STORE).index('scope').count(this.getAccountScope());
     request.onsuccess = () => this.outboxCount.set(request.result);
+  }
+
+  private dateValue(email: Email): number {
+    const time = email.date ? new Date(email.date).getTime() : 0;
+    return Number.isNaN(time) ? 0 : time;
   }
 
   private getAccountScope(): string {

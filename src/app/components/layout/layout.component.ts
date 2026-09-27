@@ -50,6 +50,16 @@ export class LayoutComponent implements OnInit, OnDestroy {
         this.openCompose();
       }
     });
+
+    // The auth guard only runs on navigation. If the session is revoked or
+    // expires while the app stays open (typical for the installed desktop
+    // app left running for days), send the user back to the login screen
+    // instead of leaving a shell where every request silently fails.
+    effect(() => {
+      if (!this.auth.isAuthenticated()) {
+        void this.router.navigate(['/login']);
+      }
+    });
   }
 
   async ngOnInit(): Promise<void> {
@@ -143,6 +153,11 @@ export class LayoutComponent implements OnInit, OnDestroy {
 
   private syncSearchStateFromUrl(url: string): void {
     const parsed = this.router.parseUrl(url);
+    // Opening a message from the results must not wipe the search field:
+    // the detail URL carries no `q`, but the user is still "inside" the
+    // search and comes back to it with the back button.
+    const firstSegment = parsed.root.children['primary']?.segments[0]?.path;
+    if (firstSegment === 'email') return;
     this.activeSearchQuery.set(parsed.queryParams['q'] ?? '');
   }
 

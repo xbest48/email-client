@@ -115,16 +115,17 @@ export class EmailController {
       'inbox': 'INBOX',
     };
 
+    // Clamp pagination: NaN / negative values broke the sequence-range math,
+    // and an unbounded pageSize let a single request fetch a whole mailbox.
+    const pageNum = this.parseBoundedInt(page, 1, 1, 100_000);
+    const sizeNum = this.parseBoundedInt(pageSize, 25, 1, 200);
+
     if (decodedFolder.toLowerCase() === 'starred') {
-      const pageNum = parseInt(page || '1', 10);
-      const sizeNum = parseInt(pageSize || '25', 10);
       return this.imapService.fetchFlaggedEmails(creds, pageNum, sizeNum, q);
     }
 
     if (decodedFolder.toLowerCase().startsWith('label:')) {
       const labelId = decodedFolder.slice('label:'.length);
-      const pageNum = parseInt(page || '1', 10);
-      const sizeNum = parseInt(pageSize || '25', 10);
       const emailRefs = await this.labelsService.getEmailsByLabel(labelId, req.user.id);
       return this.imapService.fetchEmailsByReferences(creds, emailRefs, pageNum, sizeNum, q);
     }
@@ -133,11 +134,8 @@ export class EmailController {
        decodedFolder = folderMap[decodedFolder.toLowerCase()];
     }
 
-    const pageNum = parseInt(page || '1', 10);
-    const sizeNum = parseInt(pageSize || '25', 10);
-
     if (q) {
-      return this.imapService.searchEmails(creds, decodedFolder, q);
+      return this.imapService.searchEmails(creds, decodedFolder, q, pageNum, sizeNum);
     }
     return this.imapService.fetchEmails(creds, decodedFolder, pageNum, sizeNum);
   }
@@ -356,5 +354,11 @@ export class EmailController {
     const creds = await this.getCredentials(req, headers);
     await this.imapService.deleteEmail(creds, decodeURIComponent(folder), parseInt(uid, 10));
     return { success: true };
+  }
+
+  private parseBoundedInt(raw: string | undefined, fallback: number, min: number, max: number): number {
+    const value = parseInt(raw ?? '', 10);
+    if (!Number.isFinite(value)) return fallback;
+    return Math.min(max, Math.max(min, value));
   }
 }

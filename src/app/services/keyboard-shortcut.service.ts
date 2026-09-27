@@ -60,8 +60,8 @@ export class KeyboardShortcutService implements OnDestroy {
     const target = event.target as HTMLElement;
     const tagName = target.tagName.toLowerCase();
 
-    // Ignore when typing in inputs, textareas, or contenteditable elements
-    if (tagName === 'input' || tagName === 'textarea' || target.isContentEditable) {
+    // Ignore when typing in inputs, textareas, selects, or contenteditable elements
+    if (tagName === 'input' || tagName === 'textarea' || tagName === 'select' || target.isContentEditable) {
       // Still allow Escape from inputs
       if (event.key === 'Escape') {
         this.ngZone.run(() => this.action$.next('closeModal'));
@@ -71,6 +71,14 @@ export class KeyboardShortcutService implements OnDestroy {
 
     // Avoid firing when modifier keys (except Shift) are pressed
     if (event.ctrlKey || event.metaKey || event.altKey) {
+      return;
+    }
+
+    // Enter on a focused control must activate that control: intercepting it
+    // (preventDefault + "open email") made buttons unusable from the keyboard,
+    // and on a focused list row it opened a second email (the j/k-highlighted
+    // one) on top of the row's own Enter handler.
+    if (event.key === 'Enter' && target.closest('button, a[href], summary, [tabindex], [role="button"], [role="menuitem"], [role="option"]')) {
       return;
     }
 

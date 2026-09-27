@@ -1,0 +1,7 @@
+/* The clear button is rendered by the template; hide the native WebKit cross
+   so desktop Chrome/Safari don't show two of them. */
+.search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}

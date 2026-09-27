@@ -26,15 +26,27 @@ export class SearchBarComponent implements OnDestroy {
   readonly filterMinSize = signal('');
   readonly filterMaxSize = signal('');
   private searchTimeout: ReturnType<typeof setTimeout> | null = null;
+  /** Last query this component emitted, to recognise its own echo via the URL. */
+  private lastEmittedQuery: string | null = null;
 
   constructor() {
     effect(() => {
       const activeQuery = this.activeQuery();
-      this.query.set(activeQuery);
 
-      if (!activeQuery) {
-        this.clearFiltersState();
+      // The URL change triggered by our own emission comes back through
+      // `activeQuery` a few ms later. Re-applying it would overwrite what the
+      // user typed in the meantime (lost characters) and would copy the
+      // advanced-filter tokens into the text field, duplicating them on the
+      // next search.
+      if (activeQuery === this.lastEmittedQuery) return;
+      this.lastEmittedQuery = null;
+
+      if (this.searchTimeout) {
+        clearTimeout(this.searchTimeout);
+        this.searchTimeout = null;
       }
+      this.query.set(activeQuery);
+      this.clearFiltersState();
     });
   }
 
@@ -53,19 +65,36 @@ export class SearchBarComponent implements OnDestroy {
   onQueryInput(): void {
     if (this.searchTimeout) clearTimeout(this.searchTimeout);
     this.searchTimeout = setTimeout(() => {
-      this.searchChange.emit(this.buildQuery());
       this.searchTimeout = null;
+      this.emitQuery();
     }, 250);
   }
 
   applyFilters(): void {
     this.showFilters.set(false);
-    this.searchChange.emit(this.buildQuery());
+    this.emitQuery();
   }
 
   resetFilters(): void {
     this.clearFiltersState();
-    this.searchChange.emit(this.buildQuery());
+    this.emitQuery();
+  }
+
+  private emitQuery(): void {
+    const next = this.buildQuery();
+    this.lastEmittedQuery = next;
+    this.searchChange.emit(next);
+  }
+
+  clearQuery(): void {
+    if (this.searchTimeout) {
+      clearTimeout(this.searchTimeout);
+      this.searchTimeout = null;
+    }
+    this.query.set('');
+    this.emitQuery();
+    // Keep the keyboard open on mobile so the user can type a new search.
+    this.focusInput();
   }
 
   focusInput(): void {
@@ -74,7 +103,7 @@ export class SearchBarComponent implements OnDestroy {
 
   private buildQuery(): string {
     const parts: string[] = [];
-    const q = this.query();
+    const q = this.query().trim();
     if (q) parts.push(q);
     const from = this.filterFrom();
     if (from) parts.push(`from:${from}`);
