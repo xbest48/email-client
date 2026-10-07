@@ -1,4 +1,4 @@
-import { ApplicationConfig, provideBrowserGlobalErrorListeners, isDevMode } from '@angular/core';
+import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { provideRouter, withComponentInputBinding, withInMemoryScrolling, withNavigationErrorHandler } from '@angular/router';
 import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
 import { provideServiceWorker } from '@angular/service-worker';
@@ -35,17 +35,14 @@ export const appConfig: ApplicationConfig = {
       routes,
       withComponentInputBinding(),
       withInMemoryScrolling({
-        // Rétablit la position du scroll lors du bouton "Précédent" du navigateur
         scrollPositionRestoration: 'enabled',
-
-        // Permet de scroller vers un ancrage (ex: #section1)
         anchorScrolling: 'enabled',
       }),
       withNavigationErrorHandler((error) => reloadOnStaleChunk(error.error, error.url)),
     ),
     provideHttpClient(withFetch(), withInterceptors([authInterceptor])),
     provideServiceWorker('ngsw-worker.js', {
-      enabled: !isDevMode(),
+      enabled: true,
       registrationStrategy: 'registerWhenStable:30000',
     }),
   ],
