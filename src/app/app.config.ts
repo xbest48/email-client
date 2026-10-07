@@ -5,6 +5,7 @@ import { provideServiceWorker } from '@angular/service-worker';
 
 import { routes } from './app.routes';
 import { authInterceptor } from './interceptors/auth.interceptor';
+import { ngswBypassInterceptor } from './interceptors/ngsw-bypass.interceptor';
 
 const CHUNK_RELOAD_KEY = 'kyma_chunk_reload_at';
 
@@ -40,7 +41,7 @@ export const appConfig: ApplicationConfig = {
       }),
       withNavigationErrorHandler((error) => reloadOnStaleChunk(error.error, error.url)),
     ),
-    provideHttpClient(withFetch(), withInterceptors([authInterceptor])),
+    provideHttpClient(withFetch(), withInterceptors([authInterceptor, ngswBypassInterceptor])),
     provideServiceWorker('ngsw-worker.js', {
       enabled: true,
       registrationStrategy: 'registerWhenStable:30000',
