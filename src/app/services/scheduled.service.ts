@@ -12,7 +12,8 @@ export interface ScheduledEmail {
   cc?: string;
   bcc?: string;
   scheduledAt: string;
-  status: 'pending' | 'sent' | 'failed';
+  status: 'pending' | 'sending' | 'sent' | 'failed';
+  attachmentCount?: number;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -44,13 +45,24 @@ export class ScheduledService {
     cc?: string;
     bcc?: string;
     scheduledAt: Date;
+    attachments?: File[];
   }): Promise<void> {
+    const { attachments = [], ...fields } = data;
+    const payload = { ...fields, scheduledAt: fields.scheduledAt.toISOString() };
+    let requestBody: FormData | typeof payload = payload;
+    if (attachments.length) {
+      // Multipart so files travel as binary, like the immediate send.
+      const formData = new FormData();
+      for (const [key, value] of Object.entries(payload)) {
+        if (value) formData.append(key, value);
+      }
+      for (const file of attachments) {
+        formData.append('files', file, file.name);
+      }
+      requestBody = formData;
+    }
     await firstValueFrom(
-      this.http.post(
-        `${this.apiUrl}/scheduled`,
-        { ...data, scheduledAt: data.scheduledAt.toISOString() },
-        { headers: this.getHeaders() }
-      )
+      this.http.post(`${this.apiUrl}/scheduled`, requestBody, { headers: this.getHeaders() })
     );
     await this.fetchScheduled();
   }

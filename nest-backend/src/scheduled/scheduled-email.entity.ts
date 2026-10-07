@@ -32,7 +32,7 @@ export class ScheduledEmail {
   scheduledAt: Date;
 
   @Column({ default: 'pending' })
-  status: 'pending' | 'sent' | 'failed';
+  status: 'pending' | 'sending' | 'sent' | 'failed';
 
   @CreateDateColumn()
   createdAt: Date;

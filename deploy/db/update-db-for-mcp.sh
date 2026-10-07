@@ -51,7 +51,7 @@ EOF
 
 
 # curl -s -X POST https://kymamail.fr/api/mcp \
-#   -H "Authorization: Bearer mcp_26cd0ce8_a7f4e5509004f7644fdabb1de977c98e5d64d774fa8d4f96eeb39be8f852ab1f" \
+#   -H "Authorization: Bearer mcp_****" \
 #   -H "Content-Type: application/json" \
 #   -H "Accept: application/json, text/event-stream" \
 #   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'

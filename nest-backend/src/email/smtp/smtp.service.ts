@@ -106,27 +106,41 @@ export class SmtpService {
   }
 
   async buildRawMessage(credentials: EmailCredentials, dto: SendEmailDto): Promise<Buffer | null> {
-    const mailOptions = this.buildMailOptions(credentials, dto);
-
     try {
-      const transporter = nodemailer.createTransport({
-        streamTransport: true,
-        buffer: true,
-      });
-      const info = await transporter.sendMail(mailOptions);
-      transporter.close();
-      return info.message as Buffer;
+      return await this.compileRawMessage(this.buildMailOptions(credentials, dto));
     } catch {
       return null;
     }
   }
 
-  async sendEmail(credentials: EmailCredentials, dto: SendEmailDto) {
+  private async compileRawMessage(mailOptions: nodemailer.SendMailOptions): Promise<Buffer> {
     const transporter = nodemailer.createTransport({
+      streamTransport: true,
+      buffer: true,
+    });
+    try {
+      const info = await transporter.sendMail(mailOptions);
+      return info.message as Buffer;
+    } finally {
+      transporter.close();
+    }
+  }
+
+  private createSmtpTransport(credentials: EmailCredentials) {
+    const port = credentials.smtpPort || 465;
+    return nodemailer.createTransport({
       host: credentials.smtpHost,
-      port: credentials.smtpPort || 465,
-      secure: credentials.smtpPort === 587 ? false : true,
+      port,
+      // Implicit TLS only on 465. Every other port (587, 25, 2525…) speaks
+      // plain SMTP first and upgrades with STARTTLS — forcing `secure: true`
+      // there makes the TLS handshake fail ("wrong version number").
+      secure: port === 465,
       auth: this.buildSmtpAuth(credentials),
+      // Without explicit timeouts a stalled server keeps the HTTP request
+      // hanging until the proxy gives up, and the client never learns why.
+      connectionTimeout: 20_000,
+      greetingTimeout: 20_000,
+      socketTimeout: 60_000,
       tls: {
         // SMTP_ALLOW_INVALID_CERTS=true keeps the previous permissive behaviour
         // (handy for self-signed dev servers). By default we now reject invalid
@@ -135,15 +149,30 @@ export class SmtpService {
         rejectUnauthorized: process.env.SMTP_ALLOW_INVALID_CERTS !== 'true',
       },
     });
+  }
 
+  async sendEmail(credentials: EmailCredentials, dto: SendEmailDto) {
     const mailOptions = this.buildMailOptions(credentials, dto);
+    // Pin the Message-ID so the copy appended to "Sent" is the exact message
+    // that went out (same Message-ID, same inline CIDs). Building the options
+    // twice used to produce two different Message-IDs, breaking threading.
+    const domain = credentials.email.split('@')[1] || 'localhost';
+    mailOptions.messageId = `<${crypto.randomUUID()}@${domain}>`;
 
-    const info = await transporter.sendMail(mailOptions);
-    transporter.close();
+    const transporter = this.createSmtpTransport(credentials);
+    let info: Awaited<ReturnType<typeof transporter.sendMail>>;
+    try {
+      info = await transporter.sendMail(mailOptions);
+    } finally {
+      transporter.close();
+    }
 
-    // Build raw RFC822 message for IMAP Sent folder append
-    // Re-use the same already-converted mailOptions via buildRawMessage
-    const rawMessage = await this.buildRawMessage(credentials, dto);
+    let rawMessage: Buffer | null = null;
+    try {
+      rawMessage = await this.compileRawMessage(mailOptions);
+    } catch {
+      // The message already left; failing to build the Sent copy is non-fatal.
+    }
 
     return {
       messageId: info.messageId,
@@ -154,19 +183,7 @@ export class SmtpService {
   }
 
   async verifySmtp(credentials: EmailCredentials) {
-    const transporter = nodemailer.createTransport({
-      host: credentials.smtpHost,
-      port: credentials.smtpPort || 465,
-      secure: credentials.smtpPort === 587 ? false : true,
-      auth: this.buildSmtpAuth(credentials),
-      tls: {
-        // SMTP_ALLOW_INVALID_CERTS=true keeps the previous permissive behaviour
-        // (handy for self-signed dev servers). By default we now reject invalid
-        // certificates, which is what anyone running against a real provider
-        // wants.
-        rejectUnauthorized: process.env.SMTP_ALLOW_INVALID_CERTS !== 'true',
-      },
-    });
+    const transporter = this.createSmtpTransport(credentials);
 
     try {
       await transporter.verify();

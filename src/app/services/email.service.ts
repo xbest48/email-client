@@ -684,6 +684,17 @@ export class EmailService {
     );
   }
 
+  /**
+   * Sends a message, optionally after an undo delay.
+   *
+   * Resolves with `'sent'` once the server accepted the message, or with
+   * `'cancelled'` when the user hit "Annuler" during the delay. Rejects when
+   * the send fails — including after the delay, so callers MUST handle the
+   * returned promise even when they don't await it.
+   *
+   * The active account is captured now: switching accounts while the undo
+   * toast is visible must not change the sender.
+   */
   async sendEmail(
     to: string,
     subject: string,
@@ -695,34 +706,40 @@ export class EmailService {
     delayMs = 0,
     attachments: File[] = [],
     requestReadReceipt = false
-  ): Promise<void> {
-    if (delayMs > 0) {
-      return new Promise((resolve, reject) => {
-        const id = Math.random().toString(36).substring(2, 9);
-        const timeoutId = setTimeout(async () => {
-          this.pendingSends.update(sends => sends.filter(s => s.id !== id));
-          try {
-            await this.executeSend(to, subject, html, cc, bcc, inReplyTo, references, attachments, requestReadReceipt);
-            resolve();
-          } catch (e) {
-            reject(e);
-          }
-        }, delayMs);
+  ): Promise<'sent' | 'cancelled'> {
+    const accountId = this.settingsService.activeAccountId();
+    const send = () =>
+      this.executeSend(accountId, to, subject, html, cc, bcc, inReplyTo, references, attachments, requestReadReceipt);
 
-        const cancel = () => {
-          clearTimeout(timeoutId);
-          this.pendingSends.update(sends => sends.filter(s => s.id !== id));
-          resolve();
-        };
-
-        this.pendingSends.update(sends => [...sends, { id, to, subject, timeoutId, cancel }]);
-      });
-    } else {
-      await this.executeSend(to, subject, html, cc, bcc, inReplyTo, references, attachments, requestReadReceipt);
+    if (delayMs <= 0) {
+      await send();
+      return 'sent';
     }
+
+    return new Promise((resolve, reject) => {
+      const id = Math.random().toString(36).substring(2, 9);
+      const timeoutId = setTimeout(async () => {
+        this.pendingSends.update(sends => sends.filter(s => s.id !== id));
+        try {
+          await send();
+          resolve('sent');
+        } catch (e) {
+          reject(e);
+        }
+      }, delayMs);
+
+      const cancel = () => {
+        clearTimeout(timeoutId);
+        this.pendingSends.update(sends => sends.filter(s => s.id !== id));
+        resolve('cancelled');
+      };
+
+      this.pendingSends.update(sends => [...sends, { id, to, subject, timeoutId, cancel }]);
+    });
   }
 
   private async executeSend(
+    accountId: string | null,
     to: string,
     subject: string,
     html: string,
@@ -733,6 +750,9 @@ export class EmailService {
     attachments: File[] = [],
     requestReadReceipt = false
   ): Promise<void> {
+    let headers = new HttpHeaders();
+    if (accountId) headers = headers.set('x-account-id', accountId);
+
     if (attachments.length > 0) {
       // Use FormData for multipart upload with attachments
       const formData = new FormData();
@@ -748,9 +768,6 @@ export class EmailService {
         formData.append('files', file, file.name);
       }
       // Don't set Content-Type header — browser sets multipart boundary automatically
-      const accountId = this.settingsService.activeAccountId();
-      let headers = new HttpHeaders();
-      if (accountId) headers = headers.set('x-account-id', accountId);
       await firstValueFrom(
         this.http.post(`${this.apiUrl}/send`, formData, { headers, withCredentials: true })
       );
@@ -759,7 +776,7 @@ export class EmailService {
         this.http.post(
           `${this.apiUrl}/send`,
           { to, subject, html, cc: cc || undefined, bcc: bcc || undefined, inReplyTo: inReplyTo || undefined, references: references || undefined, requestReadReceipt: requestReadReceipt || undefined },
-          { headers: this.getHeaders(), withCredentials: true }
+          { headers, withCredentials: true }
         )
       );
     }

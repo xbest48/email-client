@@ -1,3 +1,6 @@
+// crypto.util refuses to run without a key; use a throwaway one for tests.
+process.env.ENCRYPTION_KEY ??= 'a'.repeat(64);
+
 jest.mock('./auth.service', () => ({
   AuthService: class AuthService {},
 }));

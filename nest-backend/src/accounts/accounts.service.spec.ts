@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AccountsService } from './accounts.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Account } from './account.entity';
+import { OauthMailHttpService } from '../oauth-mail/oauth-mail-http.service';
 
 describe('AccountsService', () => {
   let service: AccountsService;
@@ -12,6 +13,10 @@ describe('AccountsService', () => {
         AccountsService,
         {
           provide: getRepositoryToken(Account),
+          useValue: {},
+        },
+        {
+          provide: OauthMailHttpService,
           useValue: {},
         },
       ],

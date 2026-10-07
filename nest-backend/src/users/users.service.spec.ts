@@ -3,6 +3,7 @@ import { UsersService } from './users.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { User } from './user.entity';
 import { WebAuthnCredential } from './webauthn-credential.entity';
+import { AuthSession } from './auth-session.entity';
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -13,6 +14,7 @@ describe('UsersService', () => {
         UsersService,
         { provide: getRepositoryToken(User), useValue: {} },
         { provide: getRepositoryToken(WebAuthnCredential), useValue: {} },
+        { provide: getRepositoryToken(AuthSession), useValue: {} },
       ],
     }).compile();
 

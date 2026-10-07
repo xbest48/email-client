@@ -315,8 +315,10 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
   async editDraft(): Promise<void> {
     const mail = this.email();
     if (!mail) return;
+    // Bare addresses: the recipient chips only display the email anyway, and
+    // display names containing a comma ("Dupont, Jean") broke the split.
     const formatAddresses = (list: EmailAddress[]): string =>
-      list.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(', ');
+      list.map((a) => a.email).join(', ');
     const attachments = await this.collectDraftAttachments(mail);
     this.emailService.composePrefill.set({
       to: formatAddresses(mail.to),
@@ -376,11 +378,15 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     }
     this.sendingDraft.set(true);
     try {
+      // Quote display names so a comma inside one ("Dupont, Jean") isn't
+      // parsed as an address separator.
       const formatAddresses = (list: EmailAddress[]): string =>
-        list.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(', ');
+        list
+          .map((a) => (a.name ? `"${a.name.replace(/["\\]/g, '')}" <${a.email}>` : a.email))
+          .join(', ');
       const delayMs = (this.authService.user()?.undoSendDelay || 0) * 1000;
       const attachments = await this.collectDraftAttachments(mail);
-      await this.emailService.sendEmail(
+      const outcome = await this.emailService.sendEmail(
         formatAddresses(mail.to),
         mail.subject,
         mail.htmlBody || mail.body || '',
@@ -392,6 +398,11 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
         attachments,
         false,
       );
+      if (outcome === 'cancelled') {
+        // Undo: the draft must stay in the Drafts folder untouched.
+        this.toastService.show('info', 'Envoi annulé. Le brouillon est conservé.');
+        return;
+      }
       // Remove the draft from the Drafts folder once the send is queued (or
       // sent immediately when no undo delay is configured).
       try {
@@ -403,7 +414,7 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
       this.toastService.show('success', 'Brouillon envoye.');
       this.goBack();
     } catch (err: any) {
-      this.toastService.show('error', err?.message || "Echec de l'envoi du brouillon.");
+      this.toastService.show('error', err?.error?.message || err?.message || "Echec de l'envoi du brouillon.");
     } finally {
       this.sendingDraft.set(false);
     }
@@ -492,7 +503,7 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
       subject,
       htmlBody,
       inReplyTo: isReply ? mail.messageId || undefined : undefined,
-      references: isReply ? mail.messageId || undefined : undefined,
+      references: isReply ? this.buildReferences(mail) : undefined,
     });
   }
 
@@ -826,7 +837,7 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
       subject: this.withSubjectPrefix(mail.subject, 'Re:'),
       htmlBody: this.escapeHtml(text).replace(/\n/g, '<br>'),
       inReplyTo: mail.messageId || undefined,
-      references: mail.messageId || undefined,
+      references: this.buildReferences(mail),
     });
   }
 
@@ -988,6 +999,19 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     this.aiPhishing.set(null);
     this.aiCategory.set(null);
     this.aiTranslation.set(null);
+  }
+
+  /**
+   * References header for a reply: the parent's own chain followed by its
+   * Message-ID. Capped to the most recent ids, as most clients do, to keep
+   * the header reasonably small on very long threads.
+   */
+  private buildReferences(mail: Email): string | undefined {
+    const ids = [...(mail.references ?? []), mail.messageId ?? '']
+      .map((id) => id.trim())
+      .filter(Boolean);
+    const unique = [...new Set(ids)].slice(-20);
+    return unique.length ? unique.join(' ') : undefined;
   }
 
   private buildReplyAllRecipients(mail: Email): { to: string; cc: string; bcc: string } {

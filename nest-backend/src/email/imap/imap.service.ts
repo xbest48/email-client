@@ -587,6 +587,9 @@ export class ImapService implements OnModuleDestroy {
         size: msg.size,
         readReceiptRequested: !!(parsed.headers?.get('disposition-notification-to')),
         readReceiptTo: (parsed.headers?.get('disposition-notification-to') as string) || '',
+        // Raw References chain, so replies can carry the whole thread history
+        // (RFC 5322 §3.6.4) instead of only the parent's Message-ID.
+        references: this.toMessageIdList(parsed.references),
       };
     } finally {
       this.safeReleaseLock(lock);
@@ -773,7 +776,22 @@ export class ImapService implements OnModuleDestroy {
     await client.mailboxCreate(folderPath);
   }
 
+  /**
+   * SMTP servers that already file a copy of every submitted message in the
+   * user's Sent folder. Appending our own copy there produced duplicates.
+   */
+  private static readonly SERVERS_SAVING_SENT_COPY = [
+    /(^|\.)gmail\.com$/i,
+    /(^|\.)googlemail\.com$/i,
+    /^smtp\.office365\.com$/i,
+    /^smtp-mail\.outlook\.com$/i,
+  ];
+
   async appendToSentFolder(credentials: EmailCredentials, rawMessage: string | Buffer): Promise<void> {
+    const smtpHost = (credentials.smtpHost || '').trim();
+    if (ImapService.SERVERS_SAVING_SENT_COPY.some((re) => re.test(smtpHost))) {
+      return;
+    }
     const client = await this.getConnection(credentials);
     const folders = await client.list();
     const sentFolder = folders.find(
@@ -903,6 +921,11 @@ export class ImapService implements OnModuleDestroy {
       return bodyStructure.childNodes.some((node: any) => this.checkAttachments(node));
     }
     return false;
+  }
+
+  private toMessageIdList(value: unknown): string[] {
+    const raw = Array.isArray(value) ? value.join(' ') : String(value ?? '');
+    return (raw.match(/<[^<>\s]+>/g) ?? []);
   }
 
   private normalizeMessageId(value: unknown): string {

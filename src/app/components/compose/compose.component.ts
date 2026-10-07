@@ -1,5 +1,6 @@
 import { Component, inject, signal, output, computed, ChangeDetectionStrategy, viewChild, OnInit, OnDestroy, ElementRef, effect } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { HttpErrorResponse } from '@angular/common/http';
 import { EmailService } from '../../services/email.service';
 import { SettingsService, EmailTemplate } from '../../services/settings.service';
 import { AuthService } from '../../services/auth.service';
@@ -11,6 +12,15 @@ import { AiService } from '../../services/ai.service';
 import { ToastService } from '../../services/toast.service';
 import { RichEditorComponent } from '../rich-editor/rich-editor.component';
 import { RecipientChipsComponent } from '../recipient-chips/recipient-chips.component';
+
+/**
+ * Most providers cap a message at ~25 MB *after* base64 encoding (+33 %), so
+ * 20 MB of raw files is the practical ceiling. It also stays under the 25 MB
+ * request limit of the backend/nginx, which used to reject bigger sends with
+ * a bare 413.
+ */
+const MAX_ATTACHMENTS_BYTES = 20 * 1024 * 1024;
+const MAX_ATTACHMENT_COUNT = 20;
 
 @Component({
   selector: 'app-compose',
@@ -101,6 +111,8 @@ export class ComposeComponent implements OnInit, OnDestroy {
   private remoteDraft: { folder: string; uid: number | null } | null = null;
   private draftSaveInFlight = false;
   private draftSavePromise: Promise<void> | null = null;
+  /** Snapshot of the last content pushed to IMAP, to skip no-op auto-saves. */
+  private lastSavedDraftKey: string | null = null;
 
   constructor() {
     effect(() => {
@@ -209,9 +221,19 @@ export class ComposeComponent implements OnInit, OnDestroy {
           await this.emailService.deleteDraftMessage(this.remoteDraft.folder, this.remoteDraft.uid);
         }
         this.remoteDraft = null;
+        this.lastSavedDraftKey = null;
         this.draftSavedAt.set(null);
         return;
       }
+
+      // Auto-save fires every 3 s: without this check every tick deleted and
+      // re-uploaded the whole draft (attachments included) even when nothing
+      // changed, hammering the IMAP connection that sends also rely on.
+      const draftKey = JSON.stringify([
+        to, cc, bcc, subject, fullHtml,
+        attachments.map((f) => [f.name, f.size, f.lastModified]),
+      ]);
+      if (draftKey === this.lastSavedDraftKey && this.remoteDraft) return;
 
       this.settingsService.saveDraft({
         to,
@@ -231,6 +253,7 @@ export class ComposeComponent implements OnInit, OnDestroy {
         this.remoteDraft,
         attachments,
       );
+      this.lastSavedDraftKey = draftKey;
       this.draftSavedAt.set(new Date().toLocaleTimeString());
     } catch (err) {
       console.error('Failed to save draft', err);
@@ -326,9 +349,38 @@ export class ComposeComponent implements OnInit, OnDestroy {
   }
 
   private addFiles(fileList: FileList): void {
-    const current = this.attachments();
-    const newFiles = Array.from(fileList);
-    this.attachments.set([...current, ...newFiles]);
+    const accepted = [...this.attachments()];
+    const rejected: string[] = [];
+    for (const file of Array.from(fileList)) {
+      if (
+        accepted.length >= MAX_ATTACHMENT_COUNT ||
+        this.totalSize(accepted) + file.size > MAX_ATTACHMENTS_BYTES
+      ) {
+        rejected.push(file.name);
+      } else {
+        accepted.push(file);
+      }
+    }
+    this.attachments.set(accepted);
+    if (rejected.length) {
+      this.toastService.show(
+        'error',
+        `Pièces jointes limitées à ${MAX_ATTACHMENT_COUNT} fichiers et ${this.formatFileSize(MAX_ATTACHMENTS_BYTES)} au total. Non ajouté : ${rejected.join(', ')}.`,
+      );
+    }
+  }
+
+  private totalSize(files: File[]): number {
+    return files.reduce((sum, f) => sum + f.size, 0);
+  }
+
+  /** Error message when the attachments can't go through, or null if they fit. */
+  private attachmentLimitError(): string | null {
+    const files = this.attachments();
+    if (files.length > MAX_ATTACHMENT_COUNT || this.totalSize(files) > MAX_ATTACHMENTS_BYTES) {
+      return `Les pièces jointes dépassent la limite (${MAX_ATTACHMENT_COUNT} fichiers, ${this.formatFileSize(MAX_ATTACHMENTS_BYTES)} au total). Utilisez un lien de partage pour les gros fichiers.`;
+    }
+    return null;
   }
 
   removeAttachment(index: number): void {
@@ -359,6 +411,16 @@ export class ComposeComponent implements OnInit, OnDestroy {
       this.toChipsRef()?.focusInput();
       return;
     }
+    if (!this.areRecipientsValid(this.cc()) || !this.areRecipientsValid(this.bcc())) {
+      this.sendError.set('Une adresse en copie (Cc/Cci) semble invalide.');
+      this.showCc.set(true);
+      return;
+    }
+    const attachmentError = this.attachmentLimitError();
+    if (attachmentError) {
+      this.sendError.set(attachmentError);
+      return;
+    }
     if (!editor) {
       this.sendError.set("L'editeur du message n'est pas pret.");
       return;
@@ -382,7 +444,8 @@ export class ComposeComponent implements OnInit, OnDestroy {
     await this.stopAutoSaveAndFlush();
     let sendSucceeded = false;
     try {
-      let html = editor.getFullHtml();
+      const plainHtml = editor.getFullHtml();
+      let html = plainHtml;
 
       // PGP encryption
       if (this.encryptPgp()) {
@@ -393,11 +456,66 @@ export class ComposeComponent implements OnInit, OnDestroy {
       const delay = this.authService.user()?.undoSendDelay || 0;
       const files = this.attachments();
       const readReceipt = this.requestReadReceipt();
+      const cc = this.cc();
+      const bcc = this.bcc();
+      const sendSubject = this.subject();
+      const inReplyTo = this.inReplyTo;
+      const references = this.references;
+
       if (delay > 0) {
-        this.emailService.sendEmail(to, this.subject(), html, this.cc(), this.bcc(), this.inReplyTo, this.references, delay * 1000, files, readReceipt);
-      } else {
-        await this.emailService.sendEmail(to, this.subject(), html, this.cc(), this.bcc(), this.inReplyTo, this.references, 0, files, readReceipt);
+        // The modal closes right away, so make sure the Drafts copy holds the
+        // final content: it's the safety net if the tab is closed during the
+        // undo delay.
+        await this.saveDraft();
+        const draftRef = this.remoteDraft;
+        const pending = this.emailService.sendEmail(
+          to, sendSubject, html, cc, bcc, inReplyTo, references, delay * 1000, files, readReceipt,
+        );
+        const restore = () =>
+          this.emailService.composePrefill.set({
+            to,
+            cc: cc || undefined,
+            bcc: bcc || undefined,
+            subject: sendSubject,
+            htmlBody: plainHtml,
+            attachments: [...files],
+            inReplyTo: inReplyTo || undefined,
+            references: references || undefined,
+            draft: draftRef?.uid ? { folder: draftRef.folder, uid: draftRef.uid } : undefined,
+          });
+        // The compose component is gone by the time this settles; only
+        // root-level services are touched here.
+        pending.then(
+          async (outcome) => {
+            if (outcome === 'cancelled') {
+              this.toastService.show('info', 'Envoi annulé. Le message a été rouvert.');
+              restore();
+              return;
+            }
+            this.toastService.show('success', 'Message envoyé.');
+            if (draftRef?.folder && draftRef.uid) {
+              try {
+                await this.emailService.deleteDraftMessage(draftRef.folder, draftRef.uid);
+              } catch (err) {
+                console.warn('Failed to delete remote draft after send', err);
+              }
+            }
+          },
+          (err: unknown) => {
+            console.error('Failed to send email', err);
+            this.toastService.show('error', `L'envoi a échoué : ${this.describeSendError(err)}`);
+            restore();
+          },
+        );
+        sendSucceeded = true;
+        this.settingsService.clearDraft();
+        this.remoteDraft = null;
+        this.toastService.show('info', "Message en cours d'envoi.");
+        this.close.emit();
+        return;
       }
+
+      await this.emailService.sendEmail(to, sendSubject, html, cc, bcc, inReplyTo, references, 0, files, readReceipt);
       sendSucceeded = true;
       this.settingsService.clearDraft();
       if (this.remoteDraft?.folder && this.remoteDraft.uid) {
@@ -408,18 +526,32 @@ export class ComposeComponent implements OnInit, OnDestroy {
         }
       }
       this.remoteDraft = null;
-      this.toastService.show('success', delay > 0 ? "Message en cours d'envoi." : 'Message envoye.');
+      this.toastService.show('success', 'Message envoyé.');
       this.close.emit();
     } catch (err) {
       console.error('Failed to send email', err);
-      this.sendError.set("L'envoi du message a echoue. Reessayez.");
-      this.toastService.show('error', "L'envoi du message a echoue.");
+      const reason = this.describeSendError(err);
+      this.sendError.set(`L'envoi du message a échoué : ${reason}`);
+      this.toastService.show('error', "L'envoi du message a échoué.");
     } finally {
       this.sending.set(false);
       if (!sendSucceeded && !this.draftInterval) {
         this.draftInterval = setInterval(() => void this.saveDraft(), 3000);
       }
     }
+  }
+
+  /** Human-readable reason for a failed send, preferring the server's message. */
+  private describeSendError(err: unknown): string {
+    if (err instanceof HttpErrorResponse) {
+      if (err.status === 0) return 'serveur injoignable (vérifiez votre connexion).';
+      if (err.status === 413) return 'message trop volumineux (25 Mo maximum, images comprises).';
+      const message = (err.error as { message?: unknown } | null)?.message;
+      if (typeof message === 'string' && message) return message;
+      if (Array.isArray(message) && message.length) return message.join(', ');
+      return `erreur ${err.status}.`;
+    }
+    return err instanceof Error && err.message ? err.message : 'erreur inconnue.';
   }
 
   // Scheduled send
@@ -437,6 +569,16 @@ export class ComposeComponent implements OnInit, OnDestroy {
     if (!this.areRecipientsValid(to)) {
       this.sendError.set('L’adresse du destinataire semble invalide.');
       this.toChipsRef()?.focusInput();
+      return;
+    }
+    if (!this.areRecipientsValid(this.cc()) || !this.areRecipientsValid(this.bcc())) {
+      this.sendError.set('Une adresse en copie (Cc/Cci) semble invalide.');
+      this.showCc.set(true);
+      return;
+    }
+    const attachmentError = this.attachmentLimitError();
+    if (attachmentError) {
+      this.sendError.set(attachmentError);
       return;
     }
     if (!editor) {
@@ -474,6 +616,7 @@ export class ComposeComponent implements OnInit, OnDestroy {
         cc: this.cc() || undefined,
         bcc: this.bcc() || undefined,
         scheduledAt: new Date(dateStr),
+        attachments: this.attachments(),
       });
       scheduleSucceeded = true;
       this.settingsService.clearDraft();
@@ -489,7 +632,7 @@ export class ComposeComponent implements OnInit, OnDestroy {
       this.close.emit();
     } catch (err) {
       console.error('Failed to schedule email', err);
-      this.sendError.set("La programmation de l'envoi a echoue.");
+      this.sendError.set(`La programmation de l'envoi a échoué : ${this.describeSendError(err)}`);
       this.toastService.show('error', "La programmation de l'envoi a echoue.");
     } finally {
       this.sending.set(false);
@@ -712,12 +855,18 @@ export class ComposeComponent implements OnInit, OnDestroy {
   }
 
   private areRecipientsValid(value: string): boolean {
+    // Accept both "email" and "Name <email>": drafts reopened from IMAP keep
+    // the display name, and used to be rejected as invalid.
     return value
       .split(/[;,]/)
       .map((item) => item.trim())
       .filter(Boolean)
-      .every((email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
+      .every((item) => {
+        const email = item.match(/<([^<>]+)>\s*$/)?.[1]?.trim() ?? item;
+        return /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email);
+      });
   }
+
 
   private isMeaningfullyEmpty(html: string): boolean {
     const normalized = html

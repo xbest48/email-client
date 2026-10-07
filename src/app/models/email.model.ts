@@ -22,6 +22,7 @@ export interface Email {
   attachments: Attachment[];
   size: number;
   messageId?: string;
+  references?: string[];
   readReceiptRequested?: boolean;
   readReceiptTo?: string;
 }

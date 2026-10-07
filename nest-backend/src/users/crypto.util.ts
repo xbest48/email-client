@@ -89,6 +89,26 @@ export function encrypt(plaintext: string): string {
   return `${VERSION_PREFIX}:${iv.toString('hex')}:${tag.toString('hex')}:${ciphertext.toString('hex')}`;
 }
 
+/**
+ * Binary counterpart of `encrypt()`, for blobs such as attachments: layout is
+ * iv (12 B) | auth tag (16 B) | ciphertext. Avoids the 2.7× blow-up of
+ * base64 + hex that the string helper would cause on multi-MB files.
+ */
+export function encryptBuffer(plain: Buffer): Buffer {
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv(GCM_ALGORITHM, getKey(), iv);
+  const ciphertext = Buffer.concat([cipher.update(plain), cipher.final()]);
+  return Buffer.concat([iv, cipher.getAuthTag(), ciphertext]);
+}
+
+export function decryptBuffer(payload: Buffer): Buffer {
+  const iv = payload.subarray(0, IV_LENGTH);
+  const tag = payload.subarray(IV_LENGTH, IV_LENGTH + 16);
+  const decipher = crypto.createDecipheriv(GCM_ALGORITHM, getKey(), iv);
+  decipher.setAuthTag(tag);
+  return Buffer.concat([decipher.update(payload.subarray(IV_LENGTH + 16)), decipher.final()]);
+}
+
 export function decrypt(payload: string): string {
   if (typeof payload !== 'string' || payload.length === 0) {
     throw new Error('decrypt() expects a non-empty string');

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Param, Query, Body, Headers, BadRequestException, UseGuards, Request, Inject, forwardRef, Res, UseInterceptors, UploadedFiles } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Query, Body, Headers, BadRequestException, BadGatewayException, PayloadTooLargeException, UseGuards, Request, Inject, forwardRef, Res, UseInterceptors, UploadedFiles } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { ImapService, EmailCredentials } from './imap/imap.service';
@@ -236,6 +236,9 @@ export class EmailController {
 
   @Post('send')
   @UseInterceptors(FilesInterceptor('files', 20, {
+    // Browsers send UTF-8 filenames; busboy defaults to latin1 and turned
+    // "été.pdf" into "Ã©tÃ©.pdf".
+    defParamCharset: 'utf8',
     limits: {
       fieldSize: 25 * 1024 * 1024,
       fileSize: 25 * 1024 * 1024,
@@ -255,6 +258,8 @@ export class EmailController {
       }
     }
 
+    this.assertAttachmentsSize(files);
+
     // Map uploaded files to attachment DTO format
     if (files?.length) {
       dto.attachments = files.map((f) => ({
@@ -269,7 +274,7 @@ export class EmailController {
       dto.requestReadReceipt = true;
     }
 
-    const result = await this.smtpService.sendEmail(creds, dto);
+    const result = await this.sendViaSmtp(creds, dto);
 
     // Append sent message to IMAP Sent folder
     if (result.rawMessage) {
@@ -300,6 +305,9 @@ export class EmailController {
 
   @Post('draft')
   @UseInterceptors(FilesInterceptor('files', 20, {
+    // Browsers send UTF-8 filenames; busboy defaults to latin1 and turned
+    // "été.pdf" into "Ã©tÃ©.pdf".
+    defParamCharset: 'utf8',
     limits: {
       fieldSize: 25 * 1024 * 1024,
       fileSize: 25 * 1024 * 1024,
@@ -354,6 +362,34 @@ export class EmailController {
     const creds = await this.getCredentials(req, headers);
     await this.imapService.deleteEmail(creds, decodeURIComponent(folder), parseInt(uid, 10));
     return { success: true };
+  }
+
+  private static readonly MAX_TOTAL_ATTACHMENTS_BYTES = 25 * 1024 * 1024;
+
+  /** Multer only caps each file; a pile of 20 × 24 MB files used to slip through. */
+  private assertAttachmentsSize(files?: Express.Multer.File[]): void {
+    const total = (files ?? []).reduce((sum, f) => sum + (f.size ?? f.buffer?.length ?? 0), 0);
+    if (total > EmailController.MAX_TOTAL_ATTACHMENTS_BYTES) {
+      throw new PayloadTooLargeException('Pièces jointes trop volumineuses (25 Mo maximum au total).');
+    }
+  }
+
+  /**
+   * SMTP failures used to bubble up as a bare 500 "Internal server error",
+   * leaving the user with no clue why the message didn't go out. Surface the
+   * server's reason instead (auth refused, recipient rejected, timeout…).
+   */
+  private async sendViaSmtp(creds: EmailCredentials, dto: SendEmailDto) {
+    try {
+      return await this.smtpService.sendEmail(creds, dto);
+    } catch (err: any) {
+      const reason = String(err?.response || err?.message || 'Erreur SMTP inconnue').slice(0, 300);
+      if (/Invalid characters in|Too many recipients/.test(reason)) {
+        throw new BadRequestException(reason);
+      }
+      console.warn('SMTP send failed', err?.code, reason);
+      throw new BadGatewayException(`Le serveur d'envoi a refusé le message : ${reason}`);
+    }
   }
 
   private parseBoundedInt(raw: string | undefined, fallback: number, min: number, max: number): number {

@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AiService } from './ai.service';
+import { getRepositoryToken } from '@nestjs/typeorm';
 import { UsersService } from '../users/users.service';
+import { EmailAiInsight } from './email-ai-insight.entity';
 
 describe('AiService', () => {
   let service: AiService;
@@ -13,6 +15,7 @@ describe('AiService', () => {
           provide: UsersService,
           useValue: {},
         },
+        { provide: getRepositoryToken(EmailAiInsight), useValue: {} },
       ],
     }).compile();
 

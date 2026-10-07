@@ -22,6 +22,7 @@ import { SnoozeModule } from './snooze/snooze.module';
 import { SnoozedEmail } from './snooze/snoozed-email.entity';
 import { ScheduledModule } from './scheduled/scheduled.module';
 import { ScheduledEmail } from './scheduled/scheduled-email.entity';
+import { ScheduledEmailAttachment } from './scheduled/scheduled-email-attachment.entity';
 import { ContactsModule } from './contacts/contacts.module';
 import { Contact } from './contacts/contact.entity';
 import { PgpModule } from './pgp/pgp.module';
@@ -54,6 +55,7 @@ const IS_PROD = process.env.NODE_ENV === 'production';
         FilterRule,
         SnoozedEmail,
         ScheduledEmail,
+        ScheduledEmailAttachment,
         Contact,
         PgpKey,
         PgpContactKey,
