@@ -873,6 +873,16 @@ export class EmailService {
     );
   }
 
+  /** Raw RFC 822 message, as stored on the IMAP server. */
+  async fetchMessageSource(folder: string, uid: number): Promise<Blob> {
+    return firstValueFrom(
+      this.http.get(
+        `${this.apiUrl}/email/${encodeURIComponent(folder)}/${uid}/source`,
+        { headers: this.getHeaders(), withCredentials: true, responseType: 'blob' }
+      )
+    );
+  }
+
   async fetchAttachmentBlob(folder: string, uid: number, attachmentId: string): Promise<string> {
     const blob = await this.fetchAttachment(folder, uid, attachmentId);
     return URL.createObjectURL(blob);

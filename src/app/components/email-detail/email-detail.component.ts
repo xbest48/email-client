@@ -11,6 +11,7 @@ import { LabelService, Label } from '../../services/label.service';
 import { PgpService } from '../../services/pgp.service';
 import { KeyboardShortcutService } from '../../services/keyboard-shortcut.service';
 import { SandboxedHtmlDirective } from '../../directives/sandboxed-html.directive';
+import { MessageSourceDialogComponent } from '../message-source-dialog/message-source-dialog.component';
 import { SettingsService } from '../../services/settings.service';
 import { AiActionItem, AiCategoryResult, AiPhishingResult, AiService } from '../../services/ai.service';
 import { TaskService } from '../../services/task.service';
@@ -19,7 +20,7 @@ import { ToastService } from '../../services/toast.service';
 @Component({
   selector: 'app-email-detail',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RelativeTimePipe, SandboxedHtmlDirective],
+  imports: [RelativeTimePipe, SandboxedHtmlDirective, MessageSourceDialogComponent],
   templateUrl: './email-detail.component.html',
   styleUrl: './email-detail.component.css',
 })
@@ -52,6 +53,7 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
   readonly customSnoozeDate = signal('');
   readonly previewAttachment = signal<{ url: string; mimeType: string; filename: string } | null>(null);
   readonly recipientsExpanded = signal(false);
+  readonly showSource = signal(false);
 
   // AI Signals
   readonly dismissAiHint = signal(false);
@@ -257,6 +259,7 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
         if (msg) {
           this.clearAiResults();
           this.recipientsExpanded.set(false);
+          this.showSource.set(false);
           this.email.set(msg);
           this.emailService.markAsRead(msg);
           this.loadLabels(folder, parseInt(uid, 10));
@@ -269,6 +272,8 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
     });
 
     this.shortcutSub = this.shortcutService.actions.subscribe((action) => {
+      // Single-key shortcuts (e.g. "#" = delete) must not act behind the source popup.
+      if (this.showSource()) return;
       switch (action) {
         case 'reply': this.openReply('reply'); break;
         case 'goBack': this.goBack(); break;
@@ -505,6 +510,11 @@ export class EmailDetailComponent implements OnInit, OnDestroy {
       inReplyTo: isReply ? mail.messageId || undefined : undefined,
       references: isReply ? this.buildReferences(mail) : undefined,
     });
+  }
+
+  onSourceCopied(ok: boolean): void {
+    if (ok) this.toastService.show('success', 'Source copiee dans le presse-papiers.');
+    else this.toastService.show('error', 'Impossible de copier la source.');
   }
 
   printEmail(): void {

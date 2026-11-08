@@ -596,6 +596,21 @@ export class ImapService implements OnModuleDestroy {
     }
   }
 
+  /** Raw RFC 822 bytes of a message, for "Afficher la source". */
+  async fetchSource(credentials: EmailCredentials, folder: string, uid: number): Promise<Buffer | null> {
+    const client = await this.getConnection(credentials);
+    const lock = await client.getMailboxLock(folder);
+
+    try {
+      // imapflow fetches `source` with BODY.PEEK[], so this doesn't mark the message as read.
+      const msg: any = await client.fetchOne(uid, { source: true }, { uid: true });
+      if (!msg?.source) return null;
+      return Buffer.isBuffer(msg.source) ? msg.source : Buffer.from(msg.source);
+    } finally {
+      this.safeReleaseLock(lock);
+    }
+  }
+
   async fetchAttachment(
     credentials: EmailCredentials,
     folder: string,

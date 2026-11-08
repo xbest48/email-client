@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Param, Query, Body, Headers, BadRequestException, BadGatewayException, PayloadTooLargeException, UseGuards, Request, Inject, forwardRef, Res, UseInterceptors, UploadedFiles } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Query, Body, Headers, BadRequestException, NotFoundException, BadGatewayException, PayloadTooLargeException, UseGuards, Request, Inject, forwardRef, Res, UseInterceptors, UploadedFiles } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { ImapService, EmailCredentials } from './imap/imap.service';
@@ -196,6 +196,23 @@ export class EmailController {
     const creds = await this.getCredentials(req, headers);
     await this.imapService.emptyTrashFolder(creds);
     return { success: true };
+  }
+
+  @Get('email/:folder/:uid/source')
+  async getSource(
+    @Request() req: any,
+    @Headers() headers: any,
+    @Param('folder') folder: string,
+    @Param('uid') uid: string,
+    @Res() res: Response,
+  ) {
+    const creds = await this.getCredentials(req, headers);
+    const source = await this.imapService.fetchSource(creds, decodeURIComponent(folder), parseInt(uid, 10));
+    if (!source) throw new NotFoundException('Message not found');
+    // Raw bytes, not text/plain: the message may mix charsets, the client decodes it.
+    res.setHeader('Content-Type', 'message/rfc822');
+    res.setHeader('Content-Length', String(source.length));
+    res.send(source);
   }
 
   @Get('email/:folder/:uid/attachment/:attachmentId')
